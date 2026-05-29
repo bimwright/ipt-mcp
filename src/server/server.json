@@ -1,0 +1,10 @@
+{
+  "name": "bimwright-inventor",
+  "displayName": "Bimwright Inventor MCP",
+  "description": "MCP gateway for Autodesk Inventor 2022-2027.",
+  "command": "bimwright-inventor",
+  "args": [],
+  "env": {
+    "BIMWRIGHT_INVENTOR_READ_ONLY": "true"
+  }
+}

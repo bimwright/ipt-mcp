@@ -1,4 +1,3 @@
-// BOOTSTRAP PLACEHOLDER — replaced in Phase 1 by WS1-A
 using System;
 using System.Collections.Generic;
 using System.Linq;

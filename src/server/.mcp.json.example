@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "inventor-mcp": {
+      "command": "<ABSOLUTE_PATH_TO_REPO>/src/server/bin/Debug/net8.0/Bimwright.Inventor.Server.exe",
+      "args": []
+    }
+  }
+}
