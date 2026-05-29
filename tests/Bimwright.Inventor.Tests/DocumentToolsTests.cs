@@ -18,6 +18,7 @@ public sealed class DocumentToolsTests
 {
     private static readonly string[] ExpectedTools =
     {
+        "inventor_health",
         "inventor_list_open_documents",
         "inventor_get_document_info",
         "inventor_new_part",
@@ -62,6 +63,7 @@ public sealed class DocumentToolsTests
         // DocumentTools is reachable via the read-only `query` toolset, so the read-only tools
         // (list_open_documents, get_document_info) remain registered under --read-only.
         var names = ToolNames(new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true });
+        Assert.Contains("inventor_health", names);
         Assert.Contains("inventor_list_open_documents", names);
         Assert.Contains("inventor_get_document_info", names);
     }

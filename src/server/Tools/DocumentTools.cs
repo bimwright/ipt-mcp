@@ -22,6 +22,11 @@ public sealed class DocumentTools
 
     // ---- query (read-only) ----
 
+    [McpServerTool(Name = "inventor_health"),
+     Description("Probe the active Inventor add-in target: reports inventor_year, process_id, whether a document is open, and the active document type. Read-only; use it to confirm the add-in is reachable.")]
+    public Task<string> Health(CancellationToken ct = default)
+        => Call("health", new JObject(), ct);
+
     [McpServerTool(Name = "inventor_list_open_documents"),
      Description("List all open Inventor documents: title, full path, document type, and which one is active.")]
     public Task<string> ListOpenDocuments(CancellationToken ct = default)
