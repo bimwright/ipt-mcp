@@ -32,6 +32,7 @@
   <ItemGroup>
     <Compile Include="..\shared\Contracts\*.cs" LinkBase="Shared\Contracts" />
     <Compile Include="..\shared\Security\*.cs" LinkBase="Shared\Security" />
+    <Compile Include="..\shared\ToolBaker\*.cs" LinkBase="Shared\ToolBaker" />
   </ItemGroup>
 
   <ItemGroup>
