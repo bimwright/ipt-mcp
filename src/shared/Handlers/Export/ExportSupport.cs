@@ -2,7 +2,7 @@
 using System;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Export;
+namespace Bimwright.Ipt.Shared.Handlers.Export;
 
 /// <summary>
 /// Shared helpers for the export handlers: resolving Inventor's built-in translator add-ins by their

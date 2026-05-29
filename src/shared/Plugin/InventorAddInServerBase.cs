@@ -2,13 +2,13 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using InvApi = global::Inventor;      // Autodesk.Inventor.Interop (aliased to avoid the Bimwright.Inventor collision)
+using InvApi = global::Inventor;      // Autodesk.Inventor.Interop (aliased to avoid the Bimwright.Ipt collision)
 using Newtonsoft.Json;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
-using Bimwright.Inventor.Shared.Transport;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Transport;
 
-namespace Bimwright.Inventor.Shared.Plugin;
+namespace Bimwright.Ipt.Shared.Plugin;
 
 /// <summary>
 /// Abstract <see cref="ApplicationAddInServer"/> base shared by every per-version add-in. It captures
@@ -39,11 +39,12 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
         _year = InventorVersion.Year;
         var enableSendCode = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE");
+        var readOnly = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY") || EnvFlag("BIMWRIGHT_INVENTOR_READ_ONLY");
         _descriptorDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Bimwright", "inventor-mcp");
+            "Bimwright", "ipt-mcp");
 
-        var options = new PluginOptions(_year, enableSendCode, 0);
+        var options = new PluginOptions(_year, enableSendCode, readOnly, 0);
         var handlers = InventorCommandRegistry.Build(options);
         var dispatcher = new CommandDispatcher(handlers, maxResponseBytes: 5_000_000);
 
@@ -78,7 +79,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
             var ctx = new InventorCommandContext
             {
-                ReadOnly = false,
+                ReadOnly = o.ReadOnly || env.ReadOnly,
                 EnableSendCode = o.EnableSendCode,
                 InventorYear = o.Year,
                 TargetId = descriptor.TargetId,

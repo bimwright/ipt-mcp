@@ -1,11 +1,11 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 using Newtonsoft.Json.Linq;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Core;
+namespace Bimwright.Ipt.Shared.Handlers.Core;
 
 /// <summary>
 /// <c>get_document_info</c> — read-only. Returns the active document's title, full path, and document

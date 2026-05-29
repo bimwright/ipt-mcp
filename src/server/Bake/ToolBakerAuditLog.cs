@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace Bimwright.Inventor.Server.Bake;
+namespace Bimwright.Ipt.Server.Bake;
 
 public sealed class ToolBakerAuditLog
 {

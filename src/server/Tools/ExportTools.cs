@@ -1,13 +1,12 @@
-using System;
 using System.ComponentModel;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// View capture + export tools (toolset <c>export</c>). These write output files but do not mutate the
@@ -36,7 +35,8 @@ public sealed class ExportTools
      Description("Export the active part or assembly to a STEP (.stp/.step) file at output_path. The path must be an absolute file path under an allowed output root.")]
     public Task<string> ExportStep(string outputPath, CancellationToken ct = default)
     {
-        if (TryRejectPath(outputPath, out var rejection)) return Task.FromResult(rejection);
+        if (ExportPathPolicy.TryRejectPath(outputPath, out var rejection))
+            return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
         return Call("export_step", new JObject { ["output_path"] = outputPath }, ct);
     }
 
@@ -44,7 +44,8 @@ public sealed class ExportTools
      Description("Export the active part or assembly to an STL (.stl) file at output_path. The path must be an absolute file path under an allowed output root.")]
     public Task<string> ExportStl(string outputPath, CancellationToken ct = default)
     {
-        if (TryRejectPath(outputPath, out var rejection)) return Task.FromResult(rejection);
+        if (ExportPathPolicy.TryRejectPath(outputPath, out var rejection))
+            return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
         return Call("export_stl", new JObject { ["output_path"] = outputPath }, ct);
     }
 
@@ -56,7 +57,8 @@ public sealed class ExportTools
         [Description("Sketch name when source=sketch. Ignored for flat_pattern.")] string? sketchName = null,
         CancellationToken ct = default)
     {
-        if (TryRejectPath(outputPath, out var rejection)) return Task.FromResult(rejection);
+        if (ExportPathPolicy.TryRejectPath(outputPath, out var rejection))
+            return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
 
         var normalized = (source ?? string.Empty).Trim().ToLowerInvariant();
         if (normalized != "sketch" && normalized != "flat_pattern")
@@ -80,71 +82,6 @@ public sealed class ExportTools
     // ---- helpers ----
 
     private static int ClampPixels(int px) => px < 16 ? 16 : (px > 4096 ? 4096 : px);
-
-    /// <summary>
-    /// Basic allowed-output-path check (Phase 1 has no full path policy). The path must be an absolute,
-    /// rooted file path with a file name. Returns true (with a populated <paramref name="rejection"/> JSON
-    /// payload) when the path is rejected.
-    /// </summary>
-    private static bool TryRejectPath(string outputPath, out string rejection)
-    {
-        rejection = "";
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            rejection = Error("INVALID_ARGUMENT", "output_path is required.");
-            return true;
-        }
-
-        string full;
-        try
-        {
-            full = Path.GetFullPath(outputPath);
-        }
-        catch (Exception ex)
-        {
-            rejection = Error("INVALID_ARGUMENT", "output_path is not a valid path: " + ex.Message);
-            return true;
-        }
-
-        if (!Path.IsPathRooted(full) || string.IsNullOrEmpty(Path.GetFileName(full)))
-        {
-            rejection = Error("INVALID_ARGUMENT", "output_path must be an absolute file path.");
-            return true;
-        }
-
-        var dir = Path.GetDirectoryName(full);
-        if (string.IsNullOrEmpty(dir) || !IsUnderAllowedRoot(full))
-        {
-            rejection = Error("INVALID_ARGUMENT",
-                "output_path must be under an allowed output root (user profile or temp directory).");
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Phase-1 allowed output roots: the user profile tree and the temp directory. This is a basic
-    /// guard, not a full policy — it stops obviously out-of-bounds writes (system dirs, drive roots).
-    /// </summary>
-    private static bool IsUnderAllowedRoot(string fullPath)
-    {
-        foreach (var root in new[]
-                 {
-                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                     Path.GetTempPath(),
-                 })
-        {
-            if (string.IsNullOrEmpty(root)) continue;
-            var normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (fullPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                || fullPath.StartsWith(normalizedRoot + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private static string Error(string code, string message)
         => JsonConvert.SerializeObject(new { ok = false, error = new { code, message } }, Formatting.Indented);

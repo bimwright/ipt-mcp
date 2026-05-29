@@ -2,7 +2,7 @@
 using System;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Properties;
+namespace Bimwright.Ipt.Shared.Handlers.Properties;
 
 /// <summary>
 /// Helpers for locating iProperty sets and properties by name without relying on the collection

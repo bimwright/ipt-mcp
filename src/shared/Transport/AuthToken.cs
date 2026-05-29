@@ -1,7 +1,7 @@
 using System;
 using System.Security.Cryptography;
 
-namespace Bimwright.Inventor.Shared.Transport;
+namespace Bimwright.Ipt.Shared.Transport;
 
 /// <summary>
 /// Token helper for the descriptor-based auth model. The add-in generates a random token,

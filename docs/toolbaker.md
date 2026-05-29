@@ -1,6 +1,6 @@
 # ToolBaker & send_code Security Model
 
-`inventor-mcp` ships with two Bimwright **platform** layers carried over from the
+`ipt-mcp` ships with two Bimwright **platform** layers carried over from the
 `dwg-mcp` / `rvt-mcp` / `nwd-mcp` framework pattern: the `inventor_send_code` escape hatch
 and the **ToolBaker** self-evolution engine. Neither is an Inventor domain tool — both are
 separately gated and documented here.
@@ -48,6 +48,10 @@ enforcement is defense-in-depth:
 `inventor_send_code` is **never** exposed in read-only mode (`--read-only` strips the `code`
 toolset along with every other write-capable toolset).
 
+Read-only enforcement is also carried in the add-in command envelope. For a hard add-in-side
+write lock independent of the server process, launch Inventor with
+`BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`).
+
 ---
 
 ## Compiler Safety Policy (banned APIs)
@@ -67,7 +71,7 @@ external network access, reflection, and any attempt to re-enter the ToolBaker l
 | Network | `System.Net`, `Socket`, `HttpClient` |
 | Process / environment | `System.Diagnostics`, `Process.`, `Environment.`, `Microsoft.Win32` |
 | Reflection / dynamic typing | `System.Reflection`, `Activator.`, `Assembly.`, `MethodInfo`, `PropertyInfo`, `FieldInfo`, `GetType(`, `typeof(` |
-| ToolBaker re-entry | `Bimwright.Inventor.Shared.ToolBaker` |
+| ToolBaker re-entry | `Bimwright.Ipt.Shared.ToolBaker` |
 
 > The policy is a coarse source-text gate, not a sandbox. It is one of several layers; the
 > opt-in gates and the host Inventor process trust boundary are the others. Treat `send_code`
@@ -101,6 +105,9 @@ round-trip):**
 | `inventor_run_baked_tool` | Execute a registered baked tool by name with JSON params (wire command `run_baked_tool`). | Yes |
 | `inventor_accept_bake_suggestion` | Validate → compile → apply → persist a suggestion into the registry (add-in wire command `apply_bake`). | Yes |
 | `inventor_dismiss_bake_suggestion` | Dismiss / snooze a suggestion or emit a gap signal. | No |
+
+`inventor_dismiss_bake_suggestion` is intentionally server-side-only: it mutates the local bake
+database state, not the Inventor model.
 
 ### Bake lifecycle
 
@@ -155,14 +162,14 @@ write/geometry command (e.g. `extrude`, `new_part`) is rejected by default.
 All ToolBaker state lives under:
 
 ```text
-%LOCALAPPDATA%\Bimwright\inventor-mcp\baked
+%LOCALAPPDATA%\Bimwright\ipt-mcp\baked
 ```
 
 - `bake.db` — SQLite registry of accepted baked tools and suggestion state.
 - `audit.jsonl` — append-only audit log of bake operations.
 
 The directory is created on demand (`BakePaths.EnsureDir`). It is distinct from the target
-descriptor directory `%LOCALAPPDATA%\Bimwright\inventor-mcp\` (one level up), which holds the
+descriptor directory `%LOCALAPPDATA%\Bimwright\ipt-mcp\` (one level up), which holds the
 per-instance `inventor-<year>-<pid>.json` discovery files.
 
 ---

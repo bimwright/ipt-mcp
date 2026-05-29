@@ -2,7 +2,7 @@
 using System;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers;
+namespace Bimwright.Ipt.Shared.Handlers;
 
 /// <summary>
 /// Resolves the opaque string ids the MCP surface passes for model edges and sketch entities.

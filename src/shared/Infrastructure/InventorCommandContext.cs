@@ -1,4 +1,4 @@
-namespace Bimwright.Inventor.Shared.Infrastructure;
+namespace Bimwright.Ipt.Shared.Infrastructure;
 
 using System.Collections.Generic;
 

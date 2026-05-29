@@ -1,4 +1,4 @@
-namespace Bimwright.Inventor.Shared.Plugin;
+namespace Bimwright.Ipt.Shared.Plugin;
 
 /// <summary>
 /// The Inventor calendar year of the add-in that compiled this source, resolved from the

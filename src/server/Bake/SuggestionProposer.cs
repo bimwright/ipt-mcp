@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Bake;
+namespace Bimwright.Ipt.Server.Bake;
 
 public sealed class SuggestionProposer
 {

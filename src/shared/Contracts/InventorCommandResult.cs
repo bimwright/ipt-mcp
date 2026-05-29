@@ -2,7 +2,7 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Shared.Contracts;
+namespace Bimwright.Ipt.Shared.Contracts;
 
 public sealed class InventorCommandResult
 {

@@ -1,7 +1,7 @@
-namespace Bimwright.Inventor.Shared.Infrastructure;
+namespace Bimwright.Ipt.Shared.Infrastructure;
 
 using Newtonsoft.Json.Linq;
-using Bimwright.Inventor.Shared.Contracts;
+using Bimwright.Ipt.Shared.Contracts;
 
 /// <summary>
 /// A single dispatchable add-in command. Implemented by every handler in

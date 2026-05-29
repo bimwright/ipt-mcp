@@ -1,12 +1,12 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Handlers;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
+using Bimwright.Ipt.Shared.Infrastructure;
 using Newtonsoft.Json.Linq;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Export;
+namespace Bimwright.Ipt.Shared.Handlers.Export;
 
 /// <summary>
 /// <c>export_dxf</c> — writes a 2D DXF (.dxf). Because Phase 1 ships no drawing tools, the DXF source
@@ -28,8 +28,8 @@ public sealed class ExportDxfHandler : HandlerBase, IInventorCommand
         var app = (Application)ctx.Application!;
 
         var outputPath = (p["output_path"]?.Type == JTokenType.String) ? (string)p["output_path"]! : "";
-        if (string.IsNullOrWhiteSpace(outputPath))
-            return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "output_path is required");
+        if (ExportPathPolicy.TryRejectPath(outputPath, out var pathRejection))
+            return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, pathRejection);
 
         var source = ((p["source"]?.Type == JTokenType.String) ? (string)p["source"]! : "").Trim().ToLowerInvariant();
         if (source != "sketch" && source != "flat_pattern")

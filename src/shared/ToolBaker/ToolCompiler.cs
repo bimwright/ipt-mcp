@@ -2,7 +2,7 @@ using System;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Shared.ToolBaker;
+namespace Bimwright.Ipt.Shared.ToolBaker;
 
 /// <summary>
 /// Validates and smoke-tests baked-tool records: snake_case name, preset/macro source kind,

@@ -8,16 +8,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [0.1.0] - Unreleased
 
-First public surface of `bimwright/inventor-mcp` — a local MCP gateway that lets Claude Code
+First public surface of `bimwright/ipt-mcp` — a local MCP gateway that lets Claude Code
 (and any MCP-capable client) drive Autodesk Inventor 2022-2027 through an in-process add-in.
 
 ### Added
 
-- **MCP server** (`Bimwright.Inventor.Server`, .NET 8 console, stdio transport,
+- **MCP server** (`Bimwright.Ipt.Server`, .NET 8 console, stdio transport,
   `ModelContextProtocol` 1.1.0). Single process, independent of the Inventor version; compiles
   only the API-agnostic shared contract files, so it builds and tests on any machine with the
   .NET 8 SDK — no Inventor required.
-- **Six per-version in-process add-ins** (`Bimwright.Inventor.Plugin.InvNN`), one per
+- **Six per-version in-process add-ins** (`Bimwright.Ipt.Plugin.InvNN`), one per
   Inventor 2022-2027, all compiled from the same `src/shared/**` source glob:
   - 2022 / 2023 / 2024 → `net48`, **TCP** transport.
   - 2025 / 2026 → `net8.0-windows7.0`, **Named Pipe** transport.
@@ -31,7 +31,7 @@ First public surface of `bimwright/inventor-mcp` — a local MCP gateway that le
 - **Transport + target discovery**: `ITransportServer` with `TcpTransportServer` and
   `PipeTransportServer`, NDJSON framing, auth-token verification, response-size guard, and
   per-instance discovery descriptors at
-  `%LOCALAPPDATA%\Bimwright\inventor-mcp\inventor-<year>-<pid>.json`. The server enumerates live
+  `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The server enumerates live
   targets and drops dead/stale ones (dead PID, expired heartbeat, wrong host app, out-of-range year).
 - **46 Phase-1 tools** (MCP names prefixed `inventor_`):
   - 3 server-side **meta/target** tools (`list_available_targets`, `get_current_target`,
@@ -64,7 +64,7 @@ First public surface of `bimwright/inventor-mcp` — a local MCP gateway that le
   TFM-split matrix, send-code-disabled, ToolBaker dispatch authorization, DTO validation, and
   `.addin` manifest invariants (ClassId==ClientId, assembly name, single-version brackets).
 - **Packaging**: `scripts/package-bundle.ps1` assembles the per-user, registry-free
-  `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\` layout (a `PackageContents.xml`
+  `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` layout (a `PackageContents.xml`
   entry point plus per-version subfolders with the built DLL + `.addin`). Supports `-DryRun`.
 
 ### Known limitations
@@ -78,5 +78,5 @@ First public surface of `bimwright/inventor-mcp` — a local MCP gateway that le
   output and the FLAG comments in `scripts/package-bundle.ps1`).
 - Autodesk Inventor binaries / SDK / interop assemblies are **not** redistributed with this repo.
 
-[Unreleased]: https://github.com/bimwright/inventor-mcp/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/bimwright/inventor-mcp/releases/tag/v0.1.0
+[Unreleased]: https://github.com/bimwright/ipt-mcp/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/bimwright/ipt-mcp/releases/tag/v0.1.0

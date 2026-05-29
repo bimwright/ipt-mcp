@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
-  "name": "io.github.bimwright/inventor-mcp",
+  "name": "io.github.bimwright/ipt-mcp",
   "description": "MCP gateway for Autodesk Inventor 2022-2027 (parts, sketches, features, parameters, iProperties, mass properties, export).",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/bimwright/inventor-mcp",
+    "url": "https://github.com/bimwright/ipt-mcp",
     "source": "github"
   },
   "packages": [
     {
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
-      "identifier": "Bimwright.Inventor.Server",
+      "identifier": "Bimwright.Ipt.Server",
       "version": "0.1.0",
       "runtimeHint": "dnx",
       "transport": {

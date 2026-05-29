@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// iProperty and mass-property tools (toolset <c>properties</c>). Reads/writes Inventor iProperties by

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Bimwright.Inventor.Shared.ToolBaker;
+using Bimwright.Ipt.Shared.ToolBaker;
 using Microsoft.Data.Sqlite;
 
-namespace Bimwright.Inventor.Server.Bake;
+namespace Bimwright.Ipt.Server.Bake;
 
 /// <summary>
 /// SQLite-backed ToolBaker store: the accepted-tool registry, adaptive suggestions, and usage events.

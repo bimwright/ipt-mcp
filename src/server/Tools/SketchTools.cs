@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// Sketch tools (toolset <c>sketch</c>, all write). Thin MCP wrappers that serialize typed

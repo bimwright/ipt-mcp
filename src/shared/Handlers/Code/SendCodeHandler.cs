@@ -3,15 +3,16 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
-using Bimwright.Inventor.Shared.ToolBaker;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Security;
+using Bimwright.Ipt.Shared.ToolBaker;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Newtonsoft.Json.Linq;
 using InvApi = global::Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Code;
+namespace Bimwright.Ipt.Shared.Handlers.Code;
 
 /// <summary>
 /// <c>send_code</c> — the opt-in C# scripting escape hatch. Runs a snippet in-process against
@@ -23,7 +24,6 @@ namespace Bimwright.Inventor.Shared.Handlers.Code;
 public sealed class SendCodeHandler : IInventorCommand
 {
     private const int ExecutionTimeoutMilliseconds = 30000;
-    private const int AbortGraceMilliseconds = 5000;
 
     public string Name => "send_code";
     public bool IsReadOnly => false;
@@ -74,54 +74,11 @@ public sealed class SendCodeHandler : IInventorCommand
 
             var globals = new Globals { app = app };
 
-            Exception? executionError = null;
-            using (var cts = new CancellationTokenSource())
-            using (var completed = new ManualResetEventSlim(false))
+            using (var cts = new CancellationTokenSource(ExecutionTimeoutMilliseconds))
             {
-                var worker = new Thread(() =>
-                {
-                    try
-                    {
-                        CSharpScript.EvaluateAsync(code, options, globals, cancellationToken: cts.Token)
-                            .GetAwaiter()
-                            .GetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        executionError = ex;
-                    }
-                    finally
-                    {
-                        completed.Set();
-                    }
-                })
-                {
-                    IsBackground = true,
-                    Name = "Bimwright.Inventor.SendCode"
-                };
-
-                worker.Start();
-
-                if (!completed.Wait(ExecutionTimeoutMilliseconds))
-                {
-                    cts.Cancel();
-                    try
-                    {
-#if INVENTOR2022 || INVENTOR2023 || INVENTOR2024
-                        worker.Abort();
-#endif
-                    }
-                    catch (ThreadStateException) { }
-                    catch (PlatformNotSupportedException) { }
-
-                    if (!completed.Wait(AbortGraceMilliseconds))
-                        return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.TIMEOUT, "execution timeout after 30s; script did not stop", meta);
-
-                    return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.TIMEOUT, "execution cancelled after 30s", meta);
-                }
-
-                if (executionError != null)
-                    throw executionError;
+                CSharpScript.EvaluateAsync(code, options, globals, cancellationToken: cts.Token)
+                    .GetAwaiter()
+                    .GetResult();
             }
 
             var data = new JObject
@@ -138,7 +95,7 @@ public sealed class SendCodeHandler : IInventorCommand
             {
                 ["ok"] = false,
                 ["stdout"] = captured.ToString(),
-                ["error"] = "compile error: " + string.Join("\n", ex.Diagnostics)
+                ["error"] = ErrorSanitizer.Sanitize("compile error: " + string.Join("\n", ex.Diagnostics))
             };
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
@@ -152,7 +109,7 @@ public sealed class SendCodeHandler : IInventorCommand
             {
                 ["ok"] = false,
                 ["stdout"] = captured.ToString(),
-                ["error"] = $"{ex.InnerException.GetType().Name}: {ex.InnerException.Message}\n{ex.InnerException.StackTrace}"
+                ["error"] = ErrorSanitizer.Sanitize($"{ex.InnerException.GetType().Name}: {ex.InnerException.Message}")
             };
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
@@ -162,7 +119,7 @@ public sealed class SendCodeHandler : IInventorCommand
             {
                 ["ok"] = false,
                 ["stdout"] = captured.ToString(),
-                ["error"] = $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}"
+                ["error"] = ErrorSanitizer.Sanitize($"{ex.GetType().Name}: {ex.Message}")
             };
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }

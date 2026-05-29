@@ -1,15 +1,15 @@
-namespace Bimwright.Inventor.Server;
+namespace Bimwright.Ipt.Server;
 
 public static class ServerInstructions
 {
     public const string Text =
-        "inventor-mcp - MCP gateway for Autodesk Inventor 2022-2027. " +
+        "ipt-mcp - MCP gateway for Autodesk Inventor 2022-2027. " +
         "Tools are prefixed inventor_*. Use whenever the user works with Inventor, " +
         ".ipt part files, .iam assembly files, or .idw/.dwg drawings. " +
         "Capabilities: create and open parts and assemblies; list open documents and get document info; " +
         "create and edit 2D sketches (lines, circles, rectangles, constraints) on a part; " +
-        "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole; " +
-        "create work geometry such as a work plane, work axis, and work point; " +
+        "build solid features from sketch profiles - extrude, revolve, fillet, chamfer; " +
+        "create work geometry such as a work plane and work axis; " +
         "read and write model parameters and user parameters; " +
         "read and write iProperties (iproperty: title, author, part number, description, custom properties); " +
         "compute mass properties (mass, volume, surface area, center of gravity, bounding box) and material; " +

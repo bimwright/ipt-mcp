@@ -1,6 +1,6 @@
 # Architecture
 
-`inventor-mcp` is a full C# MCP stack — no TypeScript bridge, no Python sidecar, no IPC format hop. One language across the server, the per-version add-in shells, the transport, the handlers, ToolBaker, and the tests. The authoritative agent-facing cheat-sheet is [CLAUDE.md](CLAUDE.md); this document is the design deep-dive.
+`ipt-mcp` is a full C# MCP stack — no TypeScript bridge, no Python sidecar, no IPC format hop. One language across the server, the per-version add-in shells, the transport, the handlers, ToolBaker, and the tests. The authoritative agent-facing cheat-sheet is [CLAUDE.md](CLAUDE.md); this document is the design deep-dive.
 
 ## Two processes, one local pipe
 
@@ -8,10 +8,10 @@
 MCP client (Claude Code / Cursor / Cline / …)
         │  stdio (MCP)
         ▼
-Bimwright.Inventor.Server        (.NET 8 console, NO Inventor reference)
+Bimwright.Ipt.Server        (.NET 8 console, NO Inventor reference)
         │  TCP (2022-2024)  OR  Named Pipe (2025-2027) — NDJSON + token auth
         ▼
-Bimwright.Inventor.Plugin.InvNN  (ApplicationAddInServer add-in, one per Inventor year)
+Bimwright.Ipt.Plugin.InvNN  (ApplicationAddInServer add-in, one per Inventor year)
         │  InventorStaDispatcher.InvokeAsync → Control.BeginInvoke (STA thread)
         ▼
 Inventor API  (Inventor.Application / Document)
@@ -24,7 +24,7 @@ The version split is explicit at the edge. The server is version-agnostic; all I
 
 ## STA marshalling (the novel piece)
 
-Inventor has **no `ExternalEvent`** — the mechanism `rvt-mcp` relies on to hop work onto the Revit UI thread. Inventor's API is STA-bound and must be touched only from the application's main thread, and `SynchronizationContext.Current` may be null inside the add-in. So `inventor-mcp` builds its own marshaller, `InventorStaDispatcher`:
+Inventor has **no `ExternalEvent`** — the mechanism `rvt-mcp` relies on to hop work onto the Revit UI thread. Inventor's API is STA-bound and must be touched only from the application's main thread, and `SynchronizationContext.Current` may be null inside the add-in. So `ipt-mcp` builds its own marshaller, `InventorStaDispatcher`:
 
 - During the add-in's `Activate` (which runs on Inventor's STA thread), the dispatcher creates a **hidden, message-only WinForms `Control`** and forces its window handle to be created so `BeginInvoke` works.
 - The TCP / Named-Pipe **listener runs on a background thread** and never touches the Inventor API directly.
@@ -113,7 +113,7 @@ The `CommandDispatcher` is the add-in-side line of defense: a write command unde
 
 ## Target discovery
 
-Each running add-in writes a per-instance descriptor to `%LOCALAPPDATA%\Bimwright\inventor-mcp\inventor-<year>-<pid>.json` and keeps it warm with a background heartbeat (default 30s, well inside the registry's ~120s staleness window). The descriptor (`TargetDescriptor`):
+Each running add-in writes a per-instance descriptor to `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json` and keeps it warm with a background heartbeat (default 30s, well inside the registry's ~120s staleness window). The descriptor (`TargetDescriptor`):
 
 ```json
 {
@@ -154,7 +154,7 @@ Tools are grouped into `[McpServerToolType]` classes by domain. `Program.Resolve
 
 ## Configuration precedence
 
-`InventorMcpConfig.Load(args)` applies three layers, later wins: JSON file (`--config <path>`) < environment (`BIMWRIGHT_INVENTOR_*`) < CLI flags (`--read-only`, `--enable-send-code`, `--toolsets`, `--target`, `--timeout-ms`, …). The descriptor directory defaults to `%LOCALAPPDATA%\Bimwright\inventor-mcp`; the bake database to its `baked\` subfolder.
+`InventorMcpConfig.Load(args)` applies three layers, later wins: JSON file (`--config <path>`) < environment (`BIMWRIGHT_INVENTOR_*`) < CLI flags (`--read-only`, `--enable-send-code`, `--toolsets`, `--target`, `--timeout-ms`, …). The descriptor directory defaults to `%LOCALAPPDATA%\Bimwright\ipt-mcp`; the bake database to its `baked\` subfolder.
 
 ## Why this shape
 

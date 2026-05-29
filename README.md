@@ -1,6 +1,6 @@
-<!-- mcp-name: io.github.bimwright/inventor-mcp -->
+<!-- mcp-name: io.github.bimwright/ipt-mcp -->
 
-<h1 align="center">inventor-mcp</h1>
+<h1 align="center">ipt-mcp</h1>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
@@ -14,7 +14,7 @@
 
 ---
 
-`inventor-mcp` is an open-source ([Apache-2.0](LICENSE)) [Model Context Protocol](https://modelcontextprotocol.io) gateway that lets Claude Code — and any MCP-capable client — drive **Autodesk Inventor 2022-2027** locally.
+`ipt-mcp` is an open-source ([Apache-2.0](LICENSE)) [Model Context Protocol](https://modelcontextprotocol.io) gateway that lets Claude Code — and any MCP-capable client — drive **Autodesk Inventor 2022-2027** locally.
 
 The agent speaks MCP over stdio. The server speaks NDJSON over a local authenticated transport (TCP or Named Pipe) to a per-version in-process Inventor add-in. The add-in marshals every command onto Inventor's STA thread and talks to the Inventor API.
 
@@ -22,12 +22,12 @@ Your model stays on your machine.
 
 ---
 
-## What inventor-mcp Is
+## What ipt-mcp Is
 
 Two processes, one local pipe:
 
-- **`Bimwright.Inventor.Server.exe`** — a .NET 8 MCP stdio server launched by Claude Code, Cursor, Cline, Codex, or another stdio MCP client. It has **no Inventor reference**; it only compiles the API-agnostic contract files, so it builds and runs on any machine with the .NET 8 SDK.
-- **`Bimwright.Inventor.Plugin.InvNN.dll`** — an `ApplicationAddInServer` add-in that loads inside `Inventor.exe`, runs a TCP or Named-Pipe listener, and executes commands on Inventor's main UI (STA) thread. One thin shell per Inventor year, all compiled from the same `src/shared/**` source glob.
+- **`Bimwright.Ipt.Server.exe`** — a .NET 8 MCP stdio server launched by Claude Code, Cursor, Cline, Codex, or another stdio MCP client. It has **no Inventor reference**; it only compiles the API-agnostic contract files, so it builds and runs on any machine with the .NET 8 SDK.
+- **`Bimwright.Ipt.Plugin.InvNN.dll`** — an `ApplicationAddInServer` add-in that loads inside `Inventor.exe`, runs a TCP or Named-Pipe listener, and executes commands on Inventor's main UI (STA) thread. One thin shell per Inventor year, all compiled from the same `src/shared/**` source glob.
 
 Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshals work onto the STA thread through a hidden message-only WinForms control (`InventorStaDispatcher`). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
@@ -55,22 +55,22 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 
 ## Install / Wire an MCP Client
 
-The server is a plain stdio MCP process. Point your client at the built `Bimwright.Inventor.Server.exe` (or `dotnet run` it), then load the add-in inside Inventor.
+The server is a plain stdio MCP process. Point your client at the built `Bimwright.Ipt.Server.exe` (or `dotnet run` it), then load the add-in inside Inventor.
 
 A typical `.mcp.json` (or equivalent client config) entry:
 
 ```json
 {
   "mcpServers": {
-    "inventor-mcp": {
-      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Inventor.Server.exe",
+    "ipt-mcp": {
+      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Ipt.Server.exe",
       "args": []
     }
   }
 }
 ```
 
-Add-in discovery is automatic: each running Inventor add-in writes a per-instance descriptor under `%LOCALAPPDATA%\Bimwright\inventor-mcp\inventor-<year>-<pid>.json`. The server scans these, drops dead/stale ones, and connects. When more than one Inventor may be open, call `inventor_list_available_targets` then `inventor_switch_target`.
+Add-in discovery is automatic: each running Inventor add-in writes a per-instance descriptor under `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The server scans these, deletes dead/stale descriptors best-effort, and connects. MCP target-list tools redact the descriptor `auth_token`. When more than one Inventor may be open, call `inventor_list_available_targets` then `inventor_switch_target`.
 
 ---
 
@@ -80,8 +80,8 @@ Autodesk Inventor binaries and the Inventor SDK are **not redistributed** in thi
 
 ```bash
 # Server + tests (server-only; NO Inventor required — works on any machine with the .NET 8 SDK):
-dotnet build src/InventorMcp.sln -c Debug
-dotnet test  tests/Bimwright.Inventor.Tests -c Debug
+dotnet build src/IptMcp.sln -c Debug
+dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
 # Add-in project SHAPE check without Inventor installed:
 dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
@@ -114,7 +114,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 |---|---|
 | `inventor_list_available_targets` | List detected live Inventor add-in targets (year, pid, transport, active document). |
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
-| `inventor_switch_target` | Select the active target by descriptor id, year, or session. Server-side only. |
+| `inventor_switch_target` | Select the active target by descriptor id, Inventor year, process id, or pipe/session name. Server-side only. |
 
 ### query (3) — read-only document/health probes
 
@@ -217,12 +217,12 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 Short version: your model stays on your machine, and write/dangerous tools are gated.
 
-- **Read-only mode.** `--read-only` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`) removes every write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `code`, `toolbaker_write`) but keeps `meta` + `query` + read-only `toolbaker`, and **keeps `inventor_switch_target` exposed**. The add-in's `CommandDispatcher` is the second line of defense: a write command under read-only returns `READ_ONLY`.
+- **Read-only mode.** `--read-only` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`) removes every write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `code`, `toolbaker_write`) but keeps `meta` + `query` + read-only `toolbaker`, and **keeps `inventor_switch_target` exposed**. The server sends read-only mode in each command envelope; the add-in also honors `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. A write command under enforced read-only returns `READ_ONLY`.
 - **send_code two-sided opt-in.** `inventor_send_code` is **disabled by default**. It is exposed only when **both** gates are set: the server with `--enable-send-code` (or `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **and** the add-in process with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Otherwise the dispatcher returns `SEND_CODE_DISABLED`. Banned APIs (file/process/network/environment) are rejected.
-- **Local, authenticated transport.** TCP binds loopback; Named Pipe is local-machine scoped. Each per-session descriptor carries a random auth token.
+- **Local, authenticated transport.** TCP binds loopback; Named Pipe is local-machine scoped. Each per-session descriptor carries a random auth token, but MCP meta tools never return it.
 - **Sanitized errors.** Error messages returned to the model are sanitized to avoid leaking absolute paths/secrets.
 
-**ToolBaker** turns repeated local workflows into personal, verified tools: suggestions surface through `inventor_list_bake_suggestions`, you explicitly accept one with `inventor_accept_bake_suggestion` (validate → compile → apply → persist), and accepted tools become callable through `inventor_list_baked_tools` / `inventor_run_baked_tool`. The bake database and audit log live locally under `%LOCALAPPDATA%\Bimwright\inventor-mcp\baked\`. See [docs/toolbaker.md](docs/toolbaker.md) and [SECURITY.md](SECURITY.md).
+**ToolBaker** turns repeated local workflows into personal, verified tools: suggestions surface through `inventor_list_bake_suggestions`, you explicitly accept one with `inventor_accept_bake_suggestion` (validate → compile → apply → persist), and accepted tools become callable through `inventor_list_baked_tools` / `inventor_run_baked_tool`. The bake database and audit log live locally under `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\`. See [docs/toolbaker.md](docs/toolbaker.md) and [SECURITY.md](SECURITY.md).
 
 ---
 

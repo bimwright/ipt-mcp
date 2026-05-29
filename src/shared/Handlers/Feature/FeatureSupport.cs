@@ -2,7 +2,7 @@
 using System;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Feature;
+namespace Bimwright.Ipt.Shared.Handlers.Feature;
 
 /// <summary>
 /// Shared feature-handler helpers: profile creation, operation/direction enum mapping, and edge
@@ -18,7 +18,7 @@ internal static class FeatureSupport
     /// </summary>
     public static Profile SolidProfile(PartComponentDefinition def, string sketchName)
     {
-        var sketch = Bimwright.Inventor.Shared.Handlers.EntityResolver.FindSketch(def, sketchName)
+        var sketch = Bimwright.Ipt.Shared.Handlers.EntityResolver.FindSketch(def, sketchName)
             ?? throw new ArgumentException($"no sketch named '{sketchName}'");
         if (sketch.Profiles.Count > 0)
             return sketch.Profiles[1];
@@ -48,7 +48,7 @@ internal static class FeatureSupport
     {
         var col = app.TransientObjects.CreateEdgeCollection();
         foreach (var token in edgeIds)
-            col.Add(Bimwright.Inventor.Shared.Handlers.EntityResolver.ResolveEdge(def, token.ToString()));
+            col.Add(Bimwright.Ipt.Shared.Handlers.EntityResolver.ResolveEdge(def, token.ToString()));
         return col;
     }
 
@@ -80,10 +80,10 @@ internal static class FeatureSupport
     {
         var bodies = def.SurfaceBodies;
         if (bodies.Count < 1) throw new ArgumentException("the part has no solid bodies");
-        var b = Bimwright.Inventor.Shared.Handlers.EntityResolver.ParseBodyIndex(r);
+        var b = Bimwright.Ipt.Shared.Handlers.EntityResolver.ParseBodyIndex(r);
         if (b > bodies.Count) throw new ArgumentException($"body index {b} out of range");
         var faces = bodies[b].Faces;
-        var f = Bimwright.Inventor.Shared.Handlers.EntityResolver.ParseIndex(r, "face");
+        var f = Bimwright.Ipt.Shared.Handlers.EntityResolver.ParseIndex(r, "face");
         if (f > faces.Count) throw new ArgumentException($"face index {f} out of range (1..{faces.Count})");
         return faces[f];
     }
@@ -99,10 +99,10 @@ internal static class FeatureSupport
         {
             var bodies = def.SurfaceBodies;
             if (bodies.Count < 1) throw new ArgumentException("the part has no solid bodies");
-            var b = Bimwright.Inventor.Shared.Handlers.EntityResolver.ParseBodyIndex(s);
+            var b = Bimwright.Ipt.Shared.Handlers.EntityResolver.ParseBodyIndex(s);
             if (b > bodies.Count) throw new ArgumentException($"body index {b} out of range");
             var verts = bodies[b].Vertices;
-            var v = Bimwright.Inventor.Shared.Handlers.EntityResolver.ParseIndex(s, "vertex");
+            var v = Bimwright.Ipt.Shared.Handlers.EntityResolver.ParseIndex(s, "vertex");
             if (v > verts.Count) throw new ArgumentException($"vertex index {v} out of range (1..{verts.Count})");
             return verts[v];
         }

@@ -2,10 +2,10 @@
 using System;
 using Newtonsoft.Json.Linq;
 using Inventor;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Inventor.Shared.Handlers.Feature;
+namespace Bimwright.Ipt.Shared.Handlers.Feature;
 
 /// <summary>
 /// <c>extrude</c> — extrude a named sketch's profile by a distance. distance in mm (→ cm for the API);
@@ -20,9 +20,8 @@ public sealed class ExtrudeHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        var app = (Application)ctx.Application!;
-        if (app.ActiveDocument is not PartDocument part)
-            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "extrude requires an active part document");
+        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "extrude", out var app, out var part, out var failure))
+            return failure!;
 
         var sketchName = (string?)p["sketch_name"];
         if (string.IsNullOrWhiteSpace(sketchName) || p["distance_mm"] is null)

@@ -1,6 +1,6 @@
 using System;
 
-namespace Bimwright.Inventor.Server.Bake;
+namespace Bimwright.Ipt.Server.Bake;
 
 public static class BakeSuggestionStates
 {

@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// Model parameter tools (toolset <c>parameters</c>). Lists/reads/sets user and model parameters of

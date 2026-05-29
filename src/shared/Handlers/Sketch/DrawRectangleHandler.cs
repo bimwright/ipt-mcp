@@ -2,10 +2,10 @@
 using System;
 using Newtonsoft.Json.Linq;
 using Inventor;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Inventor.Shared.Handlers.Sketch;
+namespace Bimwright.Ipt.Shared.Handlers.Sketch;
 
 /// <summary>
 /// <c>draw_rectangle</c> — add a two-point (corner-to-corner) rectangle. The Inventor API exposes
@@ -19,9 +19,8 @@ public sealed class DrawRectangleHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        var app = (Application)ctx.Application!;
-        if (app.ActiveDocument is not PartDocument part)
-            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "draw_rectangle requires an active part document");
+        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "draw_rectangle", out var app, out var part, out var failure))
+            return failure!;
 
         if (p["x1"] is null || p["y1"] is null || p["x2"] is null || p["y2"] is null)
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "x1,y1,x2,y2 (mm) are required");

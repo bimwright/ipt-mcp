@@ -2,7 +2,7 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Shared.ToolBaker;
+namespace Bimwright.Ipt.Shared.ToolBaker;
 
 /// <summary>
 /// Builds a validated <see cref="BakedToolRecord"/> from an <c>apply_bake</c> request envelope.

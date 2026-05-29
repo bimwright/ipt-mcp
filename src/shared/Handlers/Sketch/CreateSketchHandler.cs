@@ -2,10 +2,10 @@
 using System;
 using Newtonsoft.Json.Linq;
 using Inventor;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Inventor.Shared.Handlers.Sketch;
+namespace Bimwright.Ipt.Shared.Handlers.Sketch;
 
 /// <summary>
 /// <c>create_sketch</c> — create a new 2D sketch on an origin plane (XY|XZ|YZ) or on a referenced
@@ -19,9 +19,8 @@ public sealed class CreateSketchHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        var app = (Application)ctx.Application!;
-        if (app.ActiveDocument is not PartDocument part)
-            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "create_sketch requires an active part document");
+        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "create_sketch", out var app, out var part, out var failure))
+            return failure!;
 
         var plane = (p["plane"]?.ToString() ?? "XY").Trim();
         if (string.IsNullOrEmpty(plane))

@@ -1,6 +1,6 @@
 using System;
 
-namespace Bimwright.Inventor.Shared.ToolBaker;
+namespace Bimwright.Ipt.Shared.ToolBaker;
 
 public sealed class BakePolicyResult
 {
@@ -36,7 +36,7 @@ public static class BakeCompilerPolicy
         "typeof(",
         "Socket",
         "HttpClient",
-        "Bimwright.Inventor.Shared.ToolBaker"
+        "Bimwright.Ipt.Shared.ToolBaker"
     };
 
     public static BakePolicyResult ValidateSource(string source)

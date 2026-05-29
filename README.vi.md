@@ -1,6 +1,6 @@
-<!-- mcp-name: io.github.bimwright/inventor-mcp -->
+<!-- mcp-name: io.github.bimwright/ipt-mcp -->
 
-<h1 align="center">inventor-mcp</h1>
+<h1 align="center">ipt-mcp</h1>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
@@ -14,7 +14,7 @@
 
 ---
 
-`inventor-mcp` là một cổng [Model Context Protocol](https://modelcontextprotocol.io) mã nguồn mở ([Apache-2.0](LICENSE)) cho phép Claude Code — và mọi client hỗ trợ MCP — điều khiển **Autodesk Inventor 2022-2027** ngay tại máy local.
+`ipt-mcp` là một cổng [Model Context Protocol](https://modelcontextprotocol.io) mã nguồn mở ([Apache-2.0](LICENSE)) cho phép Claude Code — và mọi client hỗ trợ MCP — điều khiển **Autodesk Inventor 2022-2027** ngay tại máy local.
 
 Agent nói chuyện bằng MCP qua stdio. Server nói chuyện bằng NDJSON qua một kênh truyền local có xác thực (TCP hoặc Named Pipe) tới add-in Inventor chạy trong tiến trình theo từng phiên bản. Add-in đẩy mọi lệnh lên luồng STA của Inventor và làm việc với Inventor API.
 
@@ -22,12 +22,12 @@ Model của bạn vẫn nằm trên máy bạn.
 
 ---
 
-## inventor-mcp là gì
+## ipt-mcp là gì
 
 Hai tiến trình, một kênh local:
 
-- **`Bimwright.Inventor.Server.exe`** — MCP stdio server .NET 8, được Claude Code, Cursor, Cline, Codex hoặc MCP client khác launch qua stdio. Nó **không tham chiếu Inventor**; chỉ compile các file contract API-agnostic, nên build và chạy được trên bất kỳ máy nào có .NET 8 SDK.
-- **`Bimwright.Inventor.Plugin.InvNN.dll`** — add-in `ApplicationAddInServer` load bên trong `Inventor.exe`, chạy listener TCP hoặc Named Pipe, và thực thi lệnh trên luồng UI (STA) chính của Inventor. Mỗi năm Inventor có một shell mỏng riêng, tất cả compile từ cùng source glob `src/shared/**`.
+- **`Bimwright.Ipt.Server.exe`** — MCP stdio server .NET 8, được Claude Code, Cursor, Cline, Codex hoặc MCP client khác launch qua stdio. Nó **không tham chiếu Inventor**; chỉ compile các file contract API-agnostic, nên build và chạy được trên bất kỳ máy nào có .NET 8 SDK.
+- **`Bimwright.Ipt.Plugin.InvNN.dll`** — add-in `ApplicationAddInServer` load bên trong `Inventor.exe`, chạy listener TCP hoặc Named Pipe, và thực thi lệnh trên luồng UI (STA) chính của Inventor. Mỗi năm Inventor có một shell mỏng riêng, tất cả compile từ cùng source glob `src/shared/**`.
 
 Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent`. Add-in đẩy công việc lên luồng STA thông qua một WinForms control message-only ẩn (`InventorStaDispatcher`). Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết thiết kế đầy đủ.
 
@@ -55,22 +55,22 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 
 ## Cài đặt / Wire MCP client
 
-Server là một tiến trình MCP stdio thuần. Trỏ client tới `Bimwright.Inventor.Server.exe` đã build (hoặc `dotnet run`), rồi load add-in bên trong Inventor.
+Server là một tiến trình MCP stdio thuần. Trỏ client tới `Bimwright.Ipt.Server.exe` đã build (hoặc `dotnet run`), rồi load add-in bên trong Inventor.
 
 Một entry `.mcp.json` (hoặc config client tương đương) điển hình:
 
 ```json
 {
   "mcpServers": {
-    "inventor-mcp": {
-      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Inventor.Server.exe",
+    "ipt-mcp": {
+      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Ipt.Server.exe",
       "args": []
     }
   }
 }
 ```
 
-Discovery add-in là tự động: mỗi add-in Inventor đang chạy ghi một descriptor theo từng instance dưới `%LOCALAPPDATA%\Bimwright\inventor-mcp\inventor-<year>-<pid>.json`. Server scan các file này, bỏ những file dead/stale, và kết nối. Khi có thể mở nhiều Inventor cùng lúc, hãy gọi `inventor_list_available_targets` rồi `inventor_switch_target`.
+Discovery add-in là tự động: mỗi add-in Inventor đang chạy ghi một descriptor theo từng instance dưới `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. Server scan các file này, bỏ những file dead/stale, và kết nối. Khi có thể mở nhiều Inventor cùng lúc, hãy gọi `inventor_list_available_targets` rồi `inventor_switch_target`.
 
 ---
 
@@ -80,8 +80,8 @@ Binaries của Autodesk Inventor và Inventor SDK **không được phân phối
 
 ```bash
 # Server + tests (chỉ server; KHÔNG cần Inventor — chạy trên mọi máy có .NET 8 SDK):
-dotnet build src/InventorMcp.sln -c Debug
-dotnet test  tests/Bimwright.Inventor.Tests -c Debug
+dotnet build src/IptMcp.sln -c Debug
+dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
 # Kiểm tra SHAPE của project add-in mà không cài Inventor:
 dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
@@ -222,7 +222,7 @@ Ngắn gọn: model của bạn ở lại trên máy bạn, và các tool write/
 - **Transport local, có xác thực.** TCP bind loopback; Named Pipe scoped local-machine. Mỗi descriptor theo session mang một auth token ngẫu nhiên.
 - **Error đã sanitize.** Error trả về model được sanitize để tránh leak absolute path/secret.
 
-**ToolBaker** biến workflow local lặp lại thành tool cá nhân đã verify: suggestion xuất hiện qua `inventor_list_bake_suggestions`, bạn chủ động accept bằng `inventor_accept_bake_suggestion` (validate → compile → apply → persist), và tool đã accept gọi được qua `inventor_list_baked_tools` / `inventor_run_baked_tool`. Bake database và audit log nằm local dưới `%LOCALAPPDATA%\Bimwright\inventor-mcp\baked\`. Xem [docs/toolbaker.md](docs/toolbaker.md) và [SECURITY.md](SECURITY.md).
+**ToolBaker** biến workflow local lặp lại thành tool cá nhân đã verify: suggestion xuất hiện qua `inventor_list_bake_suggestions`, bạn chủ động accept bằng `inventor_accept_bake_suggestion` (validate → compile → apply → persist), và tool đã accept gọi được qua `inventor_list_baked_tools` / `inventor_run_baked_tool`. Bake database và audit log nằm local dưới `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\`. Xem [docs/toolbaker.md](docs/toolbaker.md) và [SECURITY.md](SECURITY.md).
 
 ---
 

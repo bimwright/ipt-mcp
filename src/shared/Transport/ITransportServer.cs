@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace Bimwright.Inventor.Shared.Transport;
+namespace Bimwright.Ipt.Shared.Transport;
 
 /// <summary>
 /// Per-version NDJSON listener abstraction. TCP for Inventor 2022-2024, Named Pipe for 2025-2027.

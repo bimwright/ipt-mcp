@@ -1,10 +1,10 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
-namespace Bimwright.Inventor.Shared.Plugin;
+namespace Bimwright.Ipt.Shared.Plugin;
 
 using System;
 using System.Collections.Generic;
-using Bimwright.Inventor.Shared.Infrastructure;
-using Bimwright.Inventor.Shared.Handlers.Feature;
+using Bimwright.Ipt.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Handlers.Feature;
 
 /// <summary>
 /// Phase-3 WS3-B feature/work-feature registrar: registers the six feature wire commands. Only

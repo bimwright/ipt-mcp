@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Bimwright.Inventor.Shared.Security;
+namespace Bimwright.Ipt.Shared.Security;
 
 /// <summary>
 /// Redacts secrets out of baked-tool source before it is persisted to the server registry.

@@ -2,13 +2,13 @@ using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Bimwright.Inventor.Server.Bake;
-using Bimwright.Inventor.Shared.ToolBaker;
-using Bimwright.Inventor.Shared.Security;
+using Bimwright.Ipt.Server.Bake;
+using Bimwright.Ipt.Shared.ToolBaker;
+using Bimwright.Ipt.Shared.Security;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Handlers;
+namespace Bimwright.Ipt.Server.Handlers;
 
 /// <summary>
 /// Accepts a bake suggestion: validates the desired name + output choice + collision, builds an

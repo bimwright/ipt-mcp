@@ -1,6 +1,6 @@
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Shared.ToolBaker;
+namespace Bimwright.Ipt.Shared.ToolBaker;
 
 /// <summary>
 /// Serializes the runtime descriptor (preset / macro) persisted as a baked tool's <c>SourceCode</c>.

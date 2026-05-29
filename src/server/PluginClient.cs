@@ -7,11 +7,11 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Bimwright.Inventor.Shared.Contracts;
+using Bimwright.Ipt.Shared.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server;
+namespace Bimwright.Ipt.Server;
 
 public sealed class InventorGatewayException : Exception
 {
@@ -52,7 +52,21 @@ public sealed class PluginClient
 
     public bool SwitchTarget(string targetId)
     {
-        var match = _registry.List().FirstOrDefault(t => t.TargetId == targetId);
+        var key = (targetId ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(key)) return false;
+
+        var live = _registry.List();
+        TargetDescriptor? match = live.FirstOrDefault(t =>
+            string.Equals(t.TargetId, key, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.PipeName, key, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null && int.TryParse(key, out var numeric))
+        {
+            match = numeric is >= 2022 and <= 2027
+                ? live.FirstOrDefault(t => t.InventorYear == numeric)
+                : live.FirstOrDefault(t => t.ProcessId == numeric);
+        }
+
         if (match is null) return false;
         _current = match;
         return true;
@@ -70,7 +84,8 @@ public sealed class PluginClient
             Command = command,
             Params = parameters as JObject ?? JObject.FromObject(parameters),
             TimeoutMs = _config.TimeoutMs,
-            AuthToken = target.AuthToken
+            AuthToken = target.AuthToken,
+            ReadOnly = _config.ReadOnly
         };
 
         var line = JsonConvert.SerializeObject(env) + "\n";
@@ -133,10 +148,13 @@ public sealed class PluginClient
             await stream.WriteAsync(Encoding.UTF8.GetBytes(line), ct);
 
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            var readTask = reader.ReadLineAsync();
+            var readTask = NdjsonLineReader.ReadLineBoundedAsync(reader, _config.MaxResponseBytes);
             if (await Task.WhenAny(readTask, Task.Delay(_config.TimeoutMs, ct)) != readTask)
                 throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"request {target.TargetId} timed out after {_config.TimeoutMs} ms");
-            return await readTask ?? throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE, "add-in closed the connection");
+            var read = await readTask;
+            if (read.Overflow)
+                throw new InventorGatewayException(InventorErrorCodes.RESPONSE_TOO_LARGE, $"add-in response exceeded {_config.MaxResponseBytes} bytes");
+            return read.Line ?? throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE, "add-in closed the connection");
         }
     }
 }

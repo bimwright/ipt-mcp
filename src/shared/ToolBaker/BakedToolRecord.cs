@@ -1,6 +1,6 @@
 using System;
 
-namespace Bimwright.Inventor.Shared.ToolBaker;
+namespace Bimwright.Ipt.Shared.ToolBaker;
 
 /// <summary>
 /// Persistable definition of a baked tool (preset = fixed args over one read-only handler; macro =

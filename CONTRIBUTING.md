@@ -22,12 +22,12 @@ no Inventor reference and compiles only the API-agnostic shared source.
 ### Clone + build
 
 ```bash
-git clone https://github.com/bimwright/inventor-mcp.git
-cd inventor-mcp
+git clone https://github.com/bimwright/ipt-mcp.git
+cd ipt-mcp
 
 # Server + tests (no Inventor required):
-dotnet build src/InventorMcp.sln -c Debug
-dotnet test  tests/Bimwright.Inventor.Tests -c Debug
+dotnet build src/IptMcp.sln -c Debug
+dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
 # Add-in project SHAPE check without Inventor installed:
 dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
@@ -40,7 +40,7 @@ and pass `/p:InventorInteropDir=...` if the interop is not at the default path
 
 **Close every running Inventor before deploying add-in DLLs** — Inventor holds file locks on loaded
 add-ins. The per-user bundle deploys to
-`%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\`.
+`%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\`.
 
 > Autodesk Inventor binaries and SDK/interop DLLs are **not** redistributed by this repo. Building
 > the add-ins requires a local Inventor installation, the matching interop assemblies, or explicit
@@ -63,7 +63,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the conceptual model. Quick reference
 | `src/shared/ToolBaker/` | Roslyn-based self-evolution engine + safety policy |
 | `src/plugin-inv22..24/` | net48 add-in shells (TCP transport) |
 | `src/plugin-inv25..27/` | net8 / net10 add-in shells (Named Pipe transport) |
-| `tests/Bimwright.Inventor.Tests/` | xUnit tests (pure .NET 8, no Inventor API) |
+| `tests/Bimwright.Ipt.Tests/` | xUnit tests (pure .NET 8, no Inventor API) |
 
 ## Adding a new MCP tool
 

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>Bimwright.Ipt.Plugin</RootNamespace>
+    <AssemblyName>Bimwright.Ipt.Plugin.Inv25</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <InventorYear>2025</InventorYear>
+    <DefineConstants>$(DefineConstants);INVENTOR2025</DefineConstants>
+    <InventorInteropDir Condition="'$(InventorInteropDir)' == ''">C:\Program Files\Common Files\Autodesk Shared\Extensions 2025\Framework\Interop</InventorInteropDir>
+  </PropertyGroup>
+
+  <Target Name="ValidateInventorReferences" BeforeTargets="ResolveReferences" Condition="'$(SkipInventorReferenceCheck)' != 'true'">
+    <Error Condition="!Exists('$(InventorInteropDir)\Autodesk.Inventor.Interop.dll')"
+           Text="Inventor interop not found at $(InventorInteropDir). Pass /p:InventorInteropDir=... or /p:SkipInventorReferenceCheck=true for project-shape checks." />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="Autodesk.Inventor.Interop">
+      <HintPath>$(InventorInteropDir)\Autodesk.Inventor.Interop.dll</HintPath>
+      <Private>false</Private>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+</Project>

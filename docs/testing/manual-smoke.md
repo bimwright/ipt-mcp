@@ -15,13 +15,13 @@ integration end to end.
 
 1. **Install the add-in bundle**
    Run the packaging script for your installed version so the per-user bundle lands at
-   `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\` (run with `-DryRun` first to
+   `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` (run with `-DryRun` first to
    preview the plan without writing anything):
    ```powershell
    pwsh -File .\scripts\package-bundle.ps1 -Years 2025 -Configuration Release
    ```
-   **Expected:** `Bimwright.Inventor.bundle\` exists with `PackageContents.xml`, a per-version
-   subfolder under `Contents\`, the `Bimwright.Inventor.Plugin.InvNN.dll`, and the matching
+   **Expected:** `Bimwright.Ipt.bundle\` exists with `PackageContents.xml`, a per-version
+   subfolder under `Contents\`, the `Bimwright.Ipt.Plugin.InvNN.dll`, and the matching
    `.addin` manifest.
 
 2. **Launch Inventor**
@@ -33,16 +33,18 @@ integration end to end.
    Confirm the add-in loaded (no load error in Inventor's Add-In Manager) and that a session
    descriptor file `inventor-<year>-<pid>.json` was written under:
    ```text
-   %LOCALAPPDATA%\Bimwright\inventor-mcp\
+   %LOCALAPPDATA%\Bimwright\ipt-mcp\
    ```
    **Expected:** the JSON contains `inventor_year`, `process_id`, `host_app: "Inventor"`,
    `transport` (`tcp` for 2022–2024, `pipe` for 2025–2027), `port` or `pipe_name`, `auth_token`,
    and a recent `last_heartbeat_utc`.
+   The descriptor file contains the private token; `inventor_list_available_targets` and
+   `inventor_get_current_target` must not return `auth_token`.
 
 4. **Start the MCP server**
    In a separate terminal, start the stdio MCP server:
    ```powershell
-   .\src\server\bin\Debug\net8.0\Bimwright.Inventor.Server.exe
+   .\src\server\bin\Debug\net8.0\Bimwright.Ipt.Server.exe
    ```
    **Expected:** the server boots and waits on stdio (register it with your MCP client per
    `.mcp.json.example`).
@@ -108,7 +110,7 @@ integration end to end.
 
 15. **Baked-tool registry initialized** — `inventor_list_baked_tools`
     **Expected:** returns an initialized registry (empty `tools` array on a fresh install) read from
-    `bake.db` under `%LOCALAPPDATA%\Bimwright\inventor-mcp\baked`.
+    `bake.db` under `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked`.
 
 16. **Multi-target listing and switching**
     If licensing permits, open a SECOND Inventor instance (same or different supported version).

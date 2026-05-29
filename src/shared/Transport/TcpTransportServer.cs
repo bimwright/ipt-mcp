@@ -7,11 +7,11 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Bimwright.Inventor.Shared.Contracts;
+using Bimwright.Ipt.Shared.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Shared.Transport;
+namespace Bimwright.Ipt.Shared.Transport;
 
 /// <summary>
 /// Loopback NDJSON TCP listener for Inventor 2022-2024 (.NET Framework 4.8 add-ins).
@@ -113,7 +113,7 @@ public sealed class TcpTransportServer : ITransportServer
                 string? line;
                 try
                 {
-                    line = ReadLineBounded(reader, MaxLineBytes, out bool overflow);
+                    line = NdjsonLineReader.ReadLineBounded(reader, MaxLineBytes, out bool overflow);
                     if (overflow)
                     {
                         TryWrite(writer, ErrorJson(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, "Request exceeded 1 MiB size limit."));
@@ -188,21 +188,4 @@ public sealed class TcpTransportServer : ITransportServer
 
     private static string ErrorJson(Guid id, string code, string message)
         => JsonConvert.SerializeObject(InventorCommandResult.Fail(id, code, message, new InventorResponseMeta()));
-
-    private static string? ReadLineBounded(StreamReader reader, int maxBytes, out bool overflow)
-    {
-        overflow = false;
-        var sb = new StringBuilder();
-        int count = 0;
-        while (true)
-        {
-            int ch = reader.Read();
-            if (ch == -1) return sb.Length == 0 ? null : sb.ToString();
-            if (ch == '\n') return sb.ToString();
-            if (ch == '\r') continue;
-            count++;
-            if (count > maxBytes) { overflow = true; return null; }
-            sb.Append((char)ch);
-        }
-    }
 }

@@ -2,7 +2,7 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Shared.Contracts;
+namespace Bimwright.Ipt.Shared.Contracts;
 
 public sealed class InventorCommandEnvelope
 {
@@ -11,4 +11,5 @@ public sealed class InventorCommandEnvelope
     [JsonProperty("params")] public JObject Params { get; set; } = new();
     [JsonProperty("timeout_ms")] public int TimeoutMs { get; set; } = 30000;
     [JsonProperty("auth_token")] public string? AuthToken { get; set; }
+    [JsonProperty("read_only")] public bool ReadOnly { get; set; }
 }

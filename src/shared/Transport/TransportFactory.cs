@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics;
-using Bimwright.Inventor.Shared.Contracts;
+using Bimwright.Ipt.Shared.Contracts;
 
-namespace Bimwright.Inventor.Shared.Transport;
+namespace Bimwright.Ipt.Shared.Transport;
 
 /// <summary>
 /// Picks and constructs the per-version transport and builds its <see cref="TargetDescriptor"/>:

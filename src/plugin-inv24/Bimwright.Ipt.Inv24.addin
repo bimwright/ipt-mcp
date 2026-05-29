@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Registry-free Inventor add-in manifest for Inventor 2024 (net48, TCP transport).
+  ClassId/ClientId MUST equal the [Guid] on InventorAddInServer (see InventorAddInServer.cs).
+
+  Version filter: Inventor's internal major version is NOT the calendar year.
+  Verified mapping (Autodesk interop assembly version + registry RegistryVersionXX.0):
+    2022 = 26, 2023 = 27, 2024 = 28, 2025 = 29, 2026 = 30.
+  (Confirmed: "Autodesk Inventor Interoperability 2024 version 28.0.x" assembly.)
+  Bracketing GreaterThan 27 .. LessThan 29 isolates major version 28 = Inventor 2024 only.
+  The ".." after the major number is the minor/service-pack wildcard.
+  FLAG (for Phase-4 packaging): confirm 28 against the installed Inventor 2024 SDK / About box.
+-->
+<Addin Type="Standard">
+  <ClassId>{B562FC6E-F594-44E2-B1B8-561ABE81BF2C}</ClassId>
+  <ClientId>{B562FC6E-F594-44E2-B1B8-561ABE81BF2C}</ClientId>
+  <DisplayName>Bimwright Inventor MCP 2024</DisplayName>
+  <Description>Bimwright MCP gateway for Autodesk Inventor 2024</Description>
+  <Assembly>Bimwright.Ipt.Plugin.Inv24.dll</Assembly>
+  <LoadAutomatically>1</LoadAutomatically>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionGreaterThan>27..</SupportedSoftwareVersionGreaterThan>
+  <SupportedSoftwareVersionLessThan>29..</SupportedSoftwareVersionLessThan>
+  <UseInventorAssemblyContext>0</UseInventorAssemblyContext>
+</Addin>

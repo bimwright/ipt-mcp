@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Bimwright.Inventor.Server;
-using Bimwright.Inventor.Server.Tools;
+using Bimwright.Ipt.Server;
+using Bimwright.Ipt.Server.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -36,7 +36,7 @@ internal static partial class Program
         }
 
         Add("meta",            typeof(MetaTools));
-        Add("query",           typeof(DocumentTools));   // read-only doc/query methods live here
+        Add("query",           typeof(QueryTools));
         Add("document",        typeof(DocumentTools));
         Add("parameters",      typeof(ParameterTools));
         Add("properties",      typeof(PropertyTools));

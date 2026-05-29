@@ -1,6 +1,6 @@
 using System;
 
-namespace Bimwright.Inventor.Shared.Handlers;
+namespace Bimwright.Ipt.Shared.Handlers;
 
 /// <summary>
 /// Unit conversion at the handler boundary.
@@ -17,6 +17,10 @@ public static class UnitConvert
     // Volume: mm^3 <-> cm^3.
     public static double Mm3ToCm3(double mm3) => mm3 / 1000.0;
     public static double Cm3ToMm3(double cm3) => cm3 * 1000.0;
+
+    // Area: mm^2 <-> cm^2.
+    public static double Mm2ToCm2(double mm2) => mm2 / 100.0;
+    public static double Cm2ToMm2(double cm2) => cm2 * 100.0;
 
     // Angle: degrees <-> radians (Inventor API angle unit is radians).
     public static double DegToRad(double deg) => deg * Math.PI / 180.0;

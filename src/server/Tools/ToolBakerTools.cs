@@ -1,11 +1,11 @@
 using System.ComponentModel;
 using System.Linq;
-using Bimwright.Inventor.Server.Bake;
-using Bimwright.Inventor.Server.Handlers;
+using Bimwright.Ipt.Server.Bake;
+using Bimwright.Ipt.Server.Handlers;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// Read-only ToolBaker tools (toolset <c>toolbaker</c>, available in read-only mode). These operate

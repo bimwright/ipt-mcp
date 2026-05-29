@@ -1,12 +1,12 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Handlers;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
+using Bimwright.Ipt.Shared.Infrastructure;
 using Newtonsoft.Json.Linq;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Properties;
+namespace Bimwright.Ipt.Shared.Handlers.Properties;
 
 /// <summary>
 /// <c>set_iproperty</c> — sets an iProperty value on the active document by property-set name and

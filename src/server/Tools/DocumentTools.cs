@@ -6,38 +6,17 @@ using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
-/// Core/document tools. Registered under BOTH the <c>query</c> and <c>document</c> toolsets
-/// (Program.ResolveToolTypesForRegistration maps both → this type and de-dups). The read-only
-/// query methods (<c>list_open_documents</c>, <c>get_document_info</c>) and the mutating document
-/// methods all live here. Each method is a thin wrapper that ships a wire envelope to the add-in.
+/// Write-capable document tools. Read-only document/query probes live in <see cref="QueryTools"/> so
+/// <c>--read-only</c> can hide this entire toolset by type.
 /// </summary>
 [McpServerToolType]
 public sealed class DocumentTools
 {
     private readonly PluginClient _client;
     public DocumentTools(PluginClient client) => _client = client;
-
-    // ---- query (read-only) ----
-
-    [McpServerTool(Name = "inventor_health"),
-     Description("Probe the active Inventor add-in target: reports inventor_year, process_id, whether a document is open, and the active document type. Read-only; use it to confirm the add-in is reachable.")]
-    public Task<string> Health(CancellationToken ct = default)
-        => Call("health", new JObject(), ct);
-
-    [McpServerTool(Name = "inventor_list_open_documents"),
-     Description("List all open Inventor documents: title, full path, document type, and which one is active.")]
-    public Task<string> ListOpenDocuments(CancellationToken ct = default)
-        => Call("list_open_documents", new JObject(), ct);
-
-    [McpServerTool(Name = "inventor_get_document_info"),
-     Description("Get the active Inventor document's title, full path, and document type.")]
-    public Task<string> GetDocumentInfo(CancellationToken ct = default)
-        => Call("get_document_info", new JObject(), ct);
-
-    // ---- document (write) ----
 
     [McpServerTool(Name = "inventor_new_part"),
      Description("Create a new part document (.ipt). Optional template path; omit to use the default standard part template.")]

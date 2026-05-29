@@ -10,12 +10,12 @@ Security updates are provided for the latest minor release series only.
 
 ## Threat Model
 
-`inventor-mcp` runs locally only. The MCP server talks to each in-process Inventor add-in over an
+`ipt-mcp` runs locally only. The MCP server talks to each in-process Inventor add-in over an
 authenticated localhost transport — **TCP on `127.0.0.1` for Inventor 2022–2024 (net48)** and a
 **Named Pipe for Inventor 2025–2027 (net8/net10)**. The attack surface is:
 
 - Local processes that can read the discovery files
-  (`%LOCALAPPDATA%\Bimwright\inventor-mcp\inventor-2022-*.json` .. `inventor-2027-*.json`).
+  (`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-2022-*.json` .. `inventor-2027-*.json`).
 - Local processes that can connect to the per-target TCP port or Named Pipe.
 - Code executed via `inventor_send_code` or materialized by the ToolBaker engine.
 

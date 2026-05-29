@@ -2,13 +2,13 @@
 using System;
 using IoPath = System.IO.Path;
 using IoFile = System.IO.File;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Handlers;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
+using Bimwright.Ipt.Shared.Infrastructure;
 using Newtonsoft.Json.Linq;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Export;
+namespace Bimwright.Ipt.Shared.Handlers.Export;
 
 /// <summary>
 /// <c>capture_view</c> — read-only. Renders the active view to a bounded PNG via
@@ -41,7 +41,7 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
         var width = Clamp(p.Value<int?>("width") ?? 1280);
         var height = Clamp(p.Value<int?>("height") ?? 720);
 
-        var tempPng = IoPath.Combine(IoPath.GetTempPath(), "inventor-mcp-capture-" + Guid.NewGuid().ToString("N") + ".png");
+        var tempPng = IoPath.Combine(IoPath.GetTempPath(), "ipt-mcp-capture-" + Guid.NewGuid().ToString("N") + ".png");
         try
         {
             // SaveAsBitmap honors the file extension (.png) for the encoding. topColor/bottomColor null = current bg.

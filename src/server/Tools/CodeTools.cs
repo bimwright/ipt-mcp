@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// The opt-in <c>send_code</c> escape hatch (toolset <c>code</c>, off by default, never exposed in

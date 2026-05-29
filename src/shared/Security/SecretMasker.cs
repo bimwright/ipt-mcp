@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace Bimwright.Inventor.Shared.Security;
+namespace Bimwright.Ipt.Shared.Security;
 
 public static class SecretMasker
 {

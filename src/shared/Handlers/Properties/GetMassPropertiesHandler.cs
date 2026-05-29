@@ -1,12 +1,12 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Handlers;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
+using Bimwright.Ipt.Shared.Infrastructure;
 using Newtonsoft.Json.Linq;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Properties;
+namespace Bimwright.Ipt.Shared.Handlers.Properties;
 
 /// <summary>
 /// <c>get_mass_properties</c> — read-only. Reports mass (g), volume (mm^3), surface area (mm^2),
@@ -15,7 +15,7 @@ namespace Bimwright.Inventor.Shared.Handlers.Properties;
 /// Inventor's API works in internal database units: mass in <b>kg</b>, lengths in <b>cm</b>,
 /// volume in <b>cm^3</b>, area in <b>cm^2</b>. We convert at the boundary: kg→g (×1000),
 /// cm→mm (<see cref="UnitConvert.CmToMm"/>), cm^3→mm^3 (<see cref="UnitConvert.Cm3ToMm3"/>),
-/// cm^2→mm^2 (×100).
+/// cm^2→mm^2 (<see cref="UnitConvert.Cm2ToMm2"/>).
 /// </para>
 /// </summary>
 public sealed class GetMassPropertiesHandler : HandlerBase, IInventorCommand
@@ -76,7 +76,7 @@ public sealed class GetMassPropertiesHandler : HandlerBase, IInventorCommand
             {
                 ["mass_g"] = massKg * 1000.0,
                 ["volume_mm3"] = UnitConvert.Cm3ToMm3(volumeCm3),
-                ["area_mm2"] = areaCm2 * 100.0,
+            ["area_mm2"] = UnitConvert.Cm2ToMm2(areaCm2),
                 ["center_of_mass_mm"] = com,
                 ["bounding_box_mm"] = bbox,
             });

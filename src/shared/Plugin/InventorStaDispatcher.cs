@@ -1,4 +1,4 @@
-namespace Bimwright.Inventor.Shared.Plugin;
+namespace Bimwright.Ipt.Shared.Plugin;
 
 using System;
 using System.Threading;

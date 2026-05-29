@@ -1,9 +1,9 @@
 using System;
 using Newtonsoft.Json.Linq;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Inventor.Shared.Handlers;
+namespace Bimwright.Ipt.Shared.Handlers;
 
 /// <summary>
 /// Convenience base for <see cref="IInventorCommand"/> handlers: concise <c>Ok</c>/<c>Fail</c>
@@ -24,5 +24,8 @@ public abstract class HandlerBase
         InventorCommandResult.Success(Guid.Empty, data, Meta(ctx));
 
     protected static InventorCommandResult Fail(InventorCommandContext ctx, string code, string message) =>
+        InventorCommandResult.Fail(Guid.Empty, code, message, Meta(ctx));
+
+    internal static InventorCommandResult FailForSupport(InventorCommandContext ctx, string code, string message) =>
         InventorCommandResult.Fail(Guid.Empty, code, message, Meta(ctx));
 }

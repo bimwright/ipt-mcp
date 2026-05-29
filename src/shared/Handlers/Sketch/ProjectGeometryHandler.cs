@@ -2,10 +2,10 @@
 using System;
 using Newtonsoft.Json.Linq;
 using Inventor;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Inventor.Shared.Handlers.Sketch;
+namespace Bimwright.Ipt.Shared.Handlers.Sketch;
 
 /// <summary>
 /// <c>project_geometry</c> — project model edges (by edge id) into the target sketch via
@@ -18,9 +18,8 @@ public sealed class ProjectGeometryHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        var app = (Application)ctx.Application!;
-        if (app.ActiveDocument is not PartDocument part)
-            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "project_geometry requires an active part document");
+        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "project_geometry", out var app, out var part, out var failure))
+            return failure!;
 
         if (p["edge_ids"] is not JArray edgeIds || edgeIds.Count == 0)
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "edge_ids[] is required and must be non-empty");

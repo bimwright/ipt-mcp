@@ -1,6 +1,6 @@
 using System;
 
-namespace Bimwright.Inventor.Shared.Contracts;
+namespace Bimwright.Ipt.Shared.Contracts;
 
 public static class ResponseSizeGuard
 {

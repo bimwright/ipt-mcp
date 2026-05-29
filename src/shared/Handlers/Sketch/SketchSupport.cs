@@ -2,7 +2,7 @@
 using System;
 using Inventor;
 
-namespace Bimwright.Inventor.Shared.Handlers.Sketch;
+namespace Bimwright.Ipt.Shared.Handlers.Sketch;
 
 /// <summary>
 /// Shared sketch-handler helpers: resolving the "target" sketch and building geometry points.

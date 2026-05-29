@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Registry-free Inventor add-in manifest for Inventor 2026 (net8.0-windows7.0, Named Pipe).
+  ClassId/ClientId MUST equal the [Guid] on InventorAddInServer (see plugin-inv26/InventorAddInServer.cs).
+
+  Version filter: Inventor's internal major version = calendar year - 1996.
+    2022 = 26, 2023 = 27, 2024 = 28, 2025 = 29, 2026 = 30, 2027 = 31.
+  To isolate exactly major version M, bracket GreaterThan (M-1).. and LessThan (M+1).. (strict
+  bounds; the ".." is the minor/service-pack wildcard). For 2026 (M=30): 29.. < v < 31.. selects 30.
+  FLAG (Phase-4 on real Inventor): the Inventor 2026 interop on the build machine is a STUB reporting
+  assembly version 29.0.0.0 (not 30). 2026 = 30 is therefore DERIVED from the year-1996 rule, not
+  observed from the interop. Confirm 30 against a real Inventor 2026 About box / SDK before shipping.
+-->
+<Addin Type="Standard">
+  <!-- ClassId/ClientId MUST match the [Guid] on InventorAddInServer (plugin-inv26). -->
+  <ClassId>{B1D26026-0000-4A26-9B26-BF1E2026C0DE}</ClassId>
+  <ClientId>{B1D26026-0000-4A26-9B26-BF1E2026C0DE}</ClientId>
+  <DisplayName>Bimwright Inventor MCP (2026)</DisplayName>
+  <Description>Bimwright ipt-mcp gateway add-in for Autodesk Inventor 2026.</Description>
+  <Assembly>Bimwright.Ipt.Plugin.Inv26.dll</Assembly>
+  <LoadOnStartUp>1</LoadOnStartUp>
+  <LoadAutomatically>1</LoadAutomatically>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionGreaterThan>29..</SupportedSoftwareVersionGreaterThan>
+  <SupportedSoftwareVersionLessThan>31..</SupportedSoftwareVersionLessThan>
+  <!-- Harmless on 2026; honoured (isolated dependency loading) on 2027. 0 = isolated context. -->
+  <UseInventorAssemblyContext>0</UseInventorAssemblyContext>
+</Addin>

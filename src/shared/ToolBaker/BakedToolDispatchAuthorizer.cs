@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Bimwright.Inventor.Shared.ToolBaker;
+namespace Bimwright.Ipt.Shared.ToolBaker;
 
 /// <summary>
 /// Governs which wire commands a baked tool may invoke. Baked tools are restricted to the read-only

@@ -2,10 +2,10 @@
 using System;
 using Newtonsoft.Json.Linq;
 using Inventor;
-using Bimwright.Inventor.Shared.Contracts;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Inventor.Shared.Handlers.Sketch;
+namespace Bimwright.Ipt.Shared.Handlers.Sketch;
 
 /// <summary>
 /// <c>draw_circle</c> — add a center/radius circle to the target sketch (mm in, cm to the API).
@@ -17,9 +17,8 @@ public sealed class DrawCircleHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        var app = (Application)ctx.Application!;
-        if (app.ActiveDocument is not PartDocument part)
-            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "draw_circle requires an active part document");
+        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "draw_circle", out var app, out var part, out var failure))
+            return failure!;
 
         if (p["cx"] is null || p["cy"] is null || p["radius"] is null)
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "cx,cy,radius (mm) are required");

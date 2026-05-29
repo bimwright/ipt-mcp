@@ -1,11 +1,11 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
-namespace Bimwright.Inventor.Shared.Plugin;
+namespace Bimwright.Ipt.Shared.Plugin;
 
 using System;
 using System.Collections.Generic;
-using Bimwright.Inventor.Shared.Infrastructure;
-using Bimwright.Inventor.Shared.Handlers;
-using Bimwright.Inventor.Shared.Handlers.Code;
+using Bimwright.Ipt.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Handlers;
+using Bimwright.Ipt.Shared.Handlers.Code;
 
 /// <summary>
 /// Phase-3 WS3-C Platform registrar: the framework escape hatch + ToolBaker runtime. <c>send_code</c> is

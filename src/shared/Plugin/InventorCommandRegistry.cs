@@ -1,8 +1,8 @@
-namespace Bimwright.Inventor.Shared.Plugin;
+namespace Bimwright.Ipt.Shared.Plugin;
 
 using System;
 using System.Collections.Generic;
-using Bimwright.Inventor.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Infrastructure;
 
 /// <summary>
 /// Builds the add-in's wire-command map. Uses the partial-registrar pattern so each Phase-3

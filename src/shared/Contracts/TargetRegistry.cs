@@ -4,7 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Bimwright.Inventor.Shared.Contracts;
+namespace Bimwright.Ipt.Shared.Contracts;
 
 public sealed class TargetRegistry
 {
@@ -26,8 +26,8 @@ public sealed class TargetRegistry
             if (d is null) continue;
             if (!string.Equals(d.HostApp, "Inventor", StringComparison.OrdinalIgnoreCase)) continue;
             if (d.InventorYear is < 2022 or > 2027) continue;
-            if (now - d.LastHeartbeatUtc > _maxAge) continue;
-            if (!IsProcessAlive(d.ProcessId)) continue;
+            if (now - d.LastHeartbeatUtc > _maxAge) { DeleteQuietly(file); continue; }
+            if (!IsProcessAlive(d.ProcessId)) { DeleteQuietly(file); continue; }
             live.Add(d);
         }
         return live.OrderByDescending(x => x.LastHeartbeatUtc).ToList();
@@ -38,5 +38,10 @@ public sealed class TargetRegistry
         if (pid <= 0) return false;
         try { System.Diagnostics.Process.GetProcessById(pid); return true; }
         catch { return false; }
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try { File.Delete(path); } catch { }
     }
 }

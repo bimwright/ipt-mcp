@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
     Builds the per-version Inventor add-ins and assembles a per-user, registry-free
-    Autodesk ApplicationPlugins bundle for inventor-mcp.
+    Autodesk ApplicationPlugins bundle for ipt-mcp.
 
 .DESCRIPTION
     Lays out:
 
-        %APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\
+        %APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\
           PackageContents.xml              <- ApplicationPackage entry point (one <Components> per year)
           Contents\
-            2022\  Bimwright.Inventor.Plugin.Inv22.dll  (+ deps)  Bimwright.Inventor.Inv22.addin
+            2022\  Bimwright.Ipt.Plugin.Inv22.dll  (+ deps)  Bimwright.Ipt.Inv22.addin
             2023\  ...
             ...
-            2027\  Bimwright.Inventor.Plugin.Inv27.dll  (+ deps)  Bimwright.Inventor.Inv27.addin
+            2027\  Bimwright.Ipt.Plugin.Inv27.dll  (+ deps)  Bimwright.Ipt.Inv27.addin
 
     Inventor auto-discovers add-ins placed under %APPDATA%\Autodesk\ApplicationPlugins\*.bundle
     via PackageContents.xml, so NO COM registry registration is required (registry-free deploy).
@@ -36,7 +36,7 @@
 
 .PARAMETER BundleRoot
     Override the bundle destination. Default:
-    %APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle
+    %APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle
 
 .PARAMETER DryRun
     Plan only: print every build/copy/write action without touching the build outputs or the
@@ -60,7 +60,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # --- Constants -------------------------------------------------------------------------------
-$BundleName  = 'Bimwright.Inventor.bundle'
+$BundleName  = 'Bimwright.Ipt.bundle'
 $VendorId    = 'Bimwright'
 $ProductName = 'Bimwright Inventor MCP'
 
@@ -88,7 +88,7 @@ function InternalMajorFor([int]$year) { return $year - 1996 }
 # --- Plan / results --------------------------------------------------------------------------
 $summary = [System.Collections.Generic.List[object]]::new()
 
-Write-Step "inventor-mcp bundle packaging  (Configuration=$Configuration, DryRun=$DryRun)"
+Write-Step "ipt-mcp bundle packaging  (Configuration=$Configuration, DryRun=$DryRun)"
 Write-Action "Repo root : $RepoRoot"
 Write-Action "Bundle    : $BundleRoot"
 Write-Action "Years     : $($Years -join ', ')"
@@ -99,9 +99,9 @@ foreach ($year in $Years) {
     $nn          = $year - 2000
     $projDirName = "plugin-inv$nn"
     $projDir     = Join-Path $SrcDir $projDirName
-    $proj        = Join-Path $projDir ("Bimwright.Inventor.Plugin.Inv{0:00}.csproj" -f $nn)
-    $asmName     = "Bimwright.Inventor.Plugin.Inv{0:00}" -f $nn
-    $addinName   = "Bimwright.Inventor.Inv{0:00}.addin" -f $nn
+    $proj        = Join-Path $projDir ("Bimwright.Ipt.Plugin.Inv{0:00}.csproj" -f $nn)
+    $asmName     = "Bimwright.Ipt.Plugin.Inv{0:00}" -f $nn
+    $addinName   = "Bimwright.Ipt.Inv{0:00}.addin" -f $nn
     $addinPath   = Join-Path $projDir $addinName
 
     $entry = [pscustomobject]@{
@@ -221,7 +221,7 @@ $sb = [System.Text.StringBuilder]::new()
 [void]$sb.Append(('<ApplicationPackage SchemaVersion="1.0" AutodeskProduct="Inventor" Name="{0}"' -f $ProductName) + $nl)
 [void]$sb.Append('                    Description="Bimwright MCP gateway add-ins for Autodesk Inventor 2022-2027"' + $nl)
 [void]$sb.Append('                    AppVersion="0.1.0" ProductType="Application" ProductCode="{B1MW0001-0000-0000-0000-000000000001}">' + $nl)
-[void]$sb.Append('  <CompanyDetails Name="Bimwright" Url="https://github.com/bimwright/inventor-mcp" />' + $nl)
+[void]$sb.Append('  <CompanyDetails Name="Bimwright" Url="https://github.com/bimwright/ipt-mcp" />' + $nl)
 [void]$sb.Append('  <RuntimeRequirements OS="Win64" Platform="Inventor" />' + $nl)
 
 foreach ($e in ($staged | Sort-Object Year)) {

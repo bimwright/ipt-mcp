@@ -4,7 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server;
+namespace Bimwright.Ipt.Server;
 
 public sealed class InventorMcpConfig
 {
@@ -18,9 +18,9 @@ public sealed class InventorMcpConfig
     public List<string> Toolsets { get; set; } = new();
 
     public string DescriptorDirectory { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "inventor-mcp");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "ipt-mcp");
     public string BakeDirectory { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "inventor-mcp", "baked");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "ipt-mcp", "baked");
 
     public static InventorMcpConfig Load(string[] args)
     {

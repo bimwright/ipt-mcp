@@ -1,4 +1,4 @@
-namespace Bimwright.Inventor.Server;
+namespace Bimwright.Ipt.Server;
 
 public sealed class ServerState
 {

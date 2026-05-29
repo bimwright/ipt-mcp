@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Bimwright.Inventor.Server;
+namespace Bimwright.Ipt.Server;
 
 public static class ToolsetFilter
 {

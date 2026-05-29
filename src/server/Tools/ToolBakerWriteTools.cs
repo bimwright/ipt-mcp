@@ -1,13 +1,13 @@
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
-using Bimwright.Inventor.Server.Bake;
-using Bimwright.Inventor.Server.Handlers;
+using Bimwright.Ipt.Server.Bake;
+using Bimwright.Ipt.Server.Handlers;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bimwright.Inventor.Server.Tools;
+namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// Write-capable ToolBaker tools (toolset <c>toolbaker_write</c>, hidden in read-only mode). These run

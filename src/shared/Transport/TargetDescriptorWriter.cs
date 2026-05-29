@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Threading;
-using Bimwright.Inventor.Shared.Contracts;
+using Bimwright.Ipt.Shared.Contracts;
 using Newtonsoft.Json;
 
-namespace Bimwright.Inventor.Shared.Transport;
+namespace Bimwright.Ipt.Shared.Transport;
 
 /// <summary>
 /// Writes and refreshes the per-instance target descriptor JSON

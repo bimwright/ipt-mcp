@@ -1,4 +1,4 @@
-namespace Bimwright.Inventor.Shared.Contracts;
+namespace Bimwright.Ipt.Shared.Contracts;
 
 /// <summary>
 /// Frozen integration contract: canonical error codes returned in

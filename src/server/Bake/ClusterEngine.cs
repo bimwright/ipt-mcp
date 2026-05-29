@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Bimwright.Inventor.Server.Bake;
+namespace Bimwright.Ipt.Server.Bake;
 
 public sealed class ClusterCandidate
 {
