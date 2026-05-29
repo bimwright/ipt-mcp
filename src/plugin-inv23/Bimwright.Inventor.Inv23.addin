@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Registry-free Inventor add-in manifest for Inventor 2023 (net48, TCP transport).
+  ClassId/ClientId MUST equal the [Guid] on InventorAddInServer (see InventorAddInServer.cs).
+
+  Version filter: Inventor's internal major version is NOT the calendar year.
+  Verified mapping (Autodesk interop assembly version + registry RegistryVersionXX.0):
+    2022 = 26, 2023 = 27, 2024 = 28, 2025 = 29, 2026 = 30.
+  Bracketing GreaterThan 26 .. LessThan 28 isolates major version 27 = Inventor 2023 only.
+  The ".." after the major number is the minor/service-pack wildcard.
+  FLAG (for Phase-4 packaging): confirm 27 against the installed Inventor 2023 SDK / About box.
+-->
+<Addin Type="Standard">
+  <ClassId>{E6E68FDF-601C-4F25-98C9-A814A3FC6F01}</ClassId>
+  <ClientId>{E6E68FDF-601C-4F25-98C9-A814A3FC6F01}</ClientId>
+  <DisplayName>Bimwright Inventor MCP 2023</DisplayName>
+  <Description>Bimwright MCP gateway for Autodesk Inventor 2023</Description>
+  <Assembly>Bimwright.Inventor.Plugin.Inv23.dll</Assembly>
+  <LoadAutomatically>1</LoadAutomatically>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionGreaterThan>26..</SupportedSoftwareVersionGreaterThan>
+  <SupportedSoftwareVersionLessThan>28..</SupportedSoftwareVersionLessThan>
+  <UseInventorAssemblyContext>0</UseInventorAssemblyContext>
+</Addin>

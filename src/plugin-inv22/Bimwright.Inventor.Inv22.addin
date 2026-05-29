@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Registry-free Inventor add-in manifest for Inventor 2022 (net48, TCP transport).
+  ClassId/ClientId MUST equal the [Guid] on InventorAddInServer (see InventorAddInServer.cs).
+
+  Version filter: Inventor's internal major version is NOT the calendar year.
+  Verified mapping (Autodesk interop assembly version + registry RegistryVersionXX.0):
+    2022 = 26, 2023 = 27, 2024 = 28, 2025 = 29, 2026 = 30.
+  Bracketing GreaterThan 25 .. LessThan 27 isolates major version 26 = Inventor 2022 only.
+  The ".." after the major number is the minor/service-pack wildcard.
+  FLAG (for Phase-4 packaging): confirm 26 against the installed Inventor 2022 SDK / About box.
+-->
+<Addin Type="Standard">
+  <ClassId>{2F4F08C6-E88B-4B75-92A8-B9C52244C169}</ClassId>
+  <ClientId>{2F4F08C6-E88B-4B75-92A8-B9C52244C169}</ClientId>
+  <DisplayName>Bimwright Inventor MCP 2022</DisplayName>
+  <Description>Bimwright MCP gateway for Autodesk Inventor 2022</Description>
+  <Assembly>Bimwright.Inventor.Plugin.Inv22.dll</Assembly>
+  <LoadAutomatically>1</LoadAutomatically>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionGreaterThan>25..</SupportedSoftwareVersionGreaterThan>
+  <SupportedSoftwareVersionLessThan>27..</SupportedSoftwareVersionLessThan>
+  <UseInventorAssemblyContext>0</UseInventorAssemblyContext>
+</Addin>
