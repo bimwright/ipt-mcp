@@ -22,7 +22,7 @@ public sealed class GetDocumentInfoHandler : IInventorCommand
         var meta = new InventorResponseMeta { TargetId = ctx.TargetId, InventorYear = ctx.InventorYear == 0 ? null : ctx.InventorYear };
         var app = (Application)ctx.Application!;
 
-        Document? doc;
+        global::Inventor.Document? doc;
         try { doc = app.ActiveDocument; }
         catch { doc = null; }
 
