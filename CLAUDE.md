@@ -26,7 +26,7 @@ Discovery / target descriptor (`TargetDescriptor`):
   "host_app": "Inventor",
   "transport": "pipe",
   "port": 0,
-  "pipe_name": "bimwright-inventor-2025-12345",
+  "pipe_name": "BimwrightInventor-12345",
   "auth_token": "…",
   "document_title": "Part1.ipt",
   "document_path": "C:\\…\\Part1.ipt",
