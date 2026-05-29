@@ -1,0 +1,23 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      # The MCP server and unit tests are net8.0 and need no Inventor SDK,
+      # so they build and run on any runner. The per-version add-ins require
+      # the Inventor interop assemblies and are built on a prepared Windows box.
+      - name: Build server
+        run: dotnet build src/server -c Release
+      - name: Test (server-only)
+        run: dotnet test tests/Bimwright.Ipt.Tests -c Release

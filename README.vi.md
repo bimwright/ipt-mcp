@@ -3,6 +3,7 @@
 <h1 align="center">ipt-mcp</h1>
 
 <p align="center">
+  <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
   <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-46%20tools-6C47FF" alt="MCP tools" /></a>
