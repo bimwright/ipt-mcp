@@ -1,23 +1,102 @@
-# Contributing
+# Contributing to Bimwright Inventor MCP
 
-> **Stub (Phase 1).** Finalized in Phase 4.
+Thanks for your interest. Bimwright Inventor MCP is an open-source (Apache-2.0) MCP gateway for
+Autodesk Inventor 2022–2027. Open an issue before a large PR so we can agree on scope.
 
-Thanks for your interest in inventor-mcp. Contributions are welcome under the project's
-[Apache-2.0](LICENSE) license and [Code of Conduct](CODE_OF_CONDUCT.md).
+## Dev setup
 
-## Quick start
+### Prereqs
+
+- Windows 10/11 (Autodesk Inventor is Windows-only).
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — required for the server, tests,
+  and the 2025/2026 add-ins.
+- .NET Framework 4.8 Developer Pack — required to compile the `net48` add-ins (2022–2024).
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — required to compile the 2027
+  add-in (`net10.0-windows7.0`), even for a shape-only check.
+- Visual Studio 2022+ or JetBrains Rider.
+- One or more Autodesk Inventor installations (2022–2027) for add-in compile and runtime testing.
+
+To compile and run the server + tests *only*, no Inventor installation is required — the server has
+no Inventor reference and compiles only the API-agnostic shared source.
+
+### Clone + build
 
 ```bash
+git clone https://github.com/bimwright/inventor-mcp.git
+cd inventor-mcp
+
+# Server + tests (no Inventor required):
 dotnet build src/InventorMcp.sln -c Debug
 dotnet test  tests/Bimwright.Inventor.Tests -c Debug
+
+# Add-in project SHAPE check without Inventor installed:
+dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
+dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # needs the .NET 10 SDK
 ```
 
-The server and tests build with no Inventor SDK installed. Add-in projects can be
-shape-checked with `/p:SkipInventorReferenceCheck=true`.
+Real add-in compile (on a box with Inventor + the matching SDK): drop `SkipInventorReferenceCheck`
+and pass `/p:InventorInteropDir=...` if the interop is not at the default path
+(`C:\Program Files\Common Files\Autodesk Shared\Extensions <year>\Framework\Interop`).
 
-## Guidelines
+**Close every running Inventor before deploying add-in DLLs** — Inventor holds file locks on loaded
+add-ins. The per-user bundle deploys to
+`%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\`.
 
-- Follow the existing `Bimwright.Inventor.*` namespace and file-per-handler conventions.
-- Add or update xUnit tests for any behavior change; the server-only suite must stay green.
-- Never serialize Inventor API objects — return DTOs.
-- Report security issues per [SECURITY.md](SECURITY.md), not as public issues.
+> Autodesk Inventor binaries and SDK/interop DLLs are **not** redistributed by this repo. Building
+> the add-ins requires a local Inventor installation, the matching interop assemblies, or explicit
+> MSBuild reference-path properties.
+
+## Project layout
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the conceptual model. Quick reference:
+
+| Path | What lives here |
+|------|-----------------|
+| `src/server/` | MCP server, tool registration, stdio entry points; **no Inventor reference** |
+| `src/server/Tools/` | `[McpServerToolType]` classes, one per toolset/domain |
+| `src/shared/Contracts/` | API-agnostic envelope/result/error/descriptor + response guard |
+| `src/shared/Infrastructure/` | `CommandDispatcher`, `IInventorCommand`, `InventorCommandContext` |
+| `src/shared/Transport/` | `ITransportServer`, TCP + Named-Pipe NDJSON transports, descriptor writer |
+| `src/shared/Plugin/` | `InventorAddInServer`, `InventorStaDispatcher`, partial command registry |
+| `src/shared/Handlers/` | one file per wire command (the Inventor API implementation) |
+| `src/shared/Security/` | `SecretMasker`, `ErrorSanitizer` |
+| `src/shared/ToolBaker/` | Roslyn-based self-evolution engine + safety policy |
+| `src/plugin-inv22..24/` | net48 add-in shells (TCP transport) |
+| `src/plugin-inv25..27/` | net8 / net10 add-in shells (Named Pipe transport) |
+| `tests/Bimwright.Inventor.Tests/` | xUnit tests (pure .NET 8, no Inventor API) |
+
+## Adding a new MCP tool
+
+1. Write the handler in `src/shared/Handlers/<Domain>/<Verb><Noun>Handler.cs` implementing
+   `IInventorCommand` (`Name`, `IsReadOnly`, `Execute`). Cast `ctx.Application` to
+   `Inventor.Application`; never call the ROT / `GetActiveObject`. Return DTOs (anonymous objects or
+   `JObject`) — never serialize Inventor API objects. Convert mm↔cm via
+   `src/shared/Handlers/UnitConvert.cs` (Inventor's internal length unit is centimetres).
+2. Register it in the matching partial registrar
+   `src/shared/Plugin/InventorCommandRegistry.<Domain>.cs` (`add(new YourHandler());`).
+3. Add an `[McpServerTool(Name = "inventor_<wire>")]` method on the owning toolset class under
+   `src/server/Tools/`. The wire command sent to the add-in is the snake_case name minus the
+   `inventor_` prefix.
+4. Cover non-trivial logic with an xUnit test, including the registration/read-only snapshot.
+5. Smoke test in at least one Inventor version before the PR (see
+   [`docs/testing/manual-smoke.md`](docs/testing/manual-smoke.md)).
+
+## Coding style
+
+- Match the surrounding code; existing handlers are the authoritative reference.
+- DTOs are anonymous objects or `JObject`s with lowercase JSON property names.
+- Comments explain *why*, not *what*.
+- Server tool registration lives once in `Program.cs`; add-in handler registration uses the
+  per-domain partial registrars so no shared `Build()` list is edited concurrently.
+
+## Commit + PR
+
+- One logical change per commit. Commit messages start with a short scope prefix
+  (e.g. `handlers:`, `transport:`, `docs:`).
+- Open a PR against `main`. CI (server-only build + tests) must be green.
+- Include a "Tested with" line: which Inventor year(s) you smoke-tested, if any.
+
+## Code of Conduct
+
+Be kind. Assume good faith. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+([Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)).

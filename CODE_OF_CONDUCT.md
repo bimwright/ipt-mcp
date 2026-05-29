@@ -1,9 +1,22 @@
 # Code of Conduct
 
-> **Stub (Phase 1).** Finalized in Phase 4.
+This project adopts the **Contributor Covenant v2.1** in full.
 
-This project adopts the [Contributor Covenant](https://www.contributor-covenant.org/),
-version 2.1. By participating, you are expected to uphold this code. Be respectful,
-assume good faith, and keep discussion constructive.
+The canonical text, including the pledge, standards, enforcement responsibilities, and guidelines,
+lives at:
 
-Report unacceptable behavior to the maintainer (see [SECURITY.md](SECURITY.md) for contact).
+https://www.contributor-covenant.org/version/2/1/code_of_conduct/
+
+## Scope
+
+Applies to all project spaces: GitHub issues and pull requests, discussions, commit messages, and
+any other channel where a contributor is acting on behalf of the project.
+
+## Reporting
+
+Report unacceptable behavior privately:
+
+- Email the maintainer via the address on the commit history, or
+- Open a GitHub private vulnerability report if the behavior also has a security dimension.
+
+Reports are handled confidentially. Enforcement follows the guidelines linked above.

@@ -1,10 +1,44 @@
 {
-  "name": "bimwright-inventor",
-  "displayName": "Bimwright Inventor MCP",
-  "description": "MCP gateway for Autodesk Inventor 2022-2027.",
-  "command": "bimwright-inventor",
-  "args": [],
-  "env": {
-    "BIMWRIGHT_INVENTOR_READ_ONLY": "true"
-  }
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.bimwright/inventor-mcp",
+  "description": "MCP gateway for Autodesk Inventor 2022-2027 (parts, sketches, features, parameters, iProperties, mass properties, export).",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/bimwright/inventor-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "nuget",
+      "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+      "identifier": "Bimwright.Inventor.Server",
+      "version": "0.1.0",
+      "runtimeHint": "dnx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "BIMWRIGHT_INVENTOR_READ_ONLY",
+          "description": "Set to 1/true to run the server in strict read-only mode (write/send_code toolsets are not registered).",
+          "isRequired": false
+        },
+        {
+          "name": "BIMWRIGHT_INVENTOR_TOOLSETS",
+          "description": "Comma-separated toolsets to enable (meta,query,document,parameters,properties,sketch,feature,export,code,toolbaker,toolbaker_write); 'all' enables every known toolset.",
+          "isRequired": false
+        },
+        {
+          "name": "BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE",
+          "description": "Set to 1/true to expose the dangerous inventor_send_code tool (also requires BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1 on the add-in).",
+          "isRequired": false
+        },
+        {
+          "name": "BIMWRIGHT_INVENTOR_TARGET",
+          "description": "Pin the active target by 4-digit Inventor year (e.g. 2025) or descriptor id.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
 }
