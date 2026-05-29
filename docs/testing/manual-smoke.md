@@ -14,13 +14,15 @@ integration end to end.
 ---
 
 1. **Install the add-in bundle**
-   Run the local packaging/deploy script for your installed version so the per-user bundle lands at
-   `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\`:
+   Run the packaging script for your installed version so the per-user bundle lands at
+   `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Inventor.bundle\` (run with `-DryRun` first to
+   preview the plan without writing anything):
    ```powershell
-   powershell -File .\scripts\install-bundle.ps1
+   pwsh -File .\scripts\package-bundle.ps1 -Years 2025 -Configuration Release
    ```
    **Expected:** `Bimwright.Inventor.bundle\` exists with `PackageContents.xml`, a per-version
-   subfolder, the `Bimwright.Inventor.Plugin.InvNN.dll`, and the matching `.addin` manifest.
+   subfolder under `Contents\`, the `Bimwright.Inventor.Plugin.InvNN.dll`, and the matching
+   `.addin` manifest.
 
 2. **Launch Inventor**
    Start the Inventor desktop version you deployed for. Close any older instance first so the right
