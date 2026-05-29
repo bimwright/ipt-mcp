@@ -7,6 +7,18 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!--
+    WS1-B owns src/shared/Infrastructure (IInventorCommand, InventorCommandContext,
+    CommandDispatcher) and src/shared/Transport. We glob them into the test assembly so
+    the dispatcher/transport get unit-tested in Phase 1 without Inventor. While WS1-B is
+    in flight these directories may be empty (the globs then match nothing and the build
+    still succeeds). DispatcherTests is gated on HAS_INVENTOR_DISPATCHER, which is defined
+    only once CommandDispatcher.cs exists, so the suite compiles + stays green either way.
+  -->
+  <PropertyGroup Condition="Exists('..\..\src\shared\Infrastructure\CommandDispatcher.cs')">
+    <DefineConstants>$(DefineConstants);HAS_INVENTOR_DISPATCHER</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
@@ -18,6 +30,11 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\server\Bimwright.Inventor.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\shared\Infrastructure\*.cs" LinkBase="Shared\Infrastructure" />
+    <Compile Include="..\..\src\shared\Transport\*.cs" LinkBase="Shared\Transport" />
   </ItemGroup>
 
 </Project>
