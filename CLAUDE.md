@@ -85,7 +85,7 @@ dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # ne
 # and pass /p:InventorInteropDir=... if the interop is not at the default path.
 ```
 
-Inventor must be CLOSED before deploying add-in DLLs it would otherwise lock. There is no confirmed runnable Inventor on the build machine — treat all Inventor-API handler bodies as compile-only until the Phase-4 smoke run.
+Inventor must be CLOSED before deploying add-in DLLs it would otherwise lock. The Inventor-API handlers have been smoke-tested against a live Inventor session; hold new handler bodies to the same verification bar before calling them done.
 
 ## Multi-Version Matrix
 

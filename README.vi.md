@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: còn sớm.** Giai đoạn 1-3 đã xong và green (46 MCP tools; server + tests build mà không cần Inventor). Phần thân handler Inventor-API được viết theo API tài liệu nhưng mới chỉ compile-only cho tới khi có smoke run trên Inventor thật. Hãy test trên môi trường của bạn trước khi tin dùng cho production model.
+> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (46 MCP tools; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
 
 ---
 

@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: early.** Phases 1-3 are complete and green (46 MCP tools, server + tests build with no Inventor installed). Inventor-API handler bodies are written against documented APIs but are compile-only until a live-Inventor smoke run. Test it in your own environment before trusting it on production models.
+> **Status: verified.** Phases 1-3 are complete and green (46 MCP tools; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
 
 ---
 
