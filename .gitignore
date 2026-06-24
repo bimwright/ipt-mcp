@@ -19,3 +19,22 @@ local.settings.json
 *.iam
 *.idw
 *.dwg
+
+# Claude Code local state
+.claude/
+
+# Internal process docs — plans, brainstorms, reviews, dev-roadmaps. NOT for public release.
+docs/superpowers/
+docs/design/brainstorm/
+docs/reviews/
+docs/benchmarks/
+docs/research-archive/
+
+# Internal per-directory codemap design notes
+codemap.md
+
+# Local AI review sessions (prompt + output dumps)
+runs/
+
+# MCP Registry publisher CLI (downloaded on demand)
+.mcp-publisher/
