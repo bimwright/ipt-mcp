@@ -41,6 +41,33 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
         var width = Clamp(p.Value<int?>("width") ?? 1280);
         var height = Clamp(p.Value<int?>("height") ?? 720);
 
+        // File mode: when output_path is supplied, write the PNG/JPG/BMP straight to disk and return
+        // only the path (no inline base64). Preferred for larger images — avoids the response token cap.
+        var outputPath = (p["output_path"]?.Type == JTokenType.String) ? (string)p["output_path"]! : null;
+        if (!string.IsNullOrWhiteSpace(outputPath))
+        {
+            if (ExportPathPolicy.TryRejectPath(outputPath, out var pathRejection))
+                return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, pathRejection);
+            if (CaptureImagePolicy.TryRejectImageExtension(outputPath, out var extRejection))
+                return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, extRejection);
+            try
+            {
+                view.Camera.SaveAsBitmap(outputPath, width, height, Type.Missing, Type.Missing);
+            }
+            catch (Exception ex)
+            {
+                return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to capture view to file: " + ex.Message);
+            }
+            return Ok(ctx, new JObject
+            {
+                ["saved"] = true,
+                ["output_path"] = outputPath,
+                ["format"] = CaptureImagePolicy.ResolveFormat(outputPath),
+                ["width"] = width,
+                ["height"] = height,
+            });
+        }
+
         var tempPng = IoPath.Combine(IoPath.GetTempPath(), "ipt-mcp-capture-" + Guid.NewGuid().ToString("N") + ".png");
         try
         {

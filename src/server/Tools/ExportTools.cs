@@ -23,13 +23,22 @@ public sealed class ExportTools
     public ExportTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_capture_view"),
-     Description("Capture the active view as a base64-encoded PNG image (bounded resolution). Optional width/height in pixels (clamped). Does not write a file or mutate the document.")]
-    public Task<string> CaptureView(int width = 1280, int height = 720, CancellationToken ct = default)
-        => Call("capture_view", new JObject
+     Description("Capture the active Inventor view as an image. Default: returns a base64-encoded PNG inline (bounded resolution). If output_path is given (absolute path under an allowed root, ending in .png/.jpg/.jpeg/.bmp), the image is written to that file and only the path is returned (no base64) — preferred for larger images to avoid the response size limit. Optional width/height in pixels (clamped). Does not mutate the document.")]
+    public Task<string> CaptureView(int width = 1280, int height = 720, string? outputPath = null, CancellationToken ct = default)
+    {
+        var p = new JObject
         {
             ["width"] = ClampPixels(width),
             ["height"] = ClampPixels(height),
-        }, ct);
+        };
+        if (!string.IsNullOrWhiteSpace(outputPath))
+        {
+            if (ExportPathPolicy.TryRejectPath(outputPath, out var rejection))
+                return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
+            p["output_path"] = outputPath;
+        }
+        return Call("capture_view", p, ct);
+    }
 
     [McpServerTool(Name = "inventor_export_step"),
      Description("Export the active part or assembly to a STEP (.stp/.step) file at output_path. The path must be an absolute file path under an allowed output root.")]

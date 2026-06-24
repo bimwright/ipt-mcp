@@ -35,6 +35,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\shared\Infrastructure\*.cs" LinkBase="Shared\Infrastructure" />
     <Compile Include="..\..\src\shared\Transport\*.cs" LinkBase="Shared\Transport" />
+    <Compile Include="..\..\src\shared\Handlers\Export\CaptureImagePolicy.cs" LinkBase="Shared\Handlers\Export" />
   </ItemGroup>
 
 </Project>
