@@ -11,7 +11,7 @@ public static class ServerInstructions
         "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole, circular_pattern, rectangular_pattern; " +
         "create work geometry such as a work plane and work axis; " +
         "place components (IPT/IAM) in assembly, constrain them (mate/flush/insert/angle) using named refs/proxies, create iMates on parts; " +
-        "query assembly relationships, BOM, degrees of freedom, interference, and min distance; " +
+        "query assembly relationships, BOM, degrees of freedom, interference (clash analysis), and min distance; " +
         "zoom-fit and orient camera views; " +
         "read and write model parameters and user parameters; " +
         "read and write iProperties (iproperty: title, author, part number, description, custom properties); " +

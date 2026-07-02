@@ -11,7 +11,7 @@ namespace Bimwright.Ipt.Server.Tools;
 /// <summary>
 /// iProperty and mass-property tools (toolset <c>properties</c>). Reads/writes Inventor iProperties by
 /// property-set and property name, and reports mass properties (mass, volume, area, centre of mass,
-/// bounding box) of the active part document. Thin wrappers over wire commands.
+/// bounding box) of the active part or assembly document. Thin wrappers over wire commands.
 /// </summary>
 [McpServerToolType]
 public sealed class PropertyTools
@@ -30,7 +30,7 @@ public sealed class PropertyTools
         => Call("set_iproperty", new JObject { ["set_name"] = setName, ["prop_name"] = propName, ["value"] = value }, ct);
 
     [McpServerTool(Name = "inventor_get_mass_properties"),
-     Description("Get mass properties of the active part document: mass (g), volume (mm^3), surface area (mm^2), centre of mass (mm), and bounding box (mm).")]
+     Description("Get mass properties of the active part or assembly document: mass (g), volume (mm^3), surface area (mm^2), centre of mass (mm), and bounding box (mm).")]
     public Task<string> GetMassProperties(CancellationToken ct = default)
         => Call("get_mass_properties", new JObject(), ct);
 

@@ -7,6 +7,48 @@ using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
 
+public class HoleFaceDto
+{
+    [JsonProperty("kind")]
+    [Description("Must be 'planar'")]
+    public string Kind { get; set; } = "planar";
+
+    [JsonProperty("normal")]
+    [Description("Normal direction (+X, -X, +Y, -Y, +Z, -Z)")]
+    public string Normal { get; set; } = "";
+
+    [JsonProperty("extreme")]
+    [Description("Extreme position (max or min)")]
+    public string Extreme { get; set; } = "max";
+
+    [JsonProperty("near_mm")]
+    [Description("Optional tie-break point [x, y, z] in mm")]
+    public double[]? NearMm { get; set; }
+}
+
+public class HoleTappedDto
+{
+    [JsonProperty("designation")]
+    [Description("Thread designation, e.g. 'M6x1'")]
+    public string Designation { get; set; } = "";
+
+    [JsonProperty("class")]
+    [Description("Thread class, default '6H'")]
+    public string Class { get; set; } = "6H";
+
+    [JsonProperty("right_handed")]
+    [Description("Right handed thread, default true")]
+    public bool RightHanded { get; set; } = true;
+
+    [JsonProperty("full_depth")]
+    [Description("Full thread depth, default true")]
+    public bool FullDepth { get; set; } = true;
+
+    [JsonProperty("thread_depth_mm")]
+    [Description("Thread depth in mm, required if full_depth=false")]
+    public double? ThreadDepthMm { get; set; }
+}
+
 /// <summary>
 /// Feature and work-feature tools (toolset <c>feature</c>, all write). Thin MCP wrappers that
 /// serialize typed parameters and round-trip a wire command to the active Inventor add-in. All length
@@ -67,58 +109,101 @@ public sealed class FeatureTools
         => Call("create_work_axis", new JObject { ["type"] = type, ["refs"] = new JArray(refs) }, ct);
 
     [McpServerTool(Name = "inventor_hole"),
-     Description("Create holes on the ACTIVE PART: pick a planar face with the deterministic selector (face_normal +X|-X|+Y|-Y|+Z|-Z, face_extreme max|min, optional face_near_mm), give hole centers as a FLAT mm array [x1,y1,z1,x2,y2,z2,...] lying ON that face plane, diameter_mm and kind=drilled|counterbore|countersink. through=true OR depth_mm (exclusive). Optional tap metadata: tapped_designation (e.g. 'M6x1') marks the hole tapped (metadata only, no thread geometry). Returns feature_names + hole_count.")]
-    public Task<string> Hole(string faceNormal, double[] pointsMm, double diameterMm,
-        string kind = "drilled", string faceExtreme = "max", double[]? faceNearMm = null,
-        bool through = true, double? depthMm = null,
-        double? cboreDiameterMm = null, double? cboreDepthMm = null,
-        double? csinkDiameterMm = null, double csinkAngleDeg = 82,
-        string? tappedDesignation = null, string tappedClass = "6H", bool tappedRightHanded = true,
+     Description("Create holes on the ACTIVE PART: pick a planar face with the deterministic selector (face_normal +X|-X|+Y|-Y|+Z|-Z, face_extreme max|min, optional face_near_mm), give hole centers as a nested array of coordinates [[x1,y1,z1],[x2,y2,z2],...] lying ON that face plane, diameter_mm and kind=drilled|counterbore|countersink. through=true OR depth_mm (exclusive). Optional tap metadata: tapped_designation (e.g. 'M6x1') marks the hole tapped. Returns feature_names + hole_count.")]
+    public Task<string> Hole(
+        HoleFaceDto face,
+        double[][] points_mm,
+        double diameter_mm,
+        string kind = "drilled",
+        bool through = true,
+        double? depth_mm = null,
+        double? cbore_diameter_mm = null,
+        double? cbore_depth_mm = null,
+        double? csink_diameter_mm = null,
+        double csink_angle_deg = 82,
+        HoleTappedDto? tapped = null,
         CancellationToken ct = default)
     {
-        if (pointsMm is null || pointsMm.Length == 0 || pointsMm.Length % 3 != 0)
-            return Task.FromResult(Err("points_mm must be a flat [x1,y1,z1,...] array (length multiple of 3)"));
-        if (through && depthMm is not null)
-            return Task.FromResult(Err("through=true and depth_mm are mutually exclusive"));
-        if (!through && depthMm is null)
-            return Task.FromResult(Err("either through=true or depth_mm is required"));
-        var points = new JArray();
-        for (int i = 0; i < pointsMm.Length; i += 3)
-            points.Add(new JArray(pointsMm[i], pointsMm[i + 1], pointsMm[i + 2]));
-        var face = new JObject { ["kind"] = "planar", ["normal"] = faceNormal, ["extreme"] = faceExtreme };
-        if (faceNearMm is not null) face["near_mm"] = new JArray(faceNearMm);
-        return Call("hole", new JObject
+        if (face is null) return Task.FromResult(Err("face selector is required"));
+        if (points_mm is null || points_mm.Length == 0)
+            return Task.FromResult(Err("points_mm must contain at least one point"));
+        foreach (var pt in points_mm)
         {
-            ["face"] = face, ["points_mm"] = points, ["diameter_mm"] = diameterMm, ["kind"] = kind,
-            ["through"] = through, ["depth_mm"] = depthMm,
-            ["cbore_diameter_mm"] = cboreDiameterMm, ["cbore_depth_mm"] = cboreDepthMm,
-            ["csink_diameter_mm"] = csinkDiameterMm, ["csink_angle_deg"] = csinkAngleDeg,
-            ["tapped_designation"] = tappedDesignation, ["tapped_class"] = tappedClass,
-            ["tapped_right_handed"] = tappedRightHanded,
-        }, ct);
+            if (pt is null || pt.Length != 3)
+                return Task.FromResult(Err("each point in points_mm must be a 3-element array [x,y,z]"));
+        }
+        if (through && depth_mm is not null)
+            return Task.FromResult(Err("through=true and depth_mm are mutually exclusive"));
+        if (!through && depth_mm is null)
+            return Task.FromResult(Err("either through=true or depth_mm is required"));
+
+        var ptsArr = new JArray();
+        foreach (var pt in points_mm)
+        {
+            ptsArr.Add(new JArray(pt[0], pt[1], pt[2]));
+        }
+
+        var faceObj = new JObject { ["kind"] = face.Kind, ["normal"] = face.Normal, ["extreme"] = face.Extreme };
+        if (face.NearMm is not null)
+        {
+            if (face.NearMm.Length != 3) return Task.FromResult(Err("face.near_mm must be [x,y,z]"));
+            faceObj["near_mm"] = new JArray(face.NearMm);
+        }
+
+        var p = new JObject
+        {
+            ["face"] = faceObj, ["points_mm"] = ptsArr, ["diameter_mm"] = diameter_mm, ["kind"] = kind,
+            ["through"] = through, ["depth_mm"] = depth_mm,
+            ["cbore_diameter_mm"] = cbore_diameter_mm, ["cbore_depth_mm"] = cbore_depth_mm,
+            ["csink_diameter_mm"] = csink_diameter_mm, ["csink_angle_deg"] = csink_angle_deg,
+        };
+
+        if (tapped is not null)
+        {
+            p["tapped_designation"] = tapped.Designation;
+            p["tapped_class"] = tapped.Class;
+            p["tapped_right_handed"] = tapped.RightHanded;
+            p["tapped_full_depth"] = tapped.FullDepth;
+            p["tapped_thread_depth_mm"] = tapped.ThreadDepthMm;
+        }
+
+        return Call("hole", p, ct);
     }
 
     [McpServerTool(Name = "inventor_circular_pattern"),
      Description("Circular-pattern part features around a named axis of the ACTIVE PART (work axis name or origin 'X Axis'|'Y Axis'|'Z Axis'). count instances over angle_deg (default full 360). Returns pattern feature name.")]
-    public Task<string> CircularPattern(string[] featureNames, string axis, int count,
-        double angleDeg = 360, bool naturalDirection = true, CancellationToken ct = default)
+    public Task<string> CircularPattern(
+        string[] feature_names,
+        string axis,
+        int count,
+        double angle_deg = 360,
+        bool natural_direction = true,
+        CancellationToken ct = default)
         => Call("circular_pattern", new JObject
         {
-            ["feature_names"] = new JArray(featureNames), ["axis"] = axis,
-            ["count"] = count, ["angle_deg"] = angleDeg, ["natural_direction"] = naturalDirection,
+            ["feature_names"] = new JArray(feature_names), ["axis"] = axis,
+            ["count"] = count, ["angle_deg"] = angle_deg, ["natural_direction"] = natural_direction,
         }, ct);
 
     [McpServerTool(Name = "inventor_rectangular_pattern"),
      Description("Rectangular-pattern part features along one or two named axes of the ACTIVE PART (work axis or origin axis names). count1/spacing_mm1 along dir1; optional dir2/count2/spacing_mm2. Returns pattern feature name.")]
-    public Task<string> RectangularPattern(string[] featureNames, string dir1, int count1, double spacingMm1,
-        string? dir2 = null, int? count2 = null, double? spacingMm2 = null,
-        bool naturalDirection1 = true, bool naturalDirection2 = true, CancellationToken ct = default)
+    public Task<string> RectangularPattern(
+        string[] feature_names,
+        string dir1,
+        int count1,
+        double spacing_mm1,
+        string? dir2 = null,
+        int? count2 = null,
+        double? spacing_mm2 = null,
+        bool natural_direction1 = true,
+        bool natural_direction2 = true,
+        CancellationToken ct = default)
         => Call("rectangular_pattern", new JObject
         {
-            ["feature_names"] = new JArray(featureNames),
-            ["dir1"] = dir1, ["count1"] = count1, ["spacing_mm1"] = spacingMm1,
-            ["dir2"] = dir2, ["count2"] = count2, ["spacing_mm2"] = spacingMm2,
-            ["natural_direction1"] = naturalDirection1, ["natural_direction2"] = naturalDirection2,
+            ["feature_names"] = new JArray(feature_names),
+            ["dir1"] = dir1, ["count1"] = count1, ["spacing_mm1"] = spacing_mm1,
+            ["dir2"] = dir2, ["count2"] = count2, ["spacing_mm2"] = spacing_mm2,
+            ["natural_direction1"] = natural_direction1, ["natural_direction2"] = natural_direction2,
         }, ct);
 
     private static string Err(string message)

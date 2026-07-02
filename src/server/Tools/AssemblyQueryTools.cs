@@ -7,6 +7,17 @@ using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
 
+public class MeasureSideDto
+{
+    [JsonProperty("occurrence")]
+    [Description("Name of the component occurrence.")]
+    public string Occurrence { get; set; } = "";
+
+    [JsonProperty("ref")]
+    [Description("Optional named reference: iMate name, work feature name, or origin plane/axis name.")]
+    public string? Ref { get; set; }
+}
+
 /// <summary>
 /// Assembly verification tools (toolset <c>assembly_query</c>, read-only — survives --read-only).
 /// The fully NUMERIC self-check battery: interference, min distance, constraint health, BOM+DOF.
@@ -33,23 +44,32 @@ public sealed class AssemblyQueryTools
 
     [McpServerTool(Name = "inventor_measure_min_distance"),
      Description("Minimum 3D distance (mm) between two occurrences, or between two named refs (iMate/work/origin names, same resolution as inventor_add_constraint). Refs are optional — omit ref to measure the whole occurrence body. Expect 0 on mated faces.")]
-    public Task<string> MeasureMinDistance(string aOccurrence, string bOccurrence,
-        string? aRef = null, string? bRef = null, CancellationToken ct = default)
-        => Call("measure_min_distance", new JObject
+    public Task<string> MeasureMinDistance(
+        MeasureSideDto a,
+        MeasureSideDto b,
+        CancellationToken ct = default)
+    {
+        if (a is null) return Task.FromResult(Error("INVALID_ARGUMENT", "side a is required"));
+        if (b is null) return Task.FromResult(Error("INVALID_ARGUMENT", "side b is required"));
+        return Call("measure_min_distance", new JObject
         {
-            ["a_occurrence"] = aOccurrence, ["a_ref"] = aRef,
-            ["b_occurrence"] = bOccurrence, ["b_ref"] = bRef,
+            ["a_occurrence"] = a.Occurrence, ["a_ref"] = a.Ref,
+            ["b_occurrence"] = b.Occurrence, ["b_ref"] = b.Ref,
         }, ct);
+    }
 
     [McpServerTool(Name = "inventor_get_assembly_bom"),
      Description("Walk the active assembly: occurrences[{name,path,depth,grounded,dof_translation,dof_rotation,suppressed}] plus a grouped bom[{part_number,path,qty,unit_mass_g}]. DOF counts reveal under-constrained parts (grounded rows are 0/0). max_rows caps the flat list.")]
-    public Task<string> GetAssemblyBom(int maxRows = 500, CancellationToken ct = default)
-        => Call("get_assembly_bom", new JObject { ["max_rows"] = maxRows }, ct);
+    public Task<string> GetAssemblyBom(int max_rows = 500, CancellationToken ct = default)
+        => Call("get_assembly_bom", new JObject { ["max_rows"] = max_rows }, ct);
 
     [McpServerTool(Name = "inventor_list_constraints"),
      Description("Read back the assembly's relationship graph: every constraint with name, type (mate|flush|insert|angle|other), health (up_to_date expected), suppressed flag and the two occurrence names. Run after building to audit that no constraint is sick.")]
     public Task<string> ListConstraints(CancellationToken ct = default)
         => Call("list_constraints", new JObject(), ct);
+
+    private static string Error(string code, string message)
+        => JsonConvert.SerializeObject(new { ok = false, error = new { code, message } }, Formatting.Indented);
 
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
