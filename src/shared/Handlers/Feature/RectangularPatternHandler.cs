@@ -108,6 +108,12 @@ public sealed class RectangularPatternHandler : HandlerBase, IInventorCommand
             }
 
             var pattern = rpFeatures.AddByDefinition(rpDef);
+            partDoc.Update();
+            if (pattern.HealthStatus != HealthStatusEnum.kUpToDateHealth)
+            {
+                return Fail(context, "API_ERROR",
+                    "Rectangular pattern health is " + AssemblyRefResolver.HealthToString(pattern.HealthStatus));
+            }
 
             return Ok(context, new JObject
             {

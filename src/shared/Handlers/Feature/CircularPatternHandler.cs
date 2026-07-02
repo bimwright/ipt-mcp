@@ -77,6 +77,12 @@ public sealed class CircularPatternHandler : HandlerBase, IInventorCommand
             var cpFeatures = def.Features.CircularPatternFeatures;
             var cpDef = cpFeatures.CreateDefinition(featuresColl, axisEntity!, naturalDirection, count, angleRad, true);
             var pattern = cpFeatures.AddByDefinition(cpDef);
+            partDoc.Update();
+            if (pattern.HealthStatus != HealthStatusEnum.kUpToDateHealth)
+            {
+                return Fail(context, "API_ERROR",
+                    "Circular pattern health is " + AssemblyRefResolver.HealthToString(pattern.HealthStatus));
+            }
 
             return Ok(context, new JObject
             {

@@ -201,7 +201,9 @@ public sealed class HoleHandler : HandlerBase, IInventorCommand
 
             var placement = def.Features.HoleFeatures.CreateSketchPlacementDefinition(pointsColl);
             HoleFeature holeFeature;
-            var dir = PartFeatureExtentDirectionEnum.kNegativeExtentDirection;
+            // A sketch created directly on a selected face uses positive extent into the body.
+            // Negative extent creates a solver-sick (driver_lost) feature on the verified +Z fixture.
+            var dir = PartFeatureExtentDirectionEnum.kPositiveExtentDirection;
 
             if (kind == "drilled")
             {
@@ -262,6 +264,13 @@ public sealed class HoleHandler : HandlerBase, IInventorCommand
             if (tapInfo != null)
             {
                 ((dynamic)holeFeature).TapInfo = tapInfo;
+            }
+
+            partDoc.Update();
+            if (holeFeature.HealthStatus != HealthStatusEnum.kUpToDateHealth)
+            {
+                return Fail(context, "API_ERROR",
+                    "Hole feature health is " + AssemblyRefResolver.HealthToString(holeFeature.HealthStatus));
             }
 
             return Ok(context, new JObject

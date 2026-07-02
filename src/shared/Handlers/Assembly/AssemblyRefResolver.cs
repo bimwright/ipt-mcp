@@ -36,7 +36,8 @@ public static class AssemblyRefResolver
             return true;
         }
 
-        occ = FindOccurrenceRecursive(def.Occurrences, name);
+        string occurrenceName = name!.Trim();
+        occ = FindOccurrenceRecursive(def.Occurrences, occurrenceName);
         if (occ != null)
         {
             return true;
@@ -46,7 +47,7 @@ public static class AssemblyRefResolver
         var validNames = new List<string>();
         CollectOccurrenceNames(def.Occurrences, validNames);
 
-        error = $"Occurrence '{name}' not found. Available occurrences: {string.Join(", ", validNames)}";
+        error = $"Occurrence '{occurrenceName}' not found. Available occurrences: {string.Join(", ", validNames)}";
         return false;
     }
 
@@ -54,7 +55,7 @@ public static class AssemblyRefResolver
     {
         foreach (Inv.ComponentOccurrence o in occurrences)
         {
-            if (string.Equals(o.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)) return o;
+            if (string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase)) return o;
             try
             {
                 if (o.SubOccurrences != null && o.SubOccurrences.Count > 0)
@@ -203,7 +204,9 @@ public static class AssemblyRefResolver
                 {
                     if (string.Equals(im.Name, refName, StringComparison.OrdinalIgnoreCase))
                     {
-                        resolved = im.ReferencedEntity;
+                        // The strongly typed ReferencedEntity property returns an opaque COM object
+                        // on Inventor 2027. The verified API path exposes the usable Face/Edge here.
+                        resolved = ((dynamic)im).Entity;
                         break;
                     }
                 }

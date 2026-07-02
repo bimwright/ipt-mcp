@@ -94,7 +94,9 @@ public sealed class ListInterfacesHandler : HandlerBase, IInventorCommand
                             ["type"] = iMateTypeStr,
                         };
 
-                        object entity = im.ReferencedEntity;
+                        // Inventor 2027 only exposes the type-testable Face/Edge through the runtime
+                        // Entity member; ReferencedEntity is an opaque COM object.
+                        object entity = ((dynamic)im).Entity;
                         string entityKind = "unknown";
                         if (entity is Inv.Face) entityKind = "face";
                         else if (entity is Inv.Edge) entityKind = "edge";
@@ -152,6 +154,31 @@ public sealed class ListInterfacesHandler : HandlerBase, IInventorCommand
                             {
                                 summary["kind"] = "other";
                             }
+                            item["geometry_summary"] = summary;
+                        }
+                        else if (entity is Inv.Edge edge)
+                        {
+                            var summary = new JObject { ["kind"] = "edge" };
+                            try
+                            {
+                                if (edge.GeometryType == Inv.CurveTypeEnum.kCircleCurve)
+                                {
+                                    var circle = (Inv.Circle)edge.Geometry;
+                                    var center = circle.Center;
+                                    var normal = circle.Normal;
+                                    if (occurrence != null)
+                                    {
+                                        center.TransformBy(occurrence.Transformation);
+                                        normal.TransformBy(occurrence.Transformation);
+                                    }
+                                    summary["curve"] = "circle";
+                                    summary["center_mm"] = new JArray(
+                                        UnitConvert.CmToMm(center.X), UnitConvert.CmToMm(center.Y), UnitConvert.CmToMm(center.Z));
+                                    summary["radius_mm"] = UnitConvert.CmToMm(circle.Radius);
+                                    summary["normal"] = new JArray(normal.X, normal.Y, normal.Z);
+                                }
+                            }
+                            catch { }
                             item["geometry_summary"] = summary;
                         }
                         else
