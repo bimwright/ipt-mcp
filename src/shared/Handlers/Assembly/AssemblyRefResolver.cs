@@ -36,24 +36,52 @@ public static class AssemblyRefResolver
             return true;
         }
 
-        foreach (Inv.ComponentOccurrence o in def.Occurrences)
+        occ = FindOccurrenceRecursive(def.Occurrences, name);
+        if (occ != null)
         {
-            if (string.Equals(o.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
-            {
-                occ = o;
-                return true;
-            }
+            return true;
         }
 
-        // Build list of valid occurrence names to teach the client
+        // Build recursive list of valid occurrence names to teach the client
         var validNames = new List<string>();
-        foreach (Inv.ComponentOccurrence o in def.Occurrences)
-        {
-            validNames.Add(o.Name);
-        }
+        CollectOccurrenceNames(def.Occurrences, validNames);
 
         error = $"Occurrence '{name}' not found. Available occurrences: {string.Join(", ", validNames)}";
         return false;
+    }
+
+    private static Inv.ComponentOccurrence? FindOccurrenceRecursive(System.Collections.IEnumerable occurrences, string name)
+    {
+        foreach (Inv.ComponentOccurrence o in occurrences)
+        {
+            if (string.Equals(o.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)) return o;
+            try
+            {
+                if (o.SubOccurrences != null && o.SubOccurrences.Count > 0)
+                {
+                    var found = FindOccurrenceRecursive(o.SubOccurrences, name);
+                    if (found != null) return found;
+                }
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    private static void CollectOccurrenceNames(System.Collections.IEnumerable occurrences, List<string> names)
+    {
+        foreach (Inv.ComponentOccurrence o in occurrences)
+        {
+            names.Add(o.Name);
+            try
+            {
+                if (o.SubOccurrences != null && o.SubOccurrences.Count > 0)
+                {
+                    CollectOccurrenceNames(o.SubOccurrences, names);
+                }
+            }
+            catch { }
+        }
     }
 
     /// <summary>

@@ -25,4 +25,8 @@ public static class UnitConvert
     // Angle: degrees <-> radians (Inventor API angle unit is radians).
     public static double DegToRad(double deg) => deg * Math.PI / 180.0;
     public static double RadToDeg(double rad) => rad * 180.0 / Math.PI;
+
+    // Mass: kg <-> g (Inventor internal mass unit is kg).
+    public static double KgToG(double kg) => kg * 1000.0;
+    public static double GToKg(double g) => g / 1000.0;
 }

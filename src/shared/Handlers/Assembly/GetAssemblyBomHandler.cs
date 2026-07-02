@@ -125,37 +125,72 @@ public sealed class GetAssemblyBomHandler : HandlerBase, IInventorCommand
             {
                 try
                 {
-                    var doc = (global::Inventor.Document)occ.Definition.Document;
-                    var propSet = doc.PropertySets["{32853F0F-3444-11d1-9E93-0060B03C1CA6}"];
-                    string partNum = propSet["Part Number"]?.Value?.ToString() ?? "";
-                    if (string.IsNullOrEmpty(partNum))
+                    if (occ.Definition is VirtualComponentDefinition vcd)
                     {
-                        partNum = System.IO.Path.GetFileNameWithoutExtension(doc.FullFileName);
-                    }
-                    string desc = propSet["Description"]?.Value?.ToString() ?? "";
-                    double massG = 0;
-                    try
-                    {
-                        if (doc is PartDocument pd)
+                        string partNum = "";
+                        string desc = "";
+                        try
                         {
-                            massG = pd.ComponentDefinition.MassProperties.Mass * 1000.0;
+                            var propSet = vcd.PropertySets["{32853F0F-3444-11d1-9E93-0060B03C1CA6}"];
+                            partNum = propSet["Part Number"]?.Value?.ToString() ?? "";
+                            desc = propSet["Description"]?.Value?.ToString() ?? "";
                         }
-                        else if (doc is AssemblyDocument ad)
-                        {
-                            massG = ad.ComponentDefinition.MassProperties.Mass * 1000.0;
-                        }
-                    }
-                    catch { }
+                        catch { }
 
-                    string bomKey = partNum + "|" + doc.FullFileName;
-                    if (bomDict.ContainsKey(bomKey))
-                    {
-                        var val = bomDict[bomKey];
-                        bomDict[bomKey] = (val.partNum, val.desc, val.path, val.qty + 1, val.mass);
+                        if (string.IsNullOrEmpty(partNum)) partNum = occ.Name;
+
+                        double massG = 0;
+                        try
+                        {
+                            massG = UnitConvert.KgToG(occ.MassProperties.Mass);
+                        }
+                        catch { }
+
+                        string bomKey = partNum + "|virtual|" + name;
+                        if (bomDict.ContainsKey(bomKey))
+                        {
+                            var val = bomDict[bomKey];
+                            bomDict[bomKey] = (val.partNum, val.desc, val.path, val.qty + 1, val.mass);
+                        }
+                        else
+                        {
+                            bomDict[bomKey] = (partNum, desc, "virtual", 1, massG);
+                        }
                     }
                     else
                     {
-                        bomDict[bomKey] = (partNum, desc, doc.FullFileName, 1, massG);
+                        var doc = (global::Inventor.Document)occ.Definition.Document;
+                        var propSet = doc.PropertySets["{32853F0F-3444-11d1-9E93-0060B03C1CA6}"];
+                        string partNum = propSet["Part Number"]?.Value?.ToString() ?? "";
+                        if (string.IsNullOrEmpty(partNum))
+                        {
+                            partNum = System.IO.Path.GetFileNameWithoutExtension(doc.FullFileName);
+                        }
+                        string desc = propSet["Description"]?.Value?.ToString() ?? "";
+                        double massG = 0;
+                        try
+                        {
+                            if (doc is PartDocument pd)
+                            {
+                                massG = UnitConvert.KgToG(pd.ComponentDefinition.MassProperties.Mass);
+                            }
+                            else if (doc is AssemblyDocument ad)
+                            {
+                                massG = UnitConvert.KgToG(ad.ComponentDefinition.MassProperties.Mass);
+                            }
+                        }
+                        catch { }
+
+                        string bomKey = partNum + "|" + doc.FullFileName;
+                        if (bomDict.ContainsKey(bomKey))
+                        {
+                            var val = bomDict[bomKey];
+                            bomDict[bomKey] = (val.partNum, val.desc, val.path, val.qty + 1, val.mass);
+                        }
+                        else
+                        {
+                            bomDict[bomKey] = (partNum, desc, doc.FullFileName, 1, massG);
+                        }
                     }
                 }
                 catch { }

@@ -85,7 +85,7 @@ public sealed class GetMassPropertiesHandler : HandlerBase, IInventorCommand
 
             return Ok(ctx, new JObject
             {
-                ["mass_g"] = massKg * 1000.0,
+                ["mass_g"] = UnitConvert.KgToG(massKg),
                 ["volume_mm3"] = UnitConvert.Cm3ToMm3(volumeCm3),
             ["area_mm2"] = UnitConvert.Cm2ToMm2(areaCm2),
                 ["center_of_mass_mm"] = com,

@@ -71,8 +71,8 @@ public sealed class CheckInterferenceHandler : HandlerBase, IInventorCommand
             for (int i = 1; i <= rawBodies; i++)
             {
                 InterferenceResult res = results[i];
-                string name1 = res.OccurrenceOne.Name;
-                string name2 = res.OccurrenceTwo.Name;
+                string name1 = res.OccurrenceOne?.Name ?? "Unknown";
+                string name2 = res.OccurrenceTwo?.Name ?? "Unknown";
                 double volCm3 = res.Volume;
 
                 totalVolCm3 += volCm3;
