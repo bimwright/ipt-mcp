@@ -9,6 +9,7 @@ using Bimwright.Ipt.Shared.Security;
 using Bimwright.Ipt.Shared.ToolBaker;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using Microsoft.CodeAnalysis.Scripting.Hosting;
 using Newtonsoft.Json.Linq;
 using InvApi = global::Inventor;
 
@@ -64,6 +65,18 @@ public sealed class SendCodeHandler : IInventorCommand
             var refs = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
                 .ToArray();
+
+            // The add-in loads into a private AssemblyLoadContext (EnableDynamicLoading), so the
+            // Globals type and the Inventor interop live in that context. Roslyn's default loader
+            // would reload those assemblies from disk into its own context, binding the compiled
+            // script to a *different* Globals type than the instance we pass in -> InvalidCastException.
+            // Register the already-loaded assemblies so the script binds to the very same types.
+            var loader = new InteractiveAssemblyLoader();
+            foreach (var asm in refs)
+            {
+                try { loader.RegisterDependency(asm); } catch { /* skip identity collisions */ }
+            }
+
             var options = ScriptOptions.Default
                 .WithReferences(refs)
                 .WithImports(
@@ -76,7 +89,8 @@ public sealed class SendCodeHandler : IInventorCommand
 
             using (var cts = new CancellationTokenSource(ExecutionTimeoutMilliseconds))
             {
-                CSharpScript.EvaluateAsync(code, options, globals, cancellationToken: cts.Token)
+                var script = CSharpScript.Create(code, options, typeof(Globals), loader);
+                script.RunAsync(globals, cancellationToken: cts.Token)
                     .GetAwaiter()
                     .GetResult();
             }
