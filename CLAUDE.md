@@ -116,6 +116,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - Handlers cast `ctx.Application` to `Inventor.Application`. They NEVER call the ROT / `GetActiveObject`, and NEVER serialize API objects — always return DTOs (anonymous objects / `JObject`).
 - Registration: partial registrars (`InventorCommandRegistry.<Domain>.cs`), one file per workstream, so nobody edits a shared `Build()` list.
 - **Units:** the Inventor API uses internal **centimetres**. Every mm input → cm (`mm/10`); every length output → mm (`cm*10`). Centralized in `shared/Handlers/UnitConvert.cs`.
+- **Assembly refs resolve iMate → work feature → origin by NAME** (`AssemblyRefResolver`; occurrence-scope entities are wrapped in assembly-context proxies via `CreateGeometryProxy`); face selection is deterministic (`FaceSelectorSpec`/`FaceSelector`, no face indexes); constraint responses carry `health` and callers MUST check it (a solver-sick constraint does not throw).
 
 ### MCP tools / registration
 - All MCP-facing names prefixed `inventor_`. Tools live in `[McpServerToolType]` classes grouped by domain.
@@ -125,7 +126,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 
 ### Read-only & opt-in gates
 - `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in).
-- `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, code, toolbaker_write`) but keeps `meta` + `query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
+- `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write`) but keeps `meta` + `query` + `assembly_query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 
 ### Config precedence

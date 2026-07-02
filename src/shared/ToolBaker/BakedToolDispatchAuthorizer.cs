@@ -21,7 +21,12 @@ public static class BakedToolDispatchAuthorizer
         "list_parameters",
         "get_parameter",
         "get_iproperty",
-        "get_mass_properties"
+        "get_mass_properties",
+        "list_interfaces",
+        "check_interference",
+        "measure_min_distance",
+        "get_assembly_bom",
+        "list_constraints"
     };
 
     // Platform / mutating commands a baked tool must never reach (recursion + escalation guard).

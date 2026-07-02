@@ -119,3 +119,27 @@ integration end to end.
     - `inventor_switch_target` with the second instance's id → **Expected:** `ok: true`; subsequent
       commands (e.g. `inventor_health`) route to the chosen target. Note this changes the
       server-side target selection only, not any Inventor document.
+
+17. **Assembly batch smoke** (place / constrain / verify / part features / view)
+    Fixtures `A.ipt` (plate 50×50×5 with a planar iMate `IF_MATE_TOP`) and `B.ipt` (Ø20×30 cylinder
+    with an insert iMate `IF_INSERT_SHAFT`) from `C:\Temp\bimwright-spike\`.
+    - `inventor_new_assembly`, then `inventor_place_occurrence` A (grounded) and B (`position_mm=[0,0,50]`).
+      **Expected:** each returns an `occurrence_name` + `bbox_mm`.
+    - `inventor_add_constraint` `type=insert` between B's `IF_INSERT_SHAFT` and A's `IF_MATE_TOP`.
+      **Expected:** `ok: true` with `health: "up_to_date"` (a sick constraint does NOT throw — always
+      read `health`). A mate ref given where an insert is required returns `INVALID_ARGUMENT` listing
+      the available interface names (self-teaching path).
+    - `inventor_list_constraints` → **Expected:** every constraint `health: "up_to_date"`.
+    - `inventor_check_interference` → **Expected:** `count: 0` on the mated fixtures.
+    - `inventor_measure_min_distance` between the two occurrences → **Expected:** `0` on contact faces.
+    - `inventor_get_assembly_bom` → **Expected:** the grounded row reports `dof_translation: 0`,
+      `dof_rotation: 0`; the flat list groups into a BOM with per-row `unit_mass_g`.
+    - `inventor_get_mass_properties` on the assembly → **Expected:** mass ≈ Σ of the two parts.
+    - `inventor_set_view_orientation iso_top_right` + `inventor_view_fit` + `inventor_capture_view`
+      (`output_path` mode) → **Expected:** a non-blank PNG on disk.
+    - Part features on `A.ipt` (`inventor_open_document`): `inventor_hole` with
+      `tapped_designation=M6x1` → **Expected:** `tapped: true`; `inventor_circular_pattern` of the hole
+      about `Z Axis`, count 4 → **Expected:** a pattern feature name.
+    - `inventor_create_imate` with a `planar` selector that matches >1 face → **Expected:**
+      `INVALID_ARGUMENT` whose `candidates` array carries each face's `centroid_mm`/`area_mm2`; retry
+      with `near_mm` from a listed candidate resolves to exactly one face.

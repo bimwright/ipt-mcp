@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-46%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-59%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: verified.** Phases 1-3 are complete and green (46 MCP tools; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
+> **Status: verified.** Phases 1-3 are complete and green (59 MCP tools; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
 
 ---
 
@@ -102,9 +102,9 @@ dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # ne
 
 ## Tool Surface
 
-The full surface is **46 tools** when all platform toolsets are enabled. Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **59 tools** when all platform toolsets are enabled. Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
-Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `toolbaker`, `toolbaker_write`.
+Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
@@ -168,7 +168,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_add_sketch_constraint` | Add a geometric constraint (coincident, parallel, tangent, …). |
 | `inventor_close_sketch` | Finish editing a sketch (exit sketch edit mode). |
 
-### feature (6) — solid & work features (write)
+### feature (9) — solid & work features (write)
 
 | Tool | Description |
 |---|---|
@@ -178,17 +178,40 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_chamfer` | Add an equal-distance edge chamfer over model edges. |
 | `inventor_create_work_plane` | Create a work plane (offset, three_points, or tangent). |
 | `inventor_create_work_axis` | Create a work axis (two_points, edge, plane_intersection, normal_to_face_through_point). |
+| `inventor_hole` | Drilled/counterbore/countersink holes on a deterministically-selected planar face; optional tapped-thread metadata. |
+| `inventor_circular_pattern` | Circular-pattern part features around a named axis (count over an angle). |
+| `inventor_rectangular_pattern` | Rectangular-pattern part features along one or two named axes. |
 
-### export (4) — view capture & geometry export (write)
+### export (6) — view capture & geometry export (write)
 
 | Tool | Description |
 |---|---|
-| `inventor_capture_view` | Capture the active view as a bounded base64 PNG (no file written). |
+| `inventor_capture_view` | Capture the active view as a bounded base64 PNG, or write to an output path. |
 | `inventor_export_step` | Export the active part/assembly to STEP (.stp/.step). |
 | `inventor_export_stl` | Export the active part/assembly to STL (.stl). |
 | `inventor_export_dxf` | Export a 2D DXF; must declare source (`sketch` or `flat_pattern`). |
+| `inventor_view_fit` | Zoom-fit the active view to the model extents (run before capture). |
+| `inventor_set_view_orientation` | Set a standard camera orientation (iso/front/top/…) for multi-angle captures. |
 
 > Export paths must be absolute and under an allowed output root (user profile or temp).
+
+### assembly (3, write) — compose assemblies via relationships, not coordinates
+
+| Tool | Description |
+|---|---|
+| `inventor_place_occurrence` | Place a component (.ipt/.iam) into the active assembly; optional initial pose + grounded. |
+| `inventor_add_constraint` | Constrain two named refs (mate/flush/insert/angle); response carries `health` — always check it. |
+| `inventor_create_imate` | Author a named iMate on the active part using a deterministic face selector. |
+
+### assembly_query (5, read-only) — numeric self-check battery; survives `--read-only`
+
+| Tool | Description |
+|---|---|
+| `inventor_list_interfaces` | List named interfaces (iMates, work features, origin geometry) of the doc or one occurrence. |
+| `inventor_check_interference` | Run interference analysis; returns pair count and total/per-pair volumes. |
+| `inventor_measure_min_distance` | Minimum 3D distance (mm) between two occurrences or named refs. |
+| `inventor_get_assembly_bom` | BOM + occurrence tree with grounded flag and translation/rotation degrees of freedom. |
+| `inventor_list_constraints` | Read back every constraint with type, `health`, suppressed flag and the two occurrence names. |
 
 ### code (1) — opt-in escape hatch (OFF by default)
 
