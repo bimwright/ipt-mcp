@@ -3,6 +3,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
 using Inventor;
 
 namespace Bimwright.Ipt.Shared.Handlers.Assembly;
@@ -44,13 +45,27 @@ public sealed class ListConstraintsHandler : HandlerBase, IInventorCommand
                 try
                 {
                     object ent1 = ((dynamic)c).EntityOne;
-                    if (ent1 != null) kind1 = ent1.GetType().Name.Replace("Proxy", "").Replace("Face", "face").Replace("Edge", "edge").Replace("Work", "work_").ToLowerInvariant();
+                    if (ent1 != null)
+                    {
+                        if (ent1 is Face) kind1 = "face";
+                        else if (ent1 is Edge) kind1 = "edge";
+                        else if (ent1 is WorkPlane) kind1 = "work_plane";
+                        else if (ent1 is WorkAxis) kind1 = "work_axis";
+                        else if (ent1 is WorkPoint) kind1 = "work_point";
+                    }
                 }
                 catch { }
                 try
                 {
                     object ent2 = ((dynamic)c).EntityTwo;
-                    if (ent2 != null) kind2 = ent2.GetType().Name.Replace("Proxy", "").Replace("Face", "face").Replace("Edge", "edge").Replace("Work", "work_").ToLowerInvariant();
+                    if (ent2 != null)
+                    {
+                        if (ent2 is Face) kind2 = "face";
+                        else if (ent2 is Edge) kind2 = "edge";
+                        else if (ent2 is WorkPlane) kind2 = "work_plane";
+                        else if (ent2 is WorkAxis) kind2 = "work_axis";
+                        else if (ent2 is WorkPoint) kind2 = "work_point";
+                    }
                 }
                 catch { }
 

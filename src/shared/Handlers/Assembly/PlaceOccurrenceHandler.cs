@@ -3,6 +3,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
 using Inventor;
 
 namespace Bimwright.Ipt.Shared.Handlers.Assembly;
@@ -33,34 +34,30 @@ public sealed class PlaceOccurrenceHandler : HandlerBase, IInventorCommand
         {
             var matrix = app.TransientGeometry.CreateMatrix();
 
-            if (position != null || rotation != null)
+            if (rotation != null && rotation.Count == 3)
             {
-                double px = 0, py = 0, pz = 0;
-                if (position != null && position.Count == 3)
-                {
-                    px = (double)position[0] / 10.0; // cm
-                    py = (double)position[1] / 10.0;
-                    pz = (double)position[2] / 10.0;
-                }
+                double rx = UnitConvert.DegToRad((double)rotation[0]);
+                double ry = UnitConvert.DegToRad((double)rotation[1]);
+                double rz = UnitConvert.DegToRad((double)rotation[2]);
+
+                var rotX = app.TransientGeometry.CreateMatrix();
+                rotX.SetToRotation(rx, app.TransientGeometry.CreateVector(1, 0, 0), app.TransientGeometry.CreatePoint(0, 0, 0));
+                var rotY = app.TransientGeometry.CreateMatrix();
+                rotY.SetToRotation(ry, app.TransientGeometry.CreateVector(0, 1, 0), app.TransientGeometry.CreatePoint(0, 0, 0));
+                var rotZ = app.TransientGeometry.CreateMatrix();
+                rotZ.SetToRotation(rz, app.TransientGeometry.CreateVector(0, 0, 1), app.TransientGeometry.CreatePoint(0, 0, 0));
+
+                matrix.PostMultiplyBy(rotX);
+                matrix.PostMultiplyBy(rotY);
+                matrix.PostMultiplyBy(rotZ);
+            }
+
+            if (position != null && position.Count == 3)
+            {
+                double px = UnitConvert.MmToCm((double)position[0]);
+                double py = UnitConvert.MmToCm((double)position[1]);
+                double pz = UnitConvert.MmToCm((double)position[2]);
                 matrix.SetTranslation(app.TransientGeometry.CreateVector(px, py, pz));
-
-                if (rotation != null && rotation.Count == 3)
-                {
-                    double rx = (double)rotation[0] * Math.PI / 180.0; // rad
-                    double ry = (double)rotation[1] * Math.PI / 180.0;
-                    double rz = (double)rotation[2] * Math.PI / 180.0;
-
-                    var rotX = app.TransientGeometry.CreateMatrix();
-                    rotX.SetToRotation(rx, app.TransientGeometry.CreateVector(1, 0, 0), app.TransientGeometry.CreatePoint(0, 0, 0));
-                    var rotY = app.TransientGeometry.CreateMatrix();
-                    rotY.SetToRotation(ry, app.TransientGeometry.CreateVector(0, 1, 0), app.TransientGeometry.CreatePoint(0, 0, 0));
-                    var rotZ = app.TransientGeometry.CreateMatrix();
-                    rotZ.SetToRotation(rz, app.TransientGeometry.CreateVector(0, 0, 1), app.TransientGeometry.CreatePoint(0, 0, 0));
-
-                    matrix.PostMultiplyBy(rotX);
-                    matrix.PostMultiplyBy(rotY);
-                    matrix.PostMultiplyBy(rotZ);
-                }
             }
 
             var occ = assemblyDoc.ComponentDefinition.Occurrences.Add(path, matrix);
@@ -70,8 +67,8 @@ public sealed class PlaceOccurrenceHandler : HandlerBase, IInventorCommand
             var max = occ.RangeBox.MaxPoint;
             var bbox = new JObject
             {
-                ["min"] = new JArray(min.X * 10.0, min.Y * 10.0, min.Z * 10.0),
-                ["max"] = new JArray(max.X * 10.0, max.Y * 10.0, max.Z * 10.0)
+                ["min"] = new JArray(UnitConvert.CmToMm(min.X), UnitConvert.CmToMm(min.Y), UnitConvert.CmToMm(min.Z)),
+                ["max"] = new JArray(UnitConvert.CmToMm(max.X), UnitConvert.CmToMm(max.Y), UnitConvert.CmToMm(max.Z))
             };
 
             return Ok(context, new JObject

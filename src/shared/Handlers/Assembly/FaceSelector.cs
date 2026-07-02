@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
 using Inv = global::Inventor;
 
 namespace Bimwright.Ipt.Shared.Handlers.Assembly;
@@ -22,15 +23,18 @@ public static class FaceSelector
         candidatesJson = new JArray();
         var candidates = new List<Inv.Face>();
 
-        foreach (Inv.Face f in def.SurfaceBodies[1].Faces)
+        foreach (Inv.SurfaceBody sb in def.SurfaceBodies)
         {
-            if (spec.Kind == "planar" && f.SurfaceType == Inv.SurfaceTypeEnum.kPlaneSurface)
+            foreach (Inv.Face f in sb.Faces)
             {
-                candidates.Add(f);
-            }
-            else if (spec.Kind == "cylindrical" && f.SurfaceType == Inv.SurfaceTypeEnum.kCylinderSurface)
-            {
-                candidates.Add(f);
+                if (spec.Kind == "planar" && f.SurfaceType == Inv.SurfaceTypeEnum.kPlaneSurface)
+                {
+                    candidates.Add(f);
+                }
+                else if (spec.Kind == "cylindrical" && f.SurfaceType == Inv.SurfaceTypeEnum.kCylinderSurface)
+                {
+                    candidates.Add(f);
+                }
             }
         }
 
@@ -77,7 +81,7 @@ public static class FaceSelector
             foreach (var f in candidates)
             {
                 var centroid = GetCentroidMm(f);
-                double area = f.Evaluator.Area * 100.0; // cm2 -> mm2
+                double area = UnitConvert.Cm2ToMm2(f.Evaluator.Area);
                 var item = new JObject
                 {
                     ["kind"] = spec.Kind,
@@ -93,7 +97,7 @@ public static class FaceSelector
                 else
                 {
                     var cyl = (Inv.Cylinder)f.Geometry;
-                    item["radius_mm"] = cyl.Radius * 10.0;
+                    item["radius_mm"] = UnitConvert.CmToMm(cyl.Radius);
                     item["axis"] = new JArray(cyl.AxisVector.X, cyl.AxisVector.Y, cyl.AxisVector.Z);
                 }
 
@@ -116,14 +120,14 @@ public static class FaceSelector
             var normal = GetPlanarNormal(f);
             double dot = normal.x * targetDir.x + normal.y * targetDir.y + normal.z * targetDir.z;
             double angleRad = Math.Acos(Math.Clamp(dot, -1.0, 1.0));
-            double angleDeg = angleRad * 180.0 / Math.PI;
+            double angleDeg = UnitConvert.RadToDeg(angleRad);
 
             if (angleDeg <= spec.ToleranceDeg)
             {
                 var plane = (Inv.Plane)f.Geometry;
                 var basePt = plane.RootPoint;
                 double posCm = basePt.X * targetDir.x + basePt.Y * targetDir.y + basePt.Z * targetDir.z;
-                matchedNormals.Add((f, posCm * 10.0));
+                matchedNormals.Add((f, UnitConvert.CmToMm(posCm)));
             }
         }
 
@@ -147,7 +151,7 @@ public static class FaceSelector
         foreach (var f in faces)
         {
             var cyl = (Inv.Cylinder)f.Geometry;
-            double radiusMm = cyl.Radius * 10.0;
+            double radiusMm = UnitConvert.CmToMm(cyl.Radius);
 
             if (Math.Abs(radiusMm - spec.RadiusMm!.Value) <= spec.RadiusTolMm)
             {
@@ -157,7 +161,7 @@ public static class FaceSelector
                     var targetDir = Directions[spec.Direction];
                     double dot = Math.Abs(cyl.AxisVector.X * targetDir.x + cyl.AxisVector.Y * targetDir.y + cyl.AxisVector.Z * targetDir.z);
                     double angleRad = Math.Acos(Math.Clamp(dot, 0.0, 1.0));
-                    double angleDeg = angleRad * 180.0 / Math.PI;
+                    double angleDeg = UnitConvert.RadToDeg(angleRad);
 
                     if (angleDeg <= spec.ToleranceDeg)
                     {
@@ -198,9 +202,9 @@ public static class FaceSelector
         var max = range.MaxPoint;
         return new double[]
         {
-            (min.X + max.X) * 5.0, // (min + max) / 2 * 10
-            (min.Y + max.Y) * 5.0,
-            (min.Z + max.Z) * 5.0
+            UnitConvert.CmToMm((min.X + max.X) / 2.0),
+            UnitConvert.CmToMm((min.Y + max.Y) / 2.0),
+            UnitConvert.CmToMm((min.Z + max.Z) / 2.0)
         };
     }
 }

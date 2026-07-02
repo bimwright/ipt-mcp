@@ -3,6 +3,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
 using Inventor;
 
 namespace Bimwright.Ipt.Shared.Handlers.Assembly;
@@ -64,7 +65,11 @@ public sealed class CreateIMateHandler : HandlerBase, IInventorCommand
         var face = FaceSelector.SelectFace(def, spec, out var candidates);
         if (face == null)
         {
-            var failResult = InventorCommandResult.Fail(System.Guid.Empty, "INVALID_ARGUMENT", "Face selection is ambiguous or matches 0 faces.", new InventorResponseMeta
+            string errMessage = candidates.Count == 0
+                ? "Face selection matches 0 faces."
+                : "Face selection is ambiguous (matches " + candidates.Count + " faces).";
+
+            var failResult = InventorCommandResult.Fail(System.Guid.Empty, "INVALID_ARGUMENT", errMessage, new InventorResponseMeta
             {
                 TargetId = context.TargetId,
                 InventorYear = context.InventorYear == 0 ? (int?)null : context.InventorYear
@@ -76,8 +81,8 @@ public sealed class CreateIMateHandler : HandlerBase, IInventorCommand
         try
         {
             iMateDefinition im;
-            double offsetCm = offsetMm / 10.0;
-            double distanceCm = distanceMm / 10.0;
+            double offsetCm = UnitConvert.MmToCm(offsetMm);
+            double distanceCm = UnitConvert.MmToCm(distanceMm);
 
             switch (type)
             {
@@ -100,7 +105,11 @@ public sealed class CreateIMateHandler : HandlerBase, IInventorCommand
             var range = face.Evaluator.RangeBox;
             var min = range.MinPoint;
             var max = range.MaxPoint;
-            var centroid = new JArray((min.X + max.X) * 5.0, (min.Y + max.Y) * 5.0, (min.Z + max.Z) * 5.0);
+            var centroid = new JArray(
+                UnitConvert.CmToMm((min.X + max.X) / 2.0),
+                UnitConvert.CmToMm((min.Y + max.Y) / 2.0),
+                UnitConvert.CmToMm((min.Z + max.Z) / 2.0)
+            );
 
             var matchedFace = new JObject
             {
@@ -123,7 +132,7 @@ public sealed class CreateIMateHandler : HandlerBase, IInventorCommand
             else
             {
                 var cyl = (Cylinder)face.Geometry;
-                matchedFace["radius_mm"] = cyl.Radius * 10.0;
+                matchedFace["radius_mm"] = UnitConvert.CmToMm(cyl.Radius);
                 matchedFace["axis"] = new JArray(cyl.AxisVector.X, cyl.AxisVector.Y, cyl.AxisVector.Z);
             }
 

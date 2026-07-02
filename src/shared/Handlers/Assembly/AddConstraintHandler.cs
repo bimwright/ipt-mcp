@@ -3,6 +3,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
 using Inventor;
 
 namespace Bimwright.Ipt.Shared.Handlers.Assembly;
@@ -45,7 +46,7 @@ public sealed class AddConstraintHandler : HandlerBase, IInventorCommand
         try
         {
             AssemblyConstraint constraint;
-            double offsetCm = offsetMm / 10.0;
+            double offsetCm = UnitConvert.MmToCm(offsetMm);
 
             switch (type)
             {
@@ -63,7 +64,7 @@ public sealed class AddConstraintHandler : HandlerBase, IInventorCommand
                     {
                         return Fail(context, "INVALID_ARGUMENT", "angle_deg is required for type=angle");
                     }
-                    double angleRad = angleDeg.Value * Math.PI / 180.0;
+                    double angleRad = UnitConvert.DegToRad(angleDeg.Value);
                     constraint = (AssemblyConstraint)def.Constraints.AddAngleConstraint(entityA, entityB, angleRad);
                     break;
                 default:

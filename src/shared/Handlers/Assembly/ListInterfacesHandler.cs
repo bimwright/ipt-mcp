@@ -5,6 +5,7 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers;
 using Inv = global::Inventor;
 
 namespace Bimwright.Ipt.Shared.Handlers.Assembly;
@@ -55,109 +56,146 @@ public sealed class ListInterfacesHandler : HandlerBase, IInventorCommand
             var workFeaturesArr = new JArray();
             var originArr = new JArray { "XY Plane", "XZ Plane", "YZ Plane", "X Axis", "Y Axis", "Z Axis", "Center Point" };
 
-            // Enumerate iMates
-            try
+            Inv.iMateDefinitions? iMates = null;
+            Inv.WorkPlanes? workPlanes = null;
+            Inv.WorkAxes? workAxes = null;
+            Inv.WorkPoints? workPoints = null;
+
+            if (targetDef is Inv.PartComponentDefinition partDef)
             {
-                dynamic dTarget = targetDef;
-                foreach (Inv.iMateDefinition im in dTarget.iMateDefinitions)
+                iMates = partDef.iMateDefinitions;
+                workPlanes = partDef.WorkPlanes;
+                workAxes = partDef.WorkAxes;
+                workPoints = partDef.WorkPoints;
+            }
+            else if (targetDef is Inv.AssemblyComponentDefinition asmDef)
+            {
+                iMates = asmDef.iMateDefinitions;
+                workPlanes = asmDef.WorkPlanes;
+                workAxes = asmDef.WorkAxes;
+                workPoints = asmDef.WorkPoints;
+            }
+
+            // Enumerate iMates
+            if (iMates != null)
+            {
+                foreach (Inv.iMateDefinition im in iMates)
                 {
-                    string iMateTypeStr = "other";
-                    if (im is Inv.MateiMateDefinition) iMateTypeStr = "mate";
-                    else if (im is Inv.FlushiMateDefinition) iMateTypeStr = "flush";
-                    else if (im is Inv.InsertiMateDefinition) iMateTypeStr = "insert";
-
-                    var item = new JObject
+                    try
                     {
-                        ["name"] = im.Name,
-                        ["type"] = iMateTypeStr,
-                    };
+                        string iMateTypeStr = "other";
+                        if (im is Inv.MateiMateDefinition) iMateTypeStr = "mate";
+                        else if (im is Inv.FlushiMateDefinition) iMateTypeStr = "flush";
+                        else if (im is Inv.InsertiMateDefinition) iMateTypeStr = "insert";
 
-                    object entity = ((dynamic)im).Entity;
-                    item["entity_kind"] = entity.GetType().Name.Replace("FaceProxy", "").Replace("Face", "").Replace("EdgeProxy", "").Replace("Edge", "").ToLowerInvariant();
-
-                    if (entity is Inv.Face face)
-                    {
-                        var range = face.Evaluator.RangeBox;
-                        var min = range.MinPoint;
-                        var max = range.MaxPoint;
-                        var pt = app.TransientGeometry.CreatePoint((min.X + max.X) / 2.0, (min.Y + max.Y) / 2.0, (min.Z + max.Z) / 2.0);
-
-                        if (occurrence != null)
+                        var item = new JObject
                         {
-                            pt.TransformBy(occurrence.Transformation);
-                        }
-
-                        var summary = new JObject
-                        {
-                            ["centroid_mm"] = new JArray(pt.X * 10.0, pt.Y * 10.0, pt.Z * 10.0)
+                            ["name"] = im.Name,
+                            ["type"] = iMateTypeStr,
                         };
 
-                        if (face.SurfaceType == Inv.SurfaceTypeEnum.kPlaneSurface)
+                        object entity = im.ReferencedEntity;
+                        string entityKind = "unknown";
+                        if (entity is Inv.Face) entityKind = "face";
+                        else if (entity is Inv.Edge) entityKind = "edge";
+                        else if (entity is Inv.WorkPlane) entityKind = "work_plane";
+                        else if (entity is Inv.WorkAxis) entityKind = "work_axis";
+                        else if (entity is Inv.WorkPoint) entityKind = "work_point";
+
+                        item["entity_kind"] = entityKind;
+
+                        if (entity is Inv.Face face)
                         {
-                            summary["kind"] = "planar";
-                            var plane = (Inv.Plane)face.Geometry;
-                            var normVec = plane.Normal;
-                            if (face.IsParamReversed)
-                            {
-                                normVec = app.TransientGeometry.CreateUnitVector(-normVec.X, -normVec.Y, -normVec.Z);
-                            }
+                            var range = face.Evaluator.RangeBox;
+                            var min = range.MinPoint;
+                            var max = range.MaxPoint;
+                            var pt = app.TransientGeometry.CreatePoint((min.X + max.X) / 2.0, (min.Y + max.Y) / 2.0, (min.Z + max.Z) / 2.0);
+
                             if (occurrence != null)
                             {
-                                normVec.TransformBy(occurrence.Transformation);
+                                pt.TransformBy(occurrence.Transformation);
                             }
-                            summary["normal"] = new JArray(normVec.X, normVec.Y, normVec.Z);
-                        }
-                        else if (face.SurfaceType == Inv.SurfaceTypeEnum.kCylinderSurface)
-                        {
-                            summary["kind"] = "cylindrical";
-                            var cyl = (Inv.Cylinder)face.Geometry;
-                            summary["radius_mm"] = cyl.Radius * 10.0;
-                            var axisVec = cyl.AxisVector;
-                            if (occurrence != null)
+
+                            var summary = new JObject
                             {
-                                axisVec.TransformBy(occurrence.Transformation);
+                                ["centroid_mm"] = new JArray(UnitConvert.CmToMm(pt.X), UnitConvert.CmToMm(pt.Y), UnitConvert.CmToMm(pt.Z))
+                            };
+
+                            if (face.SurfaceType == Inv.SurfaceTypeEnum.kPlaneSurface)
+                            {
+                                summary["kind"] = "planar";
+                                var plane = (Inv.Plane)face.Geometry;
+                                var localNorm = app.TransientGeometry.CreateVector(plane.Normal.X, plane.Normal.Y, plane.Normal.Z);
+                                if (face.IsParamReversed)
+                                {
+                                    localNorm.ScaleBy(-1.0);
+                                }
+                                if (occurrence != null)
+                                {
+                                    localNorm.TransformBy(occurrence.Transformation);
+                                }
+                                summary["normal"] = new JArray(localNorm.X, localNorm.Y, localNorm.Z);
                             }
-                            summary["axis"] = new JArray(axisVec.X, axisVec.Y, axisVec.Z);
+                            else if (face.SurfaceType == Inv.SurfaceTypeEnum.kCylinderSurface)
+                            {
+                                summary["kind"] = "cylindrical";
+                                var cyl = (Inv.Cylinder)face.Geometry;
+                                summary["radius_mm"] = UnitConvert.CmToMm(cyl.Radius);
+                                var localAxis = app.TransientGeometry.CreateVector(cyl.AxisVector.X, cyl.AxisVector.Y, cyl.AxisVector.Z);
+                                if (occurrence != null)
+                                {
+                                    localAxis.TransformBy(occurrence.Transformation);
+                                }
+                                summary["axis"] = new JArray(localAxis.X, localAxis.Y, localAxis.Z);
+                            }
+                            else
+                            {
+                                summary["kind"] = "other";
+                            }
+                            item["geometry_summary"] = summary;
                         }
                         else
                         {
-                            summary["kind"] = "other";
+                            item["geometry_summary"] = new JObject { ["kind"] = "other" };
                         }
-                        item["geometry_summary"] = summary;
-                    }
-                    else
-                    {
-                        item["geometry_summary"] = new JObject { ["kind"] = "other" };
-                    }
 
-                    imatesArr.Add(item);
+                        imatesArr.Add(item);
+                    }
+                    catch { }
                 }
             }
-            catch { }
 
             // Enumerate User Work Features (excluding origin)
             try
             {
-                dynamic dTarget = targetDef;
-                foreach (Inv.WorkPlane wp in dTarget.WorkPlanes)
+                if (workPlanes != null)
                 {
-                    if (!wp.Name.Contains("XY Plane") && !wp.Name.Contains("XZ Plane") && !wp.Name.Contains("YZ Plane"))
+                    foreach (Inv.WorkPlane wp in workPlanes)
                     {
-                        workFeaturesArr.Add(new JObject { ["name"] = wp.Name, ["kind"] = "work_plane" });
+                        if (!wp.Name.Contains("XY Plane") && !wp.Name.Contains("XZ Plane") && !wp.Name.Contains("YZ Plane"))
+                        {
+                            workFeaturesArr.Add(new JObject { ["name"] = wp.Name, ["kind"] = "work_plane" });
+                        }
                     }
                 }
-                foreach (Inv.WorkAxis wa in dTarget.WorkAxes)
+                if (workAxes != null)
                 {
-                    if (!wa.Name.Contains("X Axis") && !wa.Name.Contains("Y Axis") && !wa.Name.Contains("Z Axis"))
+                    foreach (Inv.WorkAxis wa in workAxes)
                     {
-                        workFeaturesArr.Add(new JObject { ["name"] = wa.Name, ["kind"] = "work_axis" });
+                        if (!wa.Name.Contains("X Axis") && !wa.Name.Contains("Y Axis") && !wa.Name.Contains("Z Axis"))
+                        {
+                            workFeaturesArr.Add(new JObject { ["name"] = wa.Name, ["kind"] = "work_axis" });
+                        }
                     }
                 }
-                foreach (Inv.WorkPoint wpt in dTarget.WorkPoints)
+                if (workPoints != null)
                 {
-                    if (!wpt.Name.Contains("Center Point"))
+                    foreach (Inv.WorkPoint wpt in workPoints)
                     {
-                        workFeaturesArr.Add(new JObject { ["name"] = wpt.Name, ["kind"] = "work_point" });
+                        if (!wpt.Name.Contains("Center Point"))
+                        {
+                            workFeaturesArr.Add(new JObject { ["name"] = wpt.Name, ["kind"] = "work_point" });
+                        }
                     }
                 }
             }

@@ -96,47 +96,71 @@ public static class AssemblyRefResolver
             throw new ArgumentException("Reference name cannot be empty");
         }
 
-        dynamic targetDef;
+        Inv.WorkPlanes? workPlanes = null;
+        Inv.WorkAxes? workAxes = null;
+        Inv.WorkPoints? workPoints = null;
+        Inv.iMateDefinitions? iMates = null;
+
         if (occ != null)
         {
-            targetDef = occ.Definition;
+            var occDef = occ.Definition;
+            if (occDef is Inv.PartComponentDefinition partDef)
+            {
+                workPlanes = partDef.WorkPlanes;
+                workAxes = partDef.WorkAxes;
+                workPoints = partDef.WorkPoints;
+                iMates = partDef.iMateDefinitions;
+            }
+            else if (occDef is Inv.AssemblyComponentDefinition asmDef)
+            {
+                workPlanes = asmDef.WorkPlanes;
+                workAxes = asmDef.WorkAxes;
+                workPoints = asmDef.WorkPoints;
+                iMates = asmDef.iMateDefinitions;
+            }
         }
         else
         {
-            targetDef = def;
+            workPlanes = def.WorkPlanes;
+            workAxes = def.WorkAxes;
+            workPoints = def.WorkPoints;
+            iMates = def.iMateDefinitions;
         }
 
         object resolvedEntity;
 
         // 1. Origin geometry
-        if (OriginPlanes.Contains(refName, StringComparer.OrdinalIgnoreCase))
+        if (OriginPlanes.Contains(refName, StringComparer.OrdinalIgnoreCase) && workPlanes != null)
         {
-            resolvedEntity = targetDef.WorkPlanes[refName];
+            resolvedEntity = workPlanes[refName];
         }
-        else if (OriginAxes.Contains(refName, StringComparer.OrdinalIgnoreCase))
+        else if (OriginAxes.Contains(refName, StringComparer.OrdinalIgnoreCase) && workAxes != null)
         {
-            resolvedEntity = targetDef.WorkAxes[refName];
+            resolvedEntity = workAxes[refName];
         }
-        else if (string.Equals(refName, CenterPoint, StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(refName, CenterPoint, StringComparison.OrdinalIgnoreCase) && workPoints != null)
         {
-            resolvedEntity = targetDef.WorkPoints[refName];
+            resolvedEntity = workPoints[refName];
         }
         else
         {
             // 2. iMates
             object? foundIMate = null;
-            try
+            if (iMates != null)
             {
-                foreach (Inv.iMateDefinition im in targetDef.iMateDefinitions)
+                foreach (Inv.iMateDefinition im in iMates)
                 {
-                    if (string.Equals(im.Name, refName, StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        foundIMate = ((dynamic)im).Entity;
-                        break;
+                        if (string.Equals(im.Name, refName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            foundIMate = im.ReferencedEntity;
+                            break;
+                        }
                     }
+                    catch { }
                 }
             }
-            catch { }
 
             if (foundIMate != null)
             {
@@ -148,17 +172,20 @@ public static class AssemblyRefResolver
                 object? foundWork = null;
                 try
                 {
-                    foreach (Inv.WorkPlane wp in targetDef.WorkPlanes)
+                    if (workPlanes != null)
                     {
-                        if (string.Equals(wp.Name, refName, StringComparison.OrdinalIgnoreCase))
+                        foreach (Inv.WorkPlane wp in workPlanes)
                         {
-                            foundWork = wp;
-                            break;
+                            if (string.Equals(wp.Name, refName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                foundWork = wp;
+                                break;
+                            }
                         }
                     }
-                    if (foundWork == null)
+                    if (foundWork == null && workAxes != null)
                     {
-                        foreach (Inv.WorkAxis wa in targetDef.WorkAxes)
+                        foreach (Inv.WorkAxis wa in workAxes)
                         {
                             if (string.Equals(wa.Name, refName, StringComparison.OrdinalIgnoreCase))
                             {
@@ -167,9 +194,9 @@ public static class AssemblyRefResolver
                             }
                         }
                     }
-                    if (foundWork == null)
+                    if (foundWork == null && workPoints != null)
                     {
-                        foreach (Inv.WorkPoint wpt in targetDef.WorkPoints)
+                        foreach (Inv.WorkPoint wpt in workPoints)
                         {
                             if (string.Equals(wpt.Name, refName, StringComparison.OrdinalIgnoreCase))
                             {
@@ -187,7 +214,7 @@ public static class AssemblyRefResolver
                 }
                 else
                 {
-                    var available = AvailableNames(targetDef);
+                    var available = AvailableNames(workPlanes, workAxes, workPoints, iMates);
                     throw new ArgumentException($"Reference '{refName}' not found. Available references on target: {string.Join(", ", available)}");
                 }
             }
@@ -206,38 +233,54 @@ public static class AssemblyRefResolver
     /// <summary>
     /// Collects all valid reference names (origin, iMates, user work features) on the definition.
     /// </summary>
-    public static List<string> AvailableNames(dynamic targetDef)
+    public static List<string> AvailableNames(
+        Inv.WorkPlanes? workPlanes,
+        Inv.WorkAxes? workAxes,
+        Inv.WorkPoints? workPoints,
+        Inv.iMateDefinitions? iMates)
     {
         var names = new List<string>();
         names.AddRange(OriginPlanes);
         names.AddRange(OriginAxes);
         names.Add(CenterPoint);
 
-        try
+        if (iMates != null)
         {
-            foreach (Inv.iMateDefinition im in targetDef.iMateDefinitions)
+            foreach (Inv.iMateDefinition im in iMates)
             {
-                if (!string.IsNullOrEmpty(im.Name)) names.Add(im.Name);
+                try
+                {
+                    if (!string.IsNullOrEmpty(im.Name)) names.Add(im.Name);
+                }
+                catch { }
             }
         }
-        catch { }
 
         try
         {
-            foreach (Inv.WorkPlane wp in targetDef.WorkPlanes)
+            if (workPlanes != null)
             {
-                if (!OriginPlanes.Contains(wp.Name, StringComparer.OrdinalIgnoreCase) && !string.IsNullOrEmpty(wp.Name))
-                    names.Add(wp.Name);
+                foreach (Inv.WorkPlane wp in workPlanes)
+                {
+                    if (!OriginPlanes.Contains(wp.Name, StringComparer.OrdinalIgnoreCase) && !string.IsNullOrEmpty(wp.Name))
+                        names.Add(wp.Name);
+                }
             }
-            foreach (Inv.WorkAxis wa in targetDef.WorkAxes)
+            if (workAxes != null)
             {
-                if (!OriginAxes.Contains(wa.Name, StringComparer.OrdinalIgnoreCase) && !string.IsNullOrEmpty(wa.Name))
-                    names.Add(wa.Name);
+                foreach (Inv.WorkAxis wa in workAxes)
+                {
+                    if (!OriginAxes.Contains(wa.Name, StringComparer.OrdinalIgnoreCase) && !string.IsNullOrEmpty(wa.Name))
+                        names.Add(wa.Name);
+                }
             }
-            foreach (Inv.WorkPoint wpt in targetDef.WorkPoints)
+            if (workPoints != null)
             {
-                if (!string.Equals(wpt.Name, CenterPoint, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(wpt.Name))
-                    names.Add(wpt.Name);
+                foreach (Inv.WorkPoint wpt in workPoints)
+                {
+                    if (!string.Equals(wpt.Name, CenterPoint, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(wpt.Name))
+                        names.Add(wpt.Name);
+                }
             }
         }
         catch { }
