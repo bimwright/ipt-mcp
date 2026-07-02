@@ -77,12 +77,11 @@ The **server** compiles only `shared/Contracts/*` + `shared/Security/*` (and Too
 dotnet build src/IptMcp.sln -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
-# Add-in project SHAPE check without Inventor installed (Phase 2+):
-dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
-dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # needs the .NET 10 SDK
+# Legacy TFM compatibility check using the installed 2027 interop reference:
+dotnet build src/plugin-inv24 -c Debug /p:InventorInteropDir="C:\Program Files\Common Files\Autodesk Shared\Extensions 2027\Framework\Interop"
 
-# Real add-in compile (only on a box with Inventor + matching SDK): drop SkipInventorReferenceCheck
-# and pass /p:InventorInteropDir=... if the interop is not at the default path.
+# Real 2027 add-in compile (needs the .NET 10 SDK and installed Inventor 2027 interop):
+dotnet build src/plugin-inv27 -c Debug
 ```
 
 Inventor must be CLOSED before deploying add-in DLLs it would otherwise lock. The Inventor-API handlers have been smoke-tested against a live Inventor session; hold new handler bodies to the same verification bar before calling them done.

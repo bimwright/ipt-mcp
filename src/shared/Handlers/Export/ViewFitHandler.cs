@@ -27,7 +27,7 @@ public sealed class ViewFitHandler : HandlerBase, IInventorCommand
         {
             activeView.Fit();
             activeView.Update();
-            return Ok(context, new JObject());
+            return Ok(context, new JObject { ["fitted"] = true });
         }
         catch (Exception ex)
         {

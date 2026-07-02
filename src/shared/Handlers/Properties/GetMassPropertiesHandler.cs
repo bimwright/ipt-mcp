@@ -10,7 +10,7 @@ namespace Bimwright.Ipt.Shared.Handlers.Properties;
 
 /// <summary>
 /// <c>get_mass_properties</c> — read-only. Reports mass (g), volume (mm^3), surface area (mm^2),
-/// centre of mass (mm), and the model bounding box (mm) of the active part document.
+/// centre of mass (mm), and the model bounding box (mm) of the active part or assembly document.
 /// <para>
 /// Inventor's API works in internal database units: mass in <b>kg</b>, lengths in <b>cm</b>,
 /// volume in <b>cm^3</b>, area in <b>cm^2</b>. We convert at the boundary: kg→g (×1000),
@@ -87,7 +87,7 @@ public sealed class GetMassPropertiesHandler : HandlerBase, IInventorCommand
             {
                 ["mass_g"] = UnitConvert.KgToG(massKg),
                 ["volume_mm3"] = UnitConvert.Cm3ToMm3(volumeCm3),
-            ["area_mm2"] = UnitConvert.Cm2ToMm2(areaCm2),
+                ["area_mm2"] = UnitConvert.Cm2ToMm2(areaCm2),
                 ["center_of_mass_mm"] = com,
                 ["bounding_box_mm"] = bbox,
             });

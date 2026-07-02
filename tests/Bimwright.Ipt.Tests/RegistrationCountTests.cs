@@ -152,4 +152,3 @@ public sealed class RegistrationCountTests
         Assert.Equal(58, names.Length);
     }
 }
-

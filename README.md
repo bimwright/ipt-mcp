@@ -84,12 +84,13 @@ Autodesk Inventor binaries and the Inventor SDK are **not redistributed** in thi
 dotnet build src/IptMcp.sln -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
-# Add-in project SHAPE check without Inventor installed:
-dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
-dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # needs the .NET 10 SDK
+# Legacy TFM compatibility check using the installed 2027 interop reference:
+dotnet build src/plugin-inv24 -c Debug /p:InventorInteropDir="C:\Program Files\Common Files\Autodesk Shared\Extensions 2027\Framework\Interop"
+dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the .NET 10 SDK
 
-# Real add-in compile (only on a box with Inventor + the matching SDK): drop SkipInventorReferenceCheck.
-# Pass /p:InventorInteropDir=... if the interop is not at the default path.
+# A per-version add-in always needs an Inventor interop reference. For a legacy TFM compatibility
+# check, point InventorInteropDir at an installed compatible interop; real release builds use the
+# matching year's default path.
 ```
 
 - The **server** explicit-includes only `shared/Contracts/*` + `shared/Security/*` (+ ToolBaker), so it compiles with no Inventor SDK present.

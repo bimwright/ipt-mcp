@@ -123,23 +123,23 @@ integration end to end.
 17. **Assembly batch smoke** (place / constrain / verify / part features / view)
     Fixtures `A.ipt` (plate 50×50×5 with a planar iMate `IF_MATE_TOP`) and `B.ipt` (Ø20×30 cylinder
     with an insert iMate `IF_INSERT_SHAFT`) from `C:\Temp\bimwright-spike\`.
-    - `inventor_new_assembly`, then `inventor_place_occurrence` A (grounded) and B (`position_mm=[0,0,50]`).
-      **Expected:** each returns an `occurrence_name` + `bbox_mm`.
-    - `inventor_add_constraint` `type=insert` between B's `IF_INSERT_SHAFT` and A's `IF_MATE_TOP`.
-      **Expected:** `ok: true` with `health: "up_to_date"` (a sick constraint does NOT throw — always
-      read `health`). A mate ref given where an insert is required returns `INVALID_ARGUMENT` listing
-      the available interface names (self-teaching path).
-    - `inventor_list_constraints` → **Expected:** every constraint `health: "up_to_date"`.
-    - `inventor_check_interference` → **Expected:** `count: 0` on the mated fixtures.
-    - `inventor_measure_min_distance` between the two occurrences → **Expected:** `0` on contact faces.
-    - `inventor_get_assembly_bom` → **Expected:** the grounded row reports `dof_translation: 0`,
-      `dof_rotation: 0`; the flat list groups into a BOM with per-row `unit_mass_g`.
-    - `inventor_get_mass_properties` on the assembly → **Expected:** mass ≈ Σ of the two parts.
-    - `inventor_set_view_orientation iso_top_right` + `inventor_view_fit` + `inventor_capture_view`
-      (`output_path` mode) → **Expected:** a non-blank PNG on disk.
-    - Part features on `A.ipt` (`inventor_open_document`): `inventor_hole` with
-      `tapped_designation=M6x1` → **Expected:** `tapped: true`; `inventor_circular_pattern` of the hole
-      about `Z Axis`, count 4 → **Expected:** a pattern feature name.
-    - `inventor_create_imate` with a `planar` selector that matches >1 face → **Expected:**
-      `INVALID_ARGUMENT` whose `candidates` array carries each face's `centroid_mm`/`area_mm2`; retry
-      with `near_mm` from a listed candidate resolves to exactly one face.
+    1. On the fixture parts, run `inventor_list_interfaces`, then create an additional named interface
+       with `inventor_create_imate`. Intentionally submit one ambiguous selector first.
+       **Expected:** the failure is `INVALID_ARGUMENT` with `candidates[{centroid_mm,area_mm2}]`; retry
+       with `near_mm` succeeds and returns the iMate name.
+    2. Run `inventor_new_assembly`, then `inventor_place_occurrence` for grounded A and two B occurrences.
+       Exercise `inventor_add_constraint` with `mate`, `flush`, `insert`, and `angle` using compatible
+       iMate/origin refs; use a fresh occurrence or assembly where needed to avoid over-constraint.
+       **Expected:** every successful response has `health: "up_to_date"`; an unknown ref returns
+       `INVALID_ARGUMENT` with the structured `available` names.
+    3. Run `inventor_list_constraints`, `inventor_check_interference`,
+       `inventor_measure_min_distance`, `inventor_get_assembly_bom`, and assembly-level
+       `inventor_get_mass_properties`. **Expected:** all constraints are `up_to_date`, interference
+       `count: 0`, mated-face distance `0`, grounded A has DOF `0/0`, and assembly mass approximates
+       the sum of its occurrences.
+    4. Open A and run `inventor_hole` with tapped `M6x1`, then both `inventor_circular_pattern` and
+       `inventor_rectangular_pattern` using the returned hole feature name. **Expected:** `tapped: true`
+       and both pattern calls return a pattern name with the requested instance count.
+    5. Run `inventor_set_view_orientation` for at least two orientations, `inventor_view_fit`, and
+       `inventor_capture_view` in output-path mode. **Expected:** each orientation is echoed, fit reports
+       `fitted: true`, and every PNG exists, has non-zero size, and is visually non-blank.

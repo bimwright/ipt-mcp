@@ -54,7 +54,7 @@ public sealed class SetViewOrientationHandler : HandlerBase, IInventorCommand
             camera.Apply();
             activeView.Update();
 
-            return Ok(context, new JObject());
+            return Ok(context, new JObject { ["orientation"] = orientation });
         }
         catch (Exception ex)
         {

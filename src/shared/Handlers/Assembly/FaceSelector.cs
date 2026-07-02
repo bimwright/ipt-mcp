@@ -119,7 +119,7 @@ public static class FaceSelector
         {
             var normal = GetPlanarNormal(f);
             double dot = normal.x * targetDir.x + normal.y * targetDir.y + normal.z * targetDir.z;
-            double angleRad = Math.Acos(Math.Clamp(dot, -1.0, 1.0));
+            double angleRad = Math.Acos(Math.Max(-1.0, Math.Min(1.0, dot)));
             double angleDeg = UnitConvert.RadToDeg(angleRad);
 
             if (angleDeg <= spec.ToleranceDeg)
@@ -160,7 +160,7 @@ public static class FaceSelector
                 {
                     var targetDir = Directions[spec.Direction];
                     double dot = Math.Abs(cyl.AxisVector.X * targetDir.x + cyl.AxisVector.Y * targetDir.y + cyl.AxisVector.Z * targetDir.z);
-                    double angleRad = Math.Acos(Math.Clamp(dot, 0.0, 1.0));
+                    double angleRad = Math.Acos(Math.Max(0.0, Math.Min(1.0, dot)));
                     double angleDeg = UnitConvert.RadToDeg(angleRad);
 
                     if (angleDeg <= spec.ToleranceDeg)

@@ -150,7 +150,7 @@ Default per-request timeout is 30s. The listener cancels pending requests on add
 
 ## Progressive disclosure & gates
 
-Tools are grouped into `[McpServerToolType]` classes by domain. `Program.ResolveToolTypesForRegistration(cfg)` maps each enabled toolset to its tool type and de-dups (`DocumentTools` maps to both `query` and `document`), then registers only those, so disabled tools never appear in `tools/list`. `ToolsetFilter.Resolve` handles defaults, the `all` shortcut, silent dropping of unknown names, the `code`/`toolbaker` gates, and `--read-only` post-processing (strips every `WriteCapable` toolset). `ServerInstructions.Text` is keyword-dense (part/sketch/extrude/parameter/iproperty/export) so MCP Tool Search can discover the surface.
+The full surface is 59 tools across 13 toolsets. Tools are grouped into `[McpServerToolType]` classes by domain. `Program.ResolveToolTypesForRegistration(cfg)` maps each enabled toolset to its tool type and de-dups (`DocumentTools` maps to both `query` and `document`), then registers only those, so disabled tools never appear in `tools/list`. Assembly composition lives in write-capable `assembly`; numeric verification lives in read-only `assembly_query`. `ToolsetFilter.Resolve` handles defaults, the `all` shortcut, silent dropping of unknown names, the `code`/`toolbaker` gates, and `--read-only` post-processing (strips every `WriteCapable` toolset). `ServerInstructions.Text` is keyword-dense so MCP Tool Search can discover the surface.
 
 ## Configuration precedence
 

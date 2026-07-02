@@ -33,14 +33,20 @@ public sealed class RectangularPatternHandler : HandlerBase, IInventorCommand
             return Fail(context, "INVALID_ARGUMENT", "dir1 is required");
         }
 
-        int count1 = (int?)parameters["count1"] ?? 1;
+        int count1 = (int?)parameters["count1"] ?? 0;
         double spacingMm1 = (double?)parameters["spacing_mm1"] ?? 0;
         bool naturalDirection1 = (bool?)parameters["natural_direction1"] ?? true;
 
         string dir2 = (string?)parameters["dir2"] ?? "";
-        int count2 = (int?)parameters["count2"] ?? 1;
-        double spacingMm2 = (double?)parameters["spacing_mm2"] ?? 0;
+        int? count2 = (int?)parameters["count2"];
+        double? spacingMm2 = (double?)parameters["spacing_mm2"];
         bool naturalDirection2 = (bool?)parameters["natural_direction2"] ?? true;
+
+        if (!PatternInputValidator.TryValidateRectangular(
+                count1, spacingMm1, dir2, count2, spacingMm2, out var validationError))
+        {
+            return Fail(context, "INVALID_ARGUMENT", validationError);
+        }
 
         var def = partDoc.ComponentDefinition;
 
@@ -65,6 +71,10 @@ public sealed class RectangularPatternHandler : HandlerBase, IInventorCommand
         {
             return Fail(context, "INVALID_ARGUMENT", $"Failed to resolve direction 1 reference '{dir1}': {dir1Err}");
         }
+        if (dirEntity1 is not WorkAxis)
+        {
+            return Fail(context, "INVALID_ARGUMENT", $"Direction 1 reference '{dir1}' must resolve to a work/origin axis");
+        }
 
         // Resolve direction 2 (optional)
         object? dirEntity2 = null;
@@ -73,6 +83,10 @@ public sealed class RectangularPatternHandler : HandlerBase, IInventorCommand
             if (!AssemblyRefResolver.TryResolveInPart(def, dir2, out dirEntity2, out var dir2Err))
             {
                 return Fail(context, "INVALID_ARGUMENT", $"Failed to resolve direction 2 reference '{dir2}': {dir2Err}");
+            }
+            if (dirEntity2 is not WorkAxis)
+            {
+                return Fail(context, "INVALID_ARGUMENT", $"Direction 2 reference '{dir2}' must resolve to a work/origin axis");
             }
         }
 
@@ -86,10 +100,10 @@ public sealed class RectangularPatternHandler : HandlerBase, IInventorCommand
 
             if (dirEntity2 != null)
             {
-                double spacingCm2 = UnitConvert.MmToCm(spacingMm2);
+                double spacingCm2 = UnitConvert.MmToCm(spacingMm2!.Value);
                 rpDef.YDirectionEntity = dirEntity2;
                 rpDef.NaturalYDirection = naturalDirection2;
-                rpDef.YCount = count2;
+                rpDef.YCount = count2!.Value;
                 rpDef.YSpacing = spacingCm2;
             }
 
@@ -98,7 +112,7 @@ public sealed class RectangularPatternHandler : HandlerBase, IInventorCommand
             return Ok(context, new JObject
             {
                 ["pattern_name"] = pattern.Name,
-                ["total_instances"] = dirEntity2 != null ? count1 * count2 : count1
+                ["total_instances"] = dirEntity2 != null ? count1 * count2!.Value : count1
             });
         }
         catch (Exception ex)

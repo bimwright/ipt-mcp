@@ -29,13 +29,15 @@ cd ipt-mcp
 dotnet build src/IptMcp.sln -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
-# Add-in project SHAPE check without Inventor installed:
-dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
-dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # needs the .NET 10 SDK
+# Legacy TFM compatibility check using an installed compatible interop reference:
+dotnet build src/plugin-inv24 -c Debug /p:InventorInteropDir="C:\Program Files\Common Files\Autodesk Shared\Extensions 2027\Framework\Interop"
+
+# Real 2027 compile (needs the .NET 10 SDK and installed Inventor 2027 interop):
+dotnet build src/plugin-inv27 -c Debug
 ```
 
-Real add-in compile (on a box with Inventor + the matching SDK): drop `SkipInventorReferenceCheck`
-and pass `/p:InventorInteropDir=...` if the interop is not at the default path
+Every add-in compile needs an Inventor interop reference. Pass `/p:InventorInteropDir=...` if the
+interop used for a compatibility check or real build is not at that project's default path
 (`C:\Program Files\Common Files\Autodesk Shared\Extensions <year>\Framework\Interop`).
 
 **Close every running Inventor before deploying add-in DLLs** — Inventor holds file locks on loaded

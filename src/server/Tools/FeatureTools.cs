@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -199,13 +200,19 @@ public sealed class FeatureTools
         bool natural_direction1 = true,
         bool natural_direction2 = true,
         CancellationToken ct = default)
-        => Call("rectangular_pattern", new JObject
+    {
+        if (!PatternInputValidator.TryValidateRectangular(
+                count1, spacing_mm1, dir2, count2, spacing_mm2, out var error))
+            return Task.FromResult(Err(error));
+
+        return Call("rectangular_pattern", new JObject
         {
             ["feature_names"] = new JArray(feature_names),
             ["dir1"] = dir1, ["count1"] = count1, ["spacing_mm1"] = spacing_mm1,
             ["dir2"] = dir2, ["count2"] = count2, ["spacing_mm2"] = spacing_mm2,
             ["natural_direction1"] = natural_direction1, ["natural_direction2"] = natural_direction2,
         }, ct);
+    }
 
     private static string Err(string message)
         => Newtonsoft.Json.JsonConvert.SerializeObject(new { ok = false, error = new { code = "INVALID_ARGUMENT", message } }, Newtonsoft.Json.Formatting.Indented);

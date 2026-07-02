@@ -65,6 +65,10 @@ public sealed class CircularPatternHandler : HandlerBase, IInventorCommand
         {
             return Fail(context, "INVALID_ARGUMENT", $"Failed to resolve axis reference '{axis}': {axisErr}");
         }
+        if (axisEntity is not WorkAxis)
+        {
+            return Fail(context, "INVALID_ARGUMENT", $"Axis reference '{axis}' must resolve to a work/origin axis");
+        }
 
         try
         {
