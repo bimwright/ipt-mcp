@@ -66,6 +66,64 @@ public sealed class FeatureTools
     public Task<string> CreateWorkAxis(string type, string[] refs, CancellationToken ct = default)
         => Call("create_work_axis", new JObject { ["type"] = type, ["refs"] = new JArray(refs) }, ct);
 
+    [McpServerTool(Name = "inventor_hole"),
+     Description("Create holes on the ACTIVE PART: pick a planar face with the deterministic selector (face_normal +X|-X|+Y|-Y|+Z|-Z, face_extreme max|min, optional face_near_mm), give hole centers as a FLAT mm array [x1,y1,z1,x2,y2,z2,...] lying ON that face plane, diameter_mm and kind=drilled|counterbore|countersink. through=true OR depth_mm (exclusive). Optional tap metadata: tapped_designation (e.g. 'M6x1') marks the hole tapped (metadata only, no thread geometry). Returns feature_names + hole_count.")]
+    public Task<string> Hole(string faceNormal, double[] pointsMm, double diameterMm,
+        string kind = "drilled", string faceExtreme = "max", double[]? faceNearMm = null,
+        bool through = true, double? depthMm = null,
+        double? cboreDiameterMm = null, double? cboreDepthMm = null,
+        double? csinkDiameterMm = null, double csinkAngleDeg = 82,
+        string? tappedDesignation = null, string tappedClass = "6H", bool tappedRightHanded = true,
+        CancellationToken ct = default)
+    {
+        if (pointsMm is null || pointsMm.Length == 0 || pointsMm.Length % 3 != 0)
+            return Task.FromResult(Err("points_mm must be a flat [x1,y1,z1,...] array (length multiple of 3)"));
+        if (through && depthMm is not null)
+            return Task.FromResult(Err("through=true and depth_mm are mutually exclusive"));
+        if (!through && depthMm is null)
+            return Task.FromResult(Err("either through=true or depth_mm is required"));
+        var points = new JArray();
+        for (int i = 0; i < pointsMm.Length; i += 3)
+            points.Add(new JArray(pointsMm[i], pointsMm[i + 1], pointsMm[i + 2]));
+        var face = new JObject { ["kind"] = "planar", ["normal"] = faceNormal, ["extreme"] = faceExtreme };
+        if (faceNearMm is not null) face["near_mm"] = new JArray(faceNearMm);
+        return Call("hole", new JObject
+        {
+            ["face"] = face, ["points_mm"] = points, ["diameter_mm"] = diameterMm, ["kind"] = kind,
+            ["through"] = through, ["depth_mm"] = depthMm,
+            ["cbore_diameter_mm"] = cboreDiameterMm, ["cbore_depth_mm"] = cboreDepthMm,
+            ["csink_diameter_mm"] = csinkDiameterMm, ["csink_angle_deg"] = csinkAngleDeg,
+            ["tapped_designation"] = tappedDesignation, ["tapped_class"] = tappedClass,
+            ["tapped_right_handed"] = tappedRightHanded,
+        }, ct);
+    }
+
+    [McpServerTool(Name = "inventor_circular_pattern"),
+     Description("Circular-pattern part features around a named axis of the ACTIVE PART (work axis name or origin 'X Axis'|'Y Axis'|'Z Axis'). count instances over angle_deg (default full 360). Returns pattern feature name.")]
+    public Task<string> CircularPattern(string[] featureNames, string axis, int count,
+        double angleDeg = 360, bool naturalDirection = true, CancellationToken ct = default)
+        => Call("circular_pattern", new JObject
+        {
+            ["feature_names"] = new JArray(featureNames), ["axis"] = axis,
+            ["count"] = count, ["angle_deg"] = angleDeg, ["natural_direction"] = naturalDirection,
+        }, ct);
+
+    [McpServerTool(Name = "inventor_rectangular_pattern"),
+     Description("Rectangular-pattern part features along one or two named axes of the ACTIVE PART (work axis or origin axis names). count1/spacing_mm1 along dir1; optional dir2/count2/spacing_mm2. Returns pattern feature name.")]
+    public Task<string> RectangularPattern(string[] featureNames, string dir1, int count1, double spacingMm1,
+        string? dir2 = null, int? count2 = null, double? spacingMm2 = null,
+        bool naturalDirection1 = true, bool naturalDirection2 = true, CancellationToken ct = default)
+        => Call("rectangular_pattern", new JObject
+        {
+            ["feature_names"] = new JArray(featureNames),
+            ["dir1"] = dir1, ["count1"] = count1, ["spacing_mm1"] = spacingMm1,
+            ["dir2"] = dir2, ["count2"] = count2, ["spacing_mm2"] = spacingMm2,
+            ["natural_direction1"] = naturalDirection1, ["natural_direction2"] = naturalDirection2,
+        }, ct);
+
+    private static string Err(string message)
+        => Newtonsoft.Json.JsonConvert.SerializeObject(new { ok = false, error = new { code = "INVALID_ARGUMENT", message } }, Newtonsoft.Json.Formatting.Indented);
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try

@@ -88,6 +88,16 @@ public sealed class ExportTools
         }, ct);
     }
 
+    [McpServerTool(Name = "inventor_view_fit"),
+     Description("Zoom-fit the active Inventor view to the model extents. Run before capture_view so captures are never blank. Does not modify the document.")]
+    public Task<string> ViewFit(CancellationToken ct = default)
+        => Call("view_fit", new JObject(), ct);
+
+    [McpServerTool(Name = "inventor_set_view_orientation"),
+     Description("Set the active view camera to a standard orientation: iso_top_right|iso_top_left|iso_bottom_right|iso_bottom_left|front|back|top|bottom|left|right (fit=true refits). Loop over several orientations + capture_view (output_path mode) to photograph a model from multiple angles. Does not modify the document.")]
+    public Task<string> SetViewOrientation(string orientation, bool fit = true, CancellationToken ct = default)
+        => Call("set_view_orientation", new JObject { ["orientation"] = orientation, ["fit"] = fit }, ct);
+
     // ---- helpers ----
 
     private static int ClampPixels(int px) => px < 16 ? 16 : (px > 4096 ? 4096 : px);

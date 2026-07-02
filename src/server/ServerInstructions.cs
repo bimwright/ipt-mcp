@@ -8,8 +8,11 @@ public static class ServerInstructions
         ".ipt part files, .iam assembly files, or .idw/.dwg drawings. " +
         "Capabilities: create and open parts and assemblies; list open documents and get document info; " +
         "create and edit 2D sketches (lines, circles, rectangles, constraints) on a part; " +
-        "build solid features from sketch profiles - extrude, revolve, fillet, chamfer; " +
+        "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole, circular_pattern, rectangular_pattern; " +
         "create work geometry such as a work plane and work axis; " +
+        "place components (IPT/IAM) in assembly, constrain them (mate/flush/insert/angle) using named refs/proxies, create iMates on parts; " +
+        "query assembly relationships, BOM, degrees of freedom, interference, and min distance; " +
+        "zoom-fit and orient camera views; " +
         "read and write model parameters and user parameters; " +
         "read and write iProperties (iproperty: title, author, part number, description, custom properties); " +
         "compute mass properties (mass, volume, surface area, center of gravity, bounding box) and material; " +

@@ -19,7 +19,8 @@ public sealed class ToolsetFilterTests
         foreach (var t in new[]
                  {
                      "meta", "query", "document", "parameters", "properties",
-                     "sketch", "feature", "export", "toolbaker", "toolbaker_write"
+                     "sketch", "feature", "export", "toolbaker", "toolbaker_write",
+                     "assembly", "assembly_query"
                  })
             Assert.Contains(t, set);
         Assert.DoesNotContain("code", set);
@@ -58,13 +59,13 @@ public sealed class ToolsetFilterTests
             EnableSendCode = true,
         });
 
-        foreach (var keep in new[] { "meta", "query", "toolbaker" })
+        foreach (var keep in new[] { "meta", "query", "assembly_query", "toolbaker" })
             Assert.Contains(keep, set);
 
         foreach (var gone in new[]
                  {
                      "document", "parameters", "properties", "sketch",
-                     "feature", "export", "code", "toolbaker_write"
+                     "feature", "export", "code", "toolbaker_write", "assembly"
                  })
             Assert.DoesNotContain(gone, set);
     }
@@ -84,5 +85,22 @@ public sealed class ToolsetFilterTests
         Assert.Contains("sketch", set);
         Assert.DoesNotContain("meta", set);
         Assert.Single(set);
+    }
+
+    [Fact]
+    public void Assembly_is_writecapable_assembly_query_is_not()
+    {
+        var ro = new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true };
+        var set = ToolsetFilter.Resolve(ro);
+        Assert.DoesNotContain("assembly", set);
+        Assert.Contains("assembly_query", set);
+    }
+
+    [Fact]
+    public void Assembly_toolsets_are_default_on()
+    {
+        var def = ToolsetFilter.Resolve(new InventorMcpConfig());
+        Assert.Contains("assembly", def);
+        Assert.Contains("assembly_query", def);
     }
 }
