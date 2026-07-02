@@ -34,13 +34,13 @@ public sealed class AddConstraintHandler : HandlerBase, IInventorCommand
         // Resolve reference A
         if (!AssemblyRefResolver.TryResolveInAssembly(def, aOccurrence, aRef, out var entityA, out var errA))
         {
-            return Fail(context, "INVALID_ARGUMENT", "Failed to resolve a: " + errA);
+            return FailWithAvailable(context, "Failed to resolve a: " + errA, AvailableForScope(def, aOccurrence));
         }
 
         // Resolve reference B
         if (!AssemblyRefResolver.TryResolveInAssembly(def, bOccurrence, bRef, out var entityB, out var errB))
         {
-            return Fail(context, "INVALID_ARGUMENT", "Failed to resolve b: " + errB);
+            return FailWithAvailable(context, "Failed to resolve b: " + errB, AvailableForScope(def, bOccurrence));
         }
 
         try
@@ -74,7 +74,8 @@ public sealed class AddConstraintHandler : HandlerBase, IInventorCommand
             string health = AssemblyRefResolver.HealthToString(constraint.HealthStatus);
             return Ok(context, new JObject
             {
-                ["name"] = constraint.Name,
+                ["constraint_name"] = constraint.Name,
+                ["type"] = type,
                 ["health"] = health
             });
         }
@@ -82,6 +83,32 @@ public sealed class AddConstraintHandler : HandlerBase, IInventorCommand
         {
             return Fail(context, "API_ERROR", "Failed to add constraint: " + ex.Message);
         }
+    }
+
+    // Structured available-names for the scope a failed ref was searched in (spec §9): assembly origin
+    // when the occurrence is empty, otherwise the occurrence's own part/assembly definition.
+    private static JObject AvailableForScope(AssemblyComponentDefinition def, string occName)
+    {
+        if (string.IsNullOrWhiteSpace(occName))
+        {
+            return AssemblyRefResolver.AvailableNamesStructured(def);
+        }
+        if (AssemblyRefResolver.TryFindOccurrence(def, occName, out var occ, out _) && occ != null)
+        {
+            return AssemblyRefResolver.AvailableNamesStructured(occ.Definition);
+        }
+        return AssemblyRefResolver.AvailableNamesStructured(def);
+    }
+
+    private InventorCommandResult FailWithAvailable(InventorCommandContext context, string message, JObject available)
+    {
+        var result = InventorCommandResult.Fail(System.Guid.Empty, "INVALID_ARGUMENT", message, new InventorResponseMeta
+        {
+            TargetId = context.TargetId,
+            InventorYear = context.InventorYear == 0 ? (int?)null : context.InventorYear
+        });
+        result.Data = new JObject { ["error"] = message, ["available"] = available };
+        return result;
     }
 }
 #endif

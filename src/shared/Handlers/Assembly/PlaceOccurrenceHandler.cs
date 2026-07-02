@@ -74,6 +74,7 @@ public sealed class PlaceOccurrenceHandler : HandlerBase, IInventorCommand
             return Ok(context, new JObject
             {
                 ["occurrence_name"] = occ.Name,
+                ["grounded"] = occ.Grounded,
                 ["bbox_mm"] = bbox
             });
         }

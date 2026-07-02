@@ -156,7 +156,42 @@ public sealed class HoleHandler : HandlerBase, IInventorCommand
                 double distCm = app.TransientGeometry.CreateVector(modelPt.X - closest.X, modelPt.Y - closest.Y, modelPt.Z - closest.Z).Length;
                 if (distCm > 0.001)
                 {
-                    return Fail(context, "INVALID_ARGUMENT", $"Point [{ptArray[0]},{ptArray[1]},{ptArray[2]}] does not land on the selected face.");
+                    // Face-bounds hint from the face's vertices (planar faces always have them), in mm,
+                    // plus the nearest on-face point — enough for an agent to correct the point and retry.
+                    double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
+                    double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
+                    bool anyVertex = false;
+                    foreach (Vertex v in face.Vertices)
+                    {
+                        var vp = v.Point;
+                        anyVertex = true;
+                        if (vp.X < minX) minX = vp.X; if (vp.Y < minY) minY = vp.Y; if (vp.Z < minZ) minZ = vp.Z;
+                        if (vp.X > maxX) maxX = vp.X; if (vp.Y > maxY) maxY = vp.Y; if (vp.Z > maxZ) maxZ = vp.Z;
+                    }
+
+                    string offMsg = $"Point [{ptArray[0]},{ptArray[1]},{ptArray[2]}] does not land on the selected face.";
+                    var offResult = InventorCommandResult.Fail(System.Guid.Empty, "INVALID_ARGUMENT", offMsg, new InventorResponseMeta
+                    {
+                        TargetId = context.TargetId,
+                        InventorYear = context.InventorYear == 0 ? (int?)null : context.InventorYear
+                    });
+                    var boundsHint = new JObject
+                    {
+                        ["nearest_on_face_mm"] = new JArray(UnitConvert.CmToMm(closest.X), UnitConvert.CmToMm(closest.Y), UnitConvert.CmToMm(closest.Z)),
+                        ["offset_mm"] = UnitConvert.CmToMm(distCm)
+                    };
+                    if (anyVertex)
+                    {
+                        boundsHint["min"] = new JArray(UnitConvert.CmToMm(minX), UnitConvert.CmToMm(minY), UnitConvert.CmToMm(minZ));
+                        boundsHint["max"] = new JArray(UnitConvert.CmToMm(maxX), UnitConvert.CmToMm(maxY), UnitConvert.CmToMm(maxZ));
+                    }
+                    offResult.Data = new JObject
+                    {
+                        ["error"] = offMsg,
+                        ["bad_point_mm"] = new JArray((double)ptArray[0], (double)ptArray[1], (double)ptArray[2]),
+                        ["face_bounds_hint"] = boundsHint
+                    };
+                    return offResult;
                 }
 
                 var skPt2d = sketch.ModelToSketchSpace(modelPt);

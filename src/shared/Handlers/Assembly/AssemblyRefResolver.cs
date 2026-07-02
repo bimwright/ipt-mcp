@@ -329,6 +329,65 @@ public static class AssemblyRefResolver
     }
 
     /// <summary>
+    /// Structured self-teaching payload per spec §9: <c>{imates, work_features, origin}</c> for a part
+    /// or assembly component definition (or an occurrence's definition). Names are grouped so an agent
+    /// can retry a failed ref against the correct category. scopeDef is object because Inventor interop
+    /// has no ComponentDefinition inheritance (see ResolveRef); we COM type-test it.
+    /// </summary>
+    public static JObject AvailableNamesStructured(object? scopeDef)
+    {
+        Inv.WorkPlanes? workPlanes = null;
+        Inv.WorkAxes? workAxes = null;
+        Inv.WorkPoints? workPoints = null;
+        Inv.iMateDefinitions? iMates = null;
+
+        if (scopeDef is Inv.PartComponentDefinition pd)
+        {
+            workPlanes = pd.WorkPlanes; workAxes = pd.WorkAxes; workPoints = pd.WorkPoints; iMates = pd.iMateDefinitions;
+        }
+        else if (scopeDef is Inv.AssemblyComponentDefinition ad)
+        {
+            workPlanes = ad.WorkPlanes; workAxes = ad.WorkAxes; workPoints = ad.WorkPoints; iMates = ad.iMateDefinitions;
+        }
+
+        var imates = new JArray();
+        if (iMates != null)
+        {
+            foreach (Inv.iMateDefinition im in iMates)
+            {
+                try { if (!string.IsNullOrEmpty(im.Name)) imates.Add(im.Name); } catch { }
+            }
+        }
+
+        var workFeatures = new JArray();
+        var origin = new JArray();
+        try
+        {
+            if (workPlanes != null)
+                foreach (Inv.WorkPlane wp in workPlanes)
+                {
+                    if (string.IsNullOrEmpty(wp.Name)) continue;
+                    (OriginPlanes.Contains(wp.Name, StringComparer.OrdinalIgnoreCase) ? origin : workFeatures).Add(wp.Name);
+                }
+            if (workAxes != null)
+                foreach (Inv.WorkAxis wa in workAxes)
+                {
+                    if (string.IsNullOrEmpty(wa.Name)) continue;
+                    (OriginAxes.Contains(wa.Name, StringComparer.OrdinalIgnoreCase) ? origin : workFeatures).Add(wa.Name);
+                }
+            if (workPoints != null)
+                foreach (Inv.WorkPoint wpt in workPoints)
+                {
+                    if (string.IsNullOrEmpty(wpt.Name)) continue;
+                    (string.Equals(wpt.Name, CenterPoint, StringComparison.OrdinalIgnoreCase) ? origin : workFeatures).Add(wpt.Name);
+                }
+        }
+        catch { }
+
+        return new JObject { ["imates"] = imates, ["work_features"] = workFeatures, ["origin"] = origin };
+    }
+
+    /// <summary>
     /// Converts a constraint HealthStatusEnum to its stable wire string format.
     /// </summary>
     public static string HealthToString(Inv.HealthStatusEnum h)
