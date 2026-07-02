@@ -117,7 +117,34 @@ public static class AssemblyRefResolver
         }
     }
 
-    private static object ResolveRef(Inv.AssemblyComponentDefinition def, Inv.ComponentOccurrence? occ, string refName)
+    /// <summary>
+    /// Resolves a reference name against a part document. Returns true if successful.
+    /// </summary>
+    public static bool TryResolveInPart(
+        Inv.PartComponentDefinition def,
+        string refName,
+        out object? entity,
+        out string? error)
+    {
+        entity = null;
+        error = null;
+
+        try
+        {
+            entity = ResolveRef(def, occ: null, refName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    // def is passed as object because Inventor interop does NOT model inheritance between
+    // ComponentDefinition and Part/AssemblyComponentDefinition (assignment fails), yet COM QueryInterface
+    // via `is` pattern-matching works — so we accept object and type-test.
+    private static object ResolveRef(object def, Inv.ComponentOccurrence? occ, string refName)
     {
         if (string.IsNullOrWhiteSpace(refName))
         {
@@ -147,106 +174,91 @@ public static class AssemblyRefResolver
                 iMates = asmDef.iMateDefinitions;
             }
         }
-        else
+        else if (def is Inv.PartComponentDefinition partDefTop)
         {
-            workPlanes = def.WorkPlanes;
-            workAxes = def.WorkAxes;
-            workPoints = def.WorkPoints;
-            iMates = def.iMateDefinitions;
+            workPlanes = partDefTop.WorkPlanes;
+            workAxes = partDefTop.WorkAxes;
+            workPoints = partDefTop.WorkPoints;
+            iMates = partDefTop.iMateDefinitions;
+        }
+        else if (def is Inv.AssemblyComponentDefinition asmDefTop)
+        {
+            workPlanes = asmDefTop.WorkPlanes;
+            workAxes = asmDefTop.WorkAxes;
+            workPoints = asmDefTop.WorkPoints;
+            iMates = asmDefTop.iMateDefinitions;
         }
 
-        object resolvedEntity;
+        // Resolution order per design: iMate name -> named work feature -> origin geometry.
+        // (Origin planes/axes/points are themselves members of the WorkPlanes/WorkAxes/WorkPoints
+        // collections, so a user iMate that happens to share an origin name still wins.)
+        object? resolved = null;
 
-        // 1. Origin geometry
-        if (OriginPlanes.Contains(refName, StringComparer.OrdinalIgnoreCase) && workPlanes != null)
+        // 1. iMates
+        if (iMates != null)
         {
-            resolvedEntity = workPlanes[refName];
-        }
-        else if (OriginAxes.Contains(refName, StringComparer.OrdinalIgnoreCase) && workAxes != null)
-        {
-            resolvedEntity = workAxes[refName];
-        }
-        else if (string.Equals(refName, CenterPoint, StringComparison.OrdinalIgnoreCase) && workPoints != null)
-        {
-            resolvedEntity = workPoints[refName];
-        }
-        else
-        {
-            // 2. iMates
-            object? foundIMate = null;
-            if (iMates != null)
+            foreach (Inv.iMateDefinition im in iMates)
             {
-                foreach (Inv.iMateDefinition im in iMates)
-                {
-                    try
-                    {
-                        if (string.Equals(im.Name, refName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            foundIMate = im.ReferencedEntity;
-                            break;
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            if (foundIMate != null)
-            {
-                resolvedEntity = foundIMate;
-            }
-            else
-            {
-                // 3. Named User Work Features
-                object? foundWork = null;
                 try
                 {
-                    if (workPlanes != null)
+                    if (string.Equals(im.Name, refName, StringComparison.OrdinalIgnoreCase))
                     {
-                        foreach (Inv.WorkPlane wp in workPlanes)
-                        {
-                            if (string.Equals(wp.Name, refName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                foundWork = wp;
-                                break;
-                            }
-                        }
-                    }
-                    if (foundWork == null && workAxes != null)
-                    {
-                        foreach (Inv.WorkAxis wa in workAxes)
-                        {
-                            if (string.Equals(wa.Name, refName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                foundWork = wa;
-                                break;
-                            }
-                        }
-                    }
-                    if (foundWork == null && workPoints != null)
-                    {
-                        foreach (Inv.WorkPoint wpt in workPoints)
-                        {
-                            if (string.Equals(wpt.Name, refName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                foundWork = wpt;
-                                break;
-                            }
-                        }
+                        resolved = im.ReferencedEntity;
+                        break;
                     }
                 }
                 catch { }
+            }
+        }
 
-                if (foundWork != null)
+        // 2. Named work features (this also matches origin geometry by its enumerated name)
+        try
+        {
+            if (resolved == null && workPlanes != null)
+            {
+                foreach (Inv.WorkPlane wp in workPlanes)
                 {
-                    resolvedEntity = foundWork;
+                    if (string.Equals(wp.Name, refName, StringComparison.OrdinalIgnoreCase)) { resolved = wp; break; }
                 }
-                else
+            }
+            if (resolved == null && workAxes != null)
+            {
+                foreach (Inv.WorkAxis wa in workAxes)
                 {
-                    var available = AvailableNames(workPlanes, workAxes, workPoints, iMates);
-                    throw new ArgumentException($"Reference '{refName}' not found. Available references on target: {string.Join(", ", available)}");
+                    if (string.Equals(wa.Name, refName, StringComparison.OrdinalIgnoreCase)) { resolved = wa; break; }
+                }
+            }
+            if (resolved == null && workPoints != null)
+            {
+                foreach (Inv.WorkPoint wpt in workPoints)
+                {
+                    if (string.Equals(wpt.Name, refName, StringComparison.OrdinalIgnoreCase)) { resolved = wpt; break; }
                 }
             }
         }
+        catch { }
+
+        // 3. Origin geometry by canonical name via indexer (fallback for localized enumerated names)
+        if (resolved == null && OriginPlanes.Contains(refName, StringComparer.OrdinalIgnoreCase) && workPlanes != null)
+        {
+            try { resolved = workPlanes[refName]; } catch { }
+        }
+        if (resolved == null && OriginAxes.Contains(refName, StringComparer.OrdinalIgnoreCase) && workAxes != null)
+        {
+            try { resolved = workAxes[refName]; } catch { }
+        }
+        if (resolved == null && string.Equals(refName, CenterPoint, StringComparison.OrdinalIgnoreCase) && workPoints != null)
+        {
+            try { resolved = workPoints[refName]; } catch { }
+        }
+
+        if (resolved == null)
+        {
+            var available = AvailableNames(workPlanes, workAxes, workPoints, iMates);
+            throw new ArgumentException($"Reference '{refName}' not found. Available references on target: {string.Join(", ", available)}");
+        }
+
+        object resolvedEntity = resolved;
 
         // If occurrence is provided, create geometry proxy for assembly constraint Solver
         if (occ != null)
@@ -329,7 +341,7 @@ public static class AssemblyRefResolver
             Inv.HealthStatusEnum.kInErrorHealth => "in_error",
             Inv.HealthStatusEnum.kSuppressedHealth => "suppressed",
             Inv.HealthStatusEnum.kInconsistentHealth => "inconsistent",
-            _ => "unknown"
+            _ => "unknown_" + ((int)h)
         };
     }
 }

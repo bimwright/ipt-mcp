@@ -20,21 +20,13 @@ public sealed class MeasureMinDistanceHandler : HandlerBase, IInventorCommand
             return failure!;
         }
 
-        var a = parameters["a"] as JObject;
-        var b = parameters["b"] as JObject;
-
-        if (a == null || b == null)
-        {
-            return Fail(context, "INVALID_ARGUMENT", "a and b are both required objects");
-        }
-
         var def = assemblyDoc.ComponentDefinition;
         object entityA;
         object entityB;
 
-        // Resolve entity A
-        string aOccName = (string?)a["occurrence"] ?? "";
-        string aRefName = (string?)a["ref"] ?? "";
+        // Resolve entity A (flat wire keys: a_occurrence / a_ref)
+        string aOccName = (string?)parameters["a_occurrence"] ?? "";
+        string aRefName = (string?)parameters["a_ref"] ?? "";
         if (string.IsNullOrEmpty(aRefName))
         {
             if (!AssemblyRefResolver.TryFindOccurrence(def, aOccName, out var occ, out var err))
@@ -57,8 +49,8 @@ public sealed class MeasureMinDistanceHandler : HandlerBase, IInventorCommand
         }
 
         // Resolve entity B
-        string bOccName = (string?)b["occurrence"] ?? "";
-        string bRefName = (string?)b["ref"] ?? "";
+        string bOccName = (string?)parameters["b_occurrence"] ?? "";
+        string bRefName = (string?)parameters["b_ref"] ?? "";
         if (string.IsNullOrEmpty(bRefName))
         {
             if (!AssemblyRefResolver.TryFindOccurrence(def, bOccName, out var occ, out var err))

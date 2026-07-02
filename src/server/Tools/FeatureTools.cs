@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using ModelContextProtocol.Server;
@@ -9,42 +10,42 @@ namespace Bimwright.Ipt.Server.Tools;
 
 public class HoleFaceDto
 {
-    [JsonProperty("kind")]
+    [JsonPropertyName("kind")]
     [Description("Must be 'planar'")]
     public string Kind { get; set; } = "planar";
 
-    [JsonProperty("normal")]
+    [JsonPropertyName("normal")]
     [Description("Normal direction (+X, -X, +Y, -Y, +Z, -Z)")]
     public string Normal { get; set; } = "";
 
-    [JsonProperty("extreme")]
+    [JsonPropertyName("extreme")]
     [Description("Extreme position (max or min)")]
     public string Extreme { get; set; } = "max";
 
-    [JsonProperty("near_mm")]
+    [JsonPropertyName("near_mm")]
     [Description("Optional tie-break point [x, y, z] in mm")]
     public double[]? NearMm { get; set; }
 }
 
 public class HoleTappedDto
 {
-    [JsonProperty("designation")]
+    [JsonPropertyName("designation")]
     [Description("Thread designation, e.g. 'M6x1'")]
     public string Designation { get; set; } = "";
 
-    [JsonProperty("class")]
+    [JsonPropertyName("class")]
     [Description("Thread class, default '6H'")]
     public string Class { get; set; } = "6H";
 
-    [JsonProperty("right_handed")]
+    [JsonPropertyName("right_handed")]
     [Description("Right handed thread, default true")]
     public bool RightHanded { get; set; } = true;
 
-    [JsonProperty("full_depth")]
+    [JsonPropertyName("full_depth")]
     [Description("Full thread depth, default true")]
     public bool FullDepth { get; set; } = true;
 
-    [JsonProperty("thread_depth_mm")]
+    [JsonPropertyName("thread_depth_mm")]
     [Description("Thread depth in mm, required if full_depth=false")]
     public double? ThreadDepthMm { get; set; }
 }

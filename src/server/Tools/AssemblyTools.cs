@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Bimwright.Ipt.Shared.Contracts;
@@ -10,46 +11,46 @@ namespace Bimwright.Ipt.Server.Tools;
 
 public class ConstraintSideDto
 {
-    [JsonProperty("occurrence")]
+    [JsonPropertyName("occurrence")]
     [Description("Name of the component occurrence. Omit or leave empty for the top-level assembly document itself.")]
     public string? Occurrence { get; set; }
 
-    [JsonProperty("ref")]
+    [JsonPropertyName("ref")]
     [Description("Named reference: iMate name, work feature name, or origin plane/axis name.")]
     public string Ref { get; set; } = "";
 }
 
 public class FaceSelectorDto
 {
-    [JsonProperty("kind")]
+    [JsonPropertyName("kind")]
     [Description("planar or cylindrical")]
     public string Kind { get; set; } = "";
 
-    [JsonProperty("normal")]
+    [JsonPropertyName("normal")]
     [Description("planar only: normal direction (+X, -X, +Y, -Y, +Z, -Z)")]
     public string? Normal { get; set; }
 
-    [JsonProperty("extreme")]
+    [JsonPropertyName("extreme")]
     [Description("planar only: extreme position (max or min)")]
     public string Extreme { get; set; } = "max";
 
-    [JsonProperty("radius_mm")]
+    [JsonPropertyName("radius_mm")]
     [Description("cylindrical only: target radius in mm")]
     public double? RadiusMm { get; set; }
 
-    [JsonProperty("axis")]
+    [JsonPropertyName("axis")]
     [Description("cylindrical only: optional axis direction (+X, -X, +Y, -Y, +Z, -Z)")]
     public string? Axis { get; set; }
 
-    [JsonProperty("near_mm")]
+    [JsonPropertyName("near_mm")]
     [Description("optional tie-break point [x, y, z] in mm")]
     public double[]? NearMm { get; set; }
 
-    [JsonProperty("tolerance_deg")]
+    [JsonPropertyName("tolerance_deg")]
     [Description("angular tolerance in degrees for normals (default 5.0)")]
     public double ToleranceDeg { get; set; } = 5.0;
 
-    [JsonProperty("radius_tol_mm")]
+    [JsonPropertyName("radius_tol_mm")]
     [Description("radius tolerance in mm (default 0.01)")]
     public double RadiusTolMm { get; set; } = 0.01;
 }

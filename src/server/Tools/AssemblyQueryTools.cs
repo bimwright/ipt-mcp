@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using ModelContextProtocol.Server;
@@ -9,11 +10,11 @@ namespace Bimwright.Ipt.Server.Tools;
 
 public class MeasureSideDto
 {
-    [JsonProperty("occurrence")]
+    [JsonPropertyName("occurrence")]
     [Description("Name of the component occurrence.")]
     public string Occurrence { get; set; } = "";
 
-    [JsonProperty("ref")]
+    [JsonPropertyName("ref")]
     [Description("Optional named reference: iMate name, work feature name, or origin plane/axis name.")]
     public string? Ref { get; set; }
 }
