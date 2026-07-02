@@ -31,14 +31,26 @@ public sealed class GetMassPropertiesHandler : HandlerBase, IInventorCommand
         try { activeDoc = app.ActiveDocument; } catch { activeDoc = null; }
         if (activeDoc is null)
             return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
-        if (activeDoc is not PartDocument doc)
-            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "get_mass_properties requires an active part document");
+        MassProperties mp;
+        Box rb;
+
+        if (activeDoc is PartDocument partDoc)
+        {
+            mp = partDoc.ComponentDefinition.MassProperties;
+            rb = partDoc.ComponentDefinition.RangeBox;
+        }
+        else if (activeDoc is AssemblyDocument assemblyDoc)
+        {
+            mp = assemblyDoc.ComponentDefinition.MassProperties;
+            rb = assemblyDoc.ComponentDefinition.RangeBox;
+        }
+        else
+        {
+            return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "get_mass_properties requires an active part or assembly document");
+        }
 
         try
         {
-            PartComponentDefinition def = doc.ComponentDefinition;
-            MassProperties mp = def.MassProperties;
-
             double massKg = mp.Mass;
             double volumeCm3 = mp.Volume;
             double areaCm2 = mp.Area;
@@ -56,7 +68,6 @@ public sealed class GetMassPropertiesHandler : HandlerBase, IInventorCommand
             var bbox = new JObject();
             try
             {
-                Box rb = def.RangeBox;
                 bbox["min"] = new JObject
                 {
                     ["x"] = UnitConvert.CmToMm(rb.MinPoint.X),
