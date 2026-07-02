@@ -24,6 +24,8 @@ public static partial class InventorCommandRegistry
         AddFeature(d, Add);       // Phase 3 WS-B
         AddExport(d, Add);        // Phase 3 WS-C
         AddPlatform(d, o, Add);   // Phase 3 WS-C (send_code, run_baked_tool)
+        AddAssembly(d, Add);      // Phase 3 Assembly
+        AddAssemblyQuery(d, Add); // Phase 3 Assembly Query
         return d;
     }
 
@@ -35,4 +37,6 @@ public static partial class InventorCommandRegistry
     static partial void AddFeature(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddExport(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddPlatform(Dictionary<string, IInventorCommand> d, PluginOptions o, Action<IInventorCommand> add);
+    static partial void AddAssembly(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
+    static partial void AddAssemblyQuery(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
 }

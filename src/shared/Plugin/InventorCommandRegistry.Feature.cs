@@ -21,6 +21,9 @@ public static partial class InventorCommandRegistry
         add(new ChamferHandler());
         add(new CreateWorkPlaneHandler());
         add(new CreateWorkAxisHandler());
+        add(new HoleHandler());
+        add(new CircularPatternHandler());
+        add(new RectangularPatternHandler());
     }
 }
 #endif

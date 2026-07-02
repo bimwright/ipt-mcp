@@ -19,6 +19,8 @@ public static partial class InventorCommandRegistry
         add(new ExportStepHandler());
         add(new ExportStlHandler());
         add(new ExportDxfHandler());
+        add(new ViewFitHandler());
+        add(new SetViewOrientationHandler());
     }
 }
 #endif

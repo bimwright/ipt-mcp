@@ -29,4 +29,52 @@ public sealed class InventorCommandContext
 
     /// <summary>The full command map, so commands like <c>run_baked_tool</c> can dispatch sub-commands.</summary>
     public IReadOnlyDictionary<string, IInventorCommand>? Commands { get; init; }
+
+#if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
+    public bool TryGetActiveAssembly(out global::Inventor.AssemblyDocument? assembly, out string errorCode, out string errorMessage)
+    {
+        assembly = null;
+        errorCode = "";
+        errorMessage = "";
+        if (Application is null)
+        {
+            errorCode = "API_ERROR";
+            errorMessage = "Inventor application not ready";
+            return false;
+        }
+
+        var app = (global::Inventor.Application)Application;
+        if (app.ActiveDocument is not global::Inventor.AssemblyDocument doc)
+        {
+            errorCode = "WRONG_DOCUMENT_TYPE";
+            errorMessage = "Active document is not an assembly";
+            return false;
+        }
+        assembly = doc;
+        return true;
+    }
+
+    public bool TryGetActivePart(out global::Inventor.PartDocument? part, out string errorCode, out string errorMessage)
+    {
+        part = null;
+        errorCode = "";
+        errorMessage = "";
+        if (Application is null)
+        {
+            errorCode = "API_ERROR";
+            errorMessage = "Inventor application not ready";
+            return false;
+        }
+
+        var app = (global::Inventor.Application)Application;
+        if (app.ActiveDocument is not global::Inventor.PartDocument doc)
+        {
+            errorCode = "WRONG_DOCUMENT_TYPE";
+            errorMessage = "Active document is not a part";
+            return false;
+        }
+        part = doc;
+        return true;
+    }
+#endif
 }
