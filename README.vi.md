@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-46%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-59%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (46 MCP tools; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
+> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (59 MCP tools; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
 
 ---
 
@@ -84,12 +84,13 @@ Binaries của Autodesk Inventor và Inventor SDK **không được phân phối
 dotnet build src/IptMcp.sln -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
-# Kiểm tra SHAPE của project add-in mà không cài Inventor:
-dotnet build src/plugin-inv24 -c Debug /p:SkipInventorReferenceCheck=true
-dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # cần .NET 10 SDK
+# Kiểm tra tương thích TFM cũ dùng interop reference 2027 đã cài:
+dotnet build src/plugin-inv24 -c Debug /p:InventorInteropDir="C:\Program Files\Common Files\Autodesk Shared\Extensions 2027\Framework\Interop"
+dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .NET 10 SDK
 
-# Compile add-in thật (chỉ trên máy có Inventor + SDK tương ứng): bỏ SkipInventorReferenceCheck.
-# Truyền /p:InventorInteropDir=... nếu interop không nằm ở đường dẫn mặc định.
+# Add-in theo từng phiên bản luôn cần một interop reference của Inventor. Với kiểm tra tương thích
+# TFM cũ, trỏ InventorInteropDir vào một interop tương thích đã cài; bản release thật dùng đường
+# dẫn mặc định của năm tương ứng.
 ```
 
 - **Server** explicit-include chỉ `shared/Contracts/*` + `shared/Security/*` (+ ToolBaker), nên compile được khi không có Inventor SDK.
@@ -102,9 +103,9 @@ dotnet build src/plugin-inv27 -c Debug /p:SkipInventorReferenceCheck=true   # c�
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **46 tools** khi bật mọi platform toolset. Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **59 tools** khi bật mọi platform toolset. Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
-Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `toolbaker`, `toolbaker_write`.
+Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
 
 Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in tự chuyển sang centimét/radian nội bộ của Inventor.
@@ -168,7 +169,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_add_sketch_constraint` | Thêm geometric constraint (coincident, parallel, tangent, …). |
 | `inventor_close_sketch` | Kết thúc chỉnh sketch (thoát chế độ edit sketch). |
 
-### feature (6) — solid & work feature (write)
+### feature (9) — solid & work feature (write)
 
 | Tool | Mô tả |
 |---|---|
@@ -178,17 +179,40 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_chamfer` | Thêm chamfer cạnh khoảng cách đều trên các edge model. |
 | `inventor_create_work_plane` | Tạo work plane (offset, three_points hoặc tangent). |
 | `inventor_create_work_axis` | Tạo work axis (two_points, edge, plane_intersection, normal_to_face_through_point). |
+| `inventor_hole` | Lỗ drilled/counterbore/countersink trên một planar face được chọn xác định; tùy chọn metadata luồng tapped-thread. |
+| `inventor_circular_pattern` | Circular-pattern các part feature quanh một trục theo tên (count trên một góc). |
+| `inventor_rectangular_pattern` | Rectangular-pattern các part feature dọc theo một hoặc hai trục theo tên. |
 
-### export (4) — capture view & export geometry (write)
+### export (6) — capture view & export geometry (write)
 
 | Tool | Mô tả |
 |---|---|
-| `inventor_capture_view` | Capture view active thành PNG base64 có giới hạn (không ghi file). |
+| `inventor_capture_view` | Capture view active thành PNG base64 có giới hạn, hoặc ghi ra một output path. |
 | `inventor_export_step` | Export part/assembly active sang STEP (.stp/.step). |
 | `inventor_export_stl` | Export part/assembly active sang STL (.stl). |
 | `inventor_export_dxf` | Export DXF 2D; phải khai báo source (`sketch` hoặc `flat_pattern`). |
+| `inventor_view_fit` | Zoom-fit view active vào model extents (chạy trước khi capture). |
+| `inventor_set_view_orientation` | Đặt một camera orientation chuẩn (iso/front/top/…) cho multi-angle capture. |
 
 > Đường dẫn export phải là absolute và nằm dưới một output root được phép (user profile hoặc temp).
+
+### assembly (3, write) — compose assembly qua relationships, không phải coordinates
+
+| Tool | Mô tả |
+|---|---|
+| `inventor_place_occurrence` | Đặt một component (.ipt/.iam) vào assembly active; tùy chọn pose ban đầu + grounded. |
+| `inventor_add_constraint` | Constrain hai ref theo tên (mate/flush/insert/angle); response mang `health` — luôn kiểm tra. |
+| `inventor_create_imate` | Author một iMate theo tên trên part active dùng một face selector xác định. |
+
+### assembly_query (5, read-only) — bộ pin self-check số; sống sót dưới `--read-only`
+
+| Tool | Mô tả |
+|---|---|
+| `inventor_list_interfaces` | List các named interface (iMates, work feature, origin geometry) của doc hoặc một occurrence. |
+| `inventor_check_interference` | Chạy interference analysis; trả về pair count và total/per-pair volume. |
+| `inventor_measure_min_distance` | Khoảng cách 3D nhỏ nhất (mm) giữa hai occurrence hoặc named ref. |
+| `inventor_get_assembly_bom` | BOM + occurrence tree với grounded flag và translation/rotation degrees of freedom. |
+| `inventor_list_constraints` | Đọc lại mọi constraint với type, `health`, suppressed flag và hai occurrence name. |
 
 ### code (1) — escape hatch opt-in (TẮT mặc định)
 
@@ -218,7 +242,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 
 Ngắn gọn: model của bạn ở lại trên máy bạn, và các tool write/nguy hiểm đều có gate.
 
-- **Read-only mode.** `--read-only` (hoặc `BIMWRIGHT_INVENTOR_READ_ONLY=1`) loại bỏ mọi write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `code`, `toolbaker_write`) nhưng giữ `meta` + `query` + read-only `toolbaker`, và **giữ `inventor_switch_target`**. `CommandDispatcher` của add-in là tuyến phòng thủ thứ hai: lệnh write dưới read-only trả về `READ_ONLY`.
+- **Read-only mode.** `--read-only` (hoặc `BIMWRIGHT_INVENTOR_READ_ONLY=1`) loại bỏ mọi write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`) nhưng giữ `meta` + `query` + `assembly_query` + read-only `toolbaker`, và **giữ `inventor_switch_target`**. Server gửi read-only mode trong mỗi command envelope; add-in cũng tôn trọng `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. `CommandDispatcher` của add-in là tuyến phòng thủ thứ hai: lệnh write dưới read-only trả về `READ_ONLY`.
 - **send_code opt-in hai phía.** `inventor_send_code` **mặc định tắt**. Chỉ hiện khi **cả hai** gate được bật: server với `--enable-send-code` (hoặc `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **và** tiến trình add-in với `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Nếu không, dispatcher trả `SEND_CODE_DISABLED`. API bị cấm (file/process/network/environment) bị reject.
 - **Transport local, có xác thực.** TCP bind loopback; Named Pipe scoped local-machine. Mỗi descriptor theo session mang một auth token ngẫu nhiên.
 - **Error đã sanitize.** Error trả về model được sanitize để tránh leak absolute path/secret.
