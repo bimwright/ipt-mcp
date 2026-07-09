@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-59%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-58%20or%2059%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -54,7 +54,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 - Inventor 从 2025 起把桌面 add-in 开发从 .NET Framework 上移开：**2025/2026 用 .NET 8，2027 用 .NET 10**。 （.NET 8 add-in 在 2027 上仍二进制兼容，但 net10 是原生目标。）
 - 全程使用**4-digit calendar years**（2022..2027）—— 永远不要使用 legacy 版本号。
 
-> **状态：已验证。** Phase 1-3 已完成且全绿（59 个 MCP tools；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
+> **状态：已验证。** Phase 1-3 已完成且全绿（默认 58 个 MCP tools，启用 send_code 时为 59 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
 
 ---
 
@@ -107,7 +107,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## Tool Surface
 
-当所有平台 toolsets 都启用时，完整 surface 是 **59 个 tools，分布在 13 个 toolsets**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **58 个 tools，分布在 13 个 toolsets**（如果启用 inventor_send_code 则为 **59 个**）。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -250,6 +250,8 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 - **send_code 双面 opt-in。** `inventor_send_code` **默认禁用**。只有当**两个** gate 都设置时才会暴露：server 端 `--enable-send-code`（或 `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`）**且** add-in 进程 `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`。否则 dispatcher 返回 `SEND_CODE_DISABLED`。被禁的 API（file/process/network/environment）会被拒绝。
 - **本地、经过认证的 transport。** TCP 绑定 loopback；Named Pipe 的作用域是 local-machine。每个 per-session descriptor 都带一个随机 auth token，但 MCP meta tools 永远不会返回它。
 - **Sanitized errors。** 返回给 model 的错误信息会被 sanitize，避免泄露绝对路径/密钥。
+- **ToolBaker 控制。** 默认启用 ToolBaker。你可以通过在启动 server 时传入 --disable-toolbaker 命令行标志，或者设置环境变量 BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0 来完全禁用它。
+- **允许的导出路径。** 文件导出工具会验证 output_path 是否指向安全文件夹（位于 User Profile 或 Temp 目录下）。你可以通过设置环境变量 BIMWRIGHT_INVENTOR_EXPORT_ROOT 来定义额外允许的根文件夹。
 
 **ToolBaker** 把重复的本地 workflow 变成个人、已验证的工具：建议通过 `inventor_list_bake_suggestions` 浮现，你用 `inventor_accept_bake_suggestion` 显式接受一个（validate → compile → apply → persist），accept 后的工具就可以通过 `inventor_list_baked_tools` / `inventor_run_baked_tool` 调用。Bake 数据库和 audit log 都位于本地 `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\`。见 [docs/toolbaker.md](docs/toolbaker.md) 和 [SECURITY.md](SECURITY.md)。
 

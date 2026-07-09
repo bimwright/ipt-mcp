@@ -150,11 +150,11 @@ Default per-request timeout is 30s. The listener cancels pending requests on add
 
 ## Progressive disclosure & gates
 
-The full surface is 59 tools across 13 toolsets. Tools are grouped into `[McpServerToolType]` classes by domain. `Program.ResolveToolTypesForRegistration(cfg)` maps each enabled toolset to its tool type and de-dups (`DocumentTools` maps to both `query` and `document`), then registers only those, so disabled tools never appear in `tools/list`. Assembly composition lives in write-capable `assembly`; numeric verification lives in read-only `assembly_query`. `ToolsetFilter.Resolve` handles defaults, the `all` shortcut, silent dropping of unknown names, the `code`/`toolbaker` gates, and `--read-only` post-processing (strips every `WriteCapable` toolset). `ServerInstructions.Text` is keyword-dense so MCP Tool Search can discover the surface.
+The full surface is 58 tools across 13 toolsets by default, or 59 tools when `inventor_send_code` is enabled. Tools are grouped into `[McpServerToolType]` classes by domain. `Program.ResolveToolTypesForRegistration(cfg)` maps each enabled toolset to its tool type and de-dups (`DocumentTools` maps to both `query` and `document`), then registers only those, so disabled tools never appear in `tools/list`. Assembly composition lives in write-capable `assembly`; numeric verification lives in read-only `assembly_query`. `ToolsetFilter.Resolve` handles defaults, the `all` shortcut, silent dropping of unknown names, the `code`/`toolbaker` gates, and `--read-only` post-processing (strips every `WriteCapable` toolset). `ServerInstructions.Text` is keyword-dense so MCP Tool Search can discover the surface.
 
 ## Configuration precedence
 
-`InventorMcpConfig.Load(args)` applies three layers, later wins: JSON file (`--config <path>`) < environment (`BIMWRIGHT_INVENTOR_*`) < CLI flags (`--read-only`, `--enable-send-code`, `--toolsets`, `--target`, `--timeout-ms`, …). The descriptor directory defaults to `%LOCALAPPDATA%\Bimwright\ipt-mcp`; the bake database to its `baked\` subfolder.
+`InventorMcpConfig.Load(args)` applies three layers, later wins: JSON file (`--config <path>`) < environment (`BIMWRIGHT_INVENTOR_*` including custom export roots with `BIMWRIGHT_INVENTOR_EXPORT_ROOT`) < CLI flags (`--read-only`, `--enable-send-code`, `--disable-toolbaker`, `--toolsets`, `--target`, `--timeout-ms`, …). The descriptor directory defaults to `%LOCALAPPDATA%\Bimwright\ipt-mcp`; the bake database to its `baked\` subfolder.
 
 ## Why this shape
 
