@@ -5,8 +5,8 @@
 <p align="center">
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
-  <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-58%20or%2059%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-58%20or%2059%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,34 +50,55 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（59 の MCP ツール、サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **58** MCP ツール、`send_code` 有効時 **59**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
 
 ---
 
 ## インストール / MCP クライアントの設定
 
-サーバーはプレーンな stdio MCP プロセスです。ビルドされた `Bimwright.Ipt.Server.exe`（または `dotnet run`）をクライアントから指定し、Inventor 内にアドインをロードしてください。
+### 1. サーバー — .NET グローバルツール
 
-典型的な `.mcp.json`（または同等のクライアント設定）のエントリ:
+```bash
+dotnet tool install -g Bimwright.Ipt.Server
+bimwright-ipt --help
+```
+
+.NET 8 SDK が必要です。開発時は `dotnet run` や **Release** ビルド（`src/server/bin/Release/net8.0/`）も可。Debug パスを正式なインストール手順としないでください。
+
+### 2. プラグイン — Inventor アドイン
+
+ApplicationPlugins バンドルをビルドして配置（レジストリ不要）:
+
+```powershell
+pwsh scripts/package-bundle.ps1
+```
+
+既定: `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\`。Inventor を再起動。再ビルド前に Inventor を閉じる（DLL ロック）。`InventorInteropDir` が必要な場合は [ビルドと開発](#ビルドと開発) を参照。
+
+### 3. MCP クライアントの接続
 
 ```json
 {
   "mcpServers": {
     "ipt-mcp": {
-      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Ipt.Server.exe",
+      "command": "bimwright-ipt",
       "args": []
     }
   }
 }
 ```
 
-アドインの発見は自動で行われます。実行中の各 Inventor アドインは、インスタンスごとのディスクリプタを `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json` に書き込みます。サーバーはこれらをスキャンし、停止済み/古いディスクリプタをベストエフォートで削除して接続します。MCP ターゲット一覧ツールはディスクリプタの `auth_token` をマスクします。複数の Inventor が起動している可能性がある場合は、`inventor_list_available_targets` を呼び出してから `inventor_switch_target` を使用してください。
+年の固定: `"args": ["--target", "2025"]` または `BIMWRIGHT_INVENTOR_TARGET=2025`。
+
+アドイン発見は自動（`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`）。複数 Inventor 時は `inventor_list_available_targets` → `inventor_switch_target`。
+
+`inventor_send_code` はサーバーとプラグイン双方のオプトインが必要 — [安全性](#安全性) を参照。
 
 ---
 
 ## ビルドと開発
 
-Autodesk Inventor のバイナリおよび Inventor SDK は、このリポジトリには**再配布されていません**（[再配布しないもの](#not-redistributed) を参照）。**サーバーとテスト**のビルドには .NET 8 SDK のみが必要です。**バージョン別アドイン**のビルドには、対応する SDK に加えて Inventor の相互運用参照アセンブリが必要です。
+Autodesk Inventor のバイナリおよび Inventor SDK は、このリポジトリには**再配布されていません**（[再配布しないもの](#再配布しないもの) を参照）。**サーバーとテスト**のビルドには .NET 8 SDK のみが必要です。**バージョン別アドイン**のビルドには、対応する SDK に加えて Inventor の相互運用参照アセンブリが必要です。
 
 ```bash
 # サーバー + テスト（サーバーのみ、Inventor 不要 — .NET 8 SDK がインストールされた任意のマシンで動作）:

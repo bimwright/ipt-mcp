@@ -56,22 +56,43 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 
 ## Install / Wire an MCP Client
 
-The server is a plain stdio MCP process. Point your client at the built `Bimwright.Ipt.Server.exe` (or `dotnet run` it), then load the add-in inside Inventor.
+### 1. Server — .NET global tool
 
-A typical `.mcp.json` (or equivalent client config) entry:
+```bash
+dotnet tool install -g Bimwright.Ipt.Server
+bimwright-ipt --help
+```
+
+Requires the .NET 8 SDK. For local development you can also `dotnet run` the server project, or point a client at a **Release** build under `src/server/bin/Release/net8.0/` — do not treat Debug paths as the supported install.
+
+### 2. Plugin — Inventor add-in
+
+Build and deploy the per-user ApplicationPlugins bundle (registry-free):
+
+```powershell
+pwsh scripts/package-bundle.ps1
+```
+
+Default layout: `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` (one `Contents\<year>\` folder per Inventor year with interop available on the machine). Restart Inventor to load. Close Inventor before rebuilds so DLLs are not locked. See [Build & Develop](#build--develop) if a year needs an explicit `InventorInteropDir`.
+
+### 3. Wire an MCP client
 
 ```json
 {
   "mcpServers": {
     "ipt-mcp": {
-      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Ipt.Server.exe",
+      "command": "bimwright-ipt",
       "args": []
     }
   }
 }
 ```
 
-Add-in discovery is automatic: each running Inventor add-in writes a per-instance descriptor under `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The server scans these, deletes dead/stale descriptors best-effort, and connects. MCP target-list tools redact the descriptor `auth_token`. When more than one Inventor may be open, call `inventor_list_available_targets` then `inventor_switch_target`.
+Pin a year with `"args": ["--target", "2025"]` or `BIMWRIGHT_INVENTOR_TARGET=2025` when multiple Inventor instances may run.
+
+Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The server scans these, drops dead/stale descriptors best-effort, and connects. Target-list tools redact `auth_token`. With more than one Inventor open, call `inventor_list_available_targets` then `inventor_switch_target`.
+
+`inventor_send_code` stays **off** unless both server (`--enable-send-code` / `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) and plugin (`BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`) opt in — see [Safety](#safety).
 
 ---
 

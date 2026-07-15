@@ -9,8 +9,8 @@
 <p align="center">
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
-  <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-58%20or%2059%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-58%20or%2059%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -38,7 +38,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 ---
 
-## Supported Inventor Versions
+## 支持的 Inventor 版本
 
 | Inventor | Target Framework | Transport | 备注 |
 |----------|------------------|-----------|------|
@@ -60,28 +60,49 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 ## 安装 / 接入 MCP Client
 
-Server 是一个普通的 stdio MCP 进程。把你的 client 指向 build 好的 `Bimwright.Ipt.Server.exe`（或用 `dotnet run` 运行它），然后在 Inventor 内加载 add-in。
+### 1. Server —— .NET 全局工具
 
-一个典型的 `.mcp.json`（或等价的 client config）entry：
+```bash
+dotnet tool install -g Bimwright.Ipt.Server
+bimwright-ipt --help
+```
+
+需要 .NET 8 SDK。本地开发可用 `dotnet run`，或把 client 指到 **Release** 构建（`src/server/bin/Release/net8.0/`）——不要把 Debug 路径当作正式安装方式。
+
+### 2. Plugin —— Inventor 插件
+
+构建并部署 per-user ApplicationPlugins bundle（无需注册表）：
+
+```powershell
+pwsh scripts/package-bundle.ps1
+```
+
+默认：`%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\`。重启 Inventor。重建前请关闭 Inventor（DLL 锁定）。需要 `InventorInteropDir` 时见 [构建与开发](#构建与开发)。
+
+### 3. 接入 MCP client
 
 ```json
 {
   "mcpServers": {
     "ipt-mcp": {
-      "command": "D:\\path\\to\\src\\server\\bin\\Debug\\net8.0\\Bimwright.Ipt.Server.exe",
+      "command": "bimwright-ipt",
       "args": []
     }
   }
 }
 ```
 
-Add-in 自动发现：每个运行的 Inventor add-in 会在 `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json` 下写入一个 per-instance descriptor。Server 扫描这些文件，best-effort 删除 dead/stale descriptor，并连接。MCP target-list tools 会 redact descriptor 里的 `auth_token`。当可能同时打开多个 Inventor 时，先调用 `inventor_list_available_targets` 再调用 `inventor_switch_target`。
+固定年份：`"args": ["--target", "2025"]` 或 `BIMWRIGHT_INVENTOR_TARGET=2025`。
+
+Add-in 自动发现：`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。多实例时先 `inventor_list_available_targets` 再 `inventor_switch_target`。
+
+`inventor_send_code` 默认关闭，需 server + plugin 双侧 opt-in——见 [安全](#安全)。
 
 ---
 
-## Build & Develop
+## 构建与开发
 
-Autodesk Inventor 二进制文件和 Inventor SDK 在本仓库中**不重新分发**（见 [Not Redistributed](#not-redistributed)）。Build **server 和 tests** 只需要 .NET 8 SDK；build 一个**按版本的 add-in** 需要匹配的 SDK 加上 Inventor interop reference assembly。
+Autodesk Inventor 二进制文件和 Inventor SDK 在本仓库中**不重新分发**（见 [不重新分发](#不重新分发)）。Build **server 和 tests** 只需要 .NET 8 SDK；build 一个**按版本的 add-in** 需要匹配的 SDK 加上 Inventor interop reference assembly。
 
 ```bash
 # Server + tests（仅 server；不需要 Inventor —— 只要有 .NET 8 SDK 的机器即可运行）：
@@ -105,9 +126,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ---
 
-## Tool Surface
+## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **58 个 tools，分布在 13 个 toolsets**（如果启用 inventor_send_code 则为 **59 个**）。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **58 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **59 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -242,7 +263,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ---
 
-## Safety
+## 安全
 
 简短版：你的模型留在你的机器上，write/dangerous tools 都被 gate 住。
 
@@ -257,7 +278,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ---
 
-## Not Redistributed
+## 不重新分发
 
 本项目**不**重新分发 Autodesk Inventor 二进制文件或 Inventor SDK / interop DLLs。发布的 server 和单元测试在没有 Inventor 时也能 build 并运行。Build 按版本的 add-ins 需要一个**本地 Inventor 安装**或匹配的 **interop reference assemblies**（`Autodesk.Inventor.Interop.dll`），通过默认的 Autodesk shared-extensions 路径或显式的 `/p:InventorInteropDir=...` MSBuild 属性提供。在 Inventor 上运行 gateway 需要一个已授权的 Inventor 安装。
 
@@ -275,7 +296,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ---
 
-## License
+## 许可证
 
 [Apache-2.0](LICENSE)。见 [LICENSE](LICENSE)。
 
