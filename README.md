@@ -56,41 +56,26 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 
 ## Install / Wire an MCP Client
 
-### 1. Server — .NET global tool
-
-```bash
-dotnet tool install -g Bimwright.Ipt.Server
-bimwright-ipt --help
-```
-
-Requires the .NET 8 SDK. For local development you can also `dotnet run` the server project, or point a client at a **Release** build under `src/server/bin/Release/net8.0/` — do not treat Debug paths as the supported install.
-
-### 2. Plugin — Inventor add-in
-
-Build and deploy the per-user ApplicationPlugins bundle (registry-free):
+Download the client setup ZIP from [GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest). It includes a self-contained MCP server and Inventor add-in years compiled against **real** interop (see `manifest.json`). The v0.1.0 ZIP ships **2025** and **2027**. Other years: build locally — do not ship `SkipInventorReferenceCheck` shape-only DLLs.
 
 ```powershell
-pwsh scripts/package-bundle.ps1
+$tag = (Invoke-RestMethod https://api.github.com/repos/bimwright/ipt-mcp/releases/latest).tag_name
+$zip = "$env:TEMP\IptMcp.Setup-$tag-win-x64.zip"
+$dir = "$env:TEMP\IptMcp.Setup-$tag-win-x64"
+Invoke-WebRequest "https://github.com/bimwright/ipt-mcp/releases/download/$tag/IptMcp.Setup-$tag-win-x64.zip" -OutFile $zip
+Expand-Archive $zip -DestinationPath $dir -Force
+
+powershell -ExecutionPolicy Bypass -File "$dir\install.ps1" -WhatIf
+powershell -ExecutionPolicy Bypass -File "$dir\install.ps1"
 ```
 
-Default layout: `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` (one `Contents\<year>\` folder per Inventor year with interop available on the machine). Restart Inventor to load. Close Inventor before rebuilds so DLLs are not locked. See [Build & Develop](#build--develop) if a year needs an explicit `InventorInteropDir`.
+Deploys `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` and `ipt-mcp.exe` under `%LOCALAPPDATA%\Bimwright\ipt-mcp\server\<version>\`. Restart Inventor. Point your MCP client at that `ipt-mcp.exe` path. Pin a year with `--target 2025` or `BIMWRIGHT_INVENTOR_TARGET=2025`.
 
-### 3. Wire an MCP client
+Do **not** `dotnet tool install -g Bimwright.Ipt.Server` — that is not the supported client install.
 
-```json
-{
-  "mcpServers": {
-    "ipt-mcp": {
-      "command": "bimwright-ipt",
-      "args": []
-    }
-  }
-}
-```
+**Developer:** `pwsh scripts/package-bundle.ps1` on a box with Inventor interop (skip years without SDK). Close Inventor before rebuilds.
 
-Pin a year with `"args": ["--target", "2025"]` or `BIMWRIGHT_INVENTOR_TARGET=2025` when multiple Inventor instances may run.
-
-Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The server scans these, drops dead/stale descriptors best-effort, and connects. Target-list tools redact `auth_token`. With more than one Inventor open, call `inventor_list_available_targets` then `inventor_switch_target`.
+Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. With more than one Inventor open, call `inventor_list_available_targets` then `inventor_switch_target`.
 
 `inventor_send_code` stays **off** unless both server (`--enable-send-code` / `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) and plugin (`BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`) opt in — see [Safety](#safety).
 

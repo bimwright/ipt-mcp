@@ -56,43 +56,9 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 
 ## インストール / MCP クライアントの設定
 
-### 1. サーバー — .NET グローバルツール
+[GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest) から `IptMcp.Setup-*-win-x64.zip` を入手。v0.1.0 は Inventor **2025** と **2027**。展開して `install.ps1`。MCP は `ipt-mcp.exe`。`dotnet tool install -g Bimwright.Ipt.Server` は使わないでください。
 
-```bash
-dotnet tool install -g Bimwright.Ipt.Server
-bimwright-ipt --help
-```
-
-.NET 8 SDK が必要です。開発時は `dotnet run` や **Release** ビルド（`src/server/bin/Release/net8.0/`）も可。Debug パスを正式なインストール手順としないでください。
-
-### 2. プラグイン — Inventor アドイン
-
-ApplicationPlugins バンドルをビルドして配置（レジストリ不要）:
-
-```powershell
-pwsh scripts/package-bundle.ps1
-```
-
-既定: `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\`。Inventor を再起動。再ビルド前に Inventor を閉じる（DLL ロック）。`InventorInteropDir` が必要な場合は [ビルドと開発](#ビルドと開発) を参照。
-
-### 3. MCP クライアントの接続
-
-```json
-{
-  "mcpServers": {
-    "ipt-mcp": {
-      "command": "bimwright-ipt",
-      "args": []
-    }
-  }
-}
-```
-
-年の固定: `"args": ["--target", "2025"]` または `BIMWRIGHT_INVENTOR_TARGET=2025`。
-
-アドイン発見は自動（`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`）。複数 Inventor 時は `inventor_list_available_targets` → `inventor_switch_target`。
-
-`inventor_send_code` はサーバーとプラグイン双方のオプトインが必要 — [安全性](#安全性) を参照。
+発見: `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。`inventor_send_code` は双方のオプトイン — [安全性](#安全性) を参照。
 
 ---
 

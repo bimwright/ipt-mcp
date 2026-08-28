@@ -56,43 +56,9 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 
 ## Cài đặt / Wire MCP client
 
-### 1. Server — .NET global tool
+Tải [GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest) (`IptMcp.Setup-*-win-x64.zip`). v0.1.0 gồm Inventor **2025** và **2027**. `install.ps1` trong ZIP; trỏ MCP vào `ipt-mcp.exe`. Không `dotnet tool install -g Bimwright.Ipt.Server`.
 
-```bash
-dotnet tool install -g Bimwright.Ipt.Server
-bimwright-ipt --help
-```
-
-Cần .NET 8 SDK. Khi dev có thể `dotnet run` project server, hoặc trỏ client tới bản **Release** dưới `src/server/bin/Release/net8.0/` — đừng coi path Debug là cách cài được hỗ trợ.
-
-### 2. Plugin — add-in Inventor
-
-Build và deploy bundle ApplicationPlugins (registry-free):
-
-```powershell
-pwsh scripts/package-bundle.ps1
-```
-
-Mặc định: `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\`. Restart Inventor. Đóng Inventor trước rebuild (DLL lock). Xem [Build & phát triển](#build--phát-triển) nếu cần `InventorInteropDir`.
-
-### 3. Nối MCP client
-
-```json
-{
-  "mcpServers": {
-    "ipt-mcp": {
-      "command": "bimwright-ipt",
-      "args": []
-    }
-  }
-}
-```
-
-Ghim năm: `"args": ["--target", "2025"]` hoặc `BIMWRIGHT_INVENTOR_TARGET=2025`.
-
-Discovery add-in tự động qua `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. Nhiều Inventor: `inventor_list_available_targets` rồi `inventor_switch_target`.
-
-`inventor_send_code` **tắt** trừ khi opt-in hai phía (server + plugin) — xem [An toàn](#an-toàn).
+Discovery: `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. `inventor_send_code` cần opt-in hai phía — xem [An toàn](#an-toàn).
 
 ---
 

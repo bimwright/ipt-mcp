@@ -60,43 +60,9 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 ## 安装 / 接入 MCP Client
 
-### 1. Server —— .NET 全局工具
+从 [GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest) 下载 `IptMcp.Setup-*-win-x64.zip`。v0.1.0 含 Inventor **2025** 与 **2027**。解压后 `install.ps1`，MCP 指向 `ipt-mcp.exe`。不要 `dotnet tool install -g Bimwright.Ipt.Server`。
 
-```bash
-dotnet tool install -g Bimwright.Ipt.Server
-bimwright-ipt --help
-```
-
-需要 .NET 8 SDK。本地开发可用 `dotnet run`，或把 client 指到 **Release** 构建（`src/server/bin/Release/net8.0/`）——不要把 Debug 路径当作正式安装方式。
-
-### 2. Plugin —— Inventor 插件
-
-构建并部署 per-user ApplicationPlugins bundle（无需注册表）：
-
-```powershell
-pwsh scripts/package-bundle.ps1
-```
-
-默认：`%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\`。重启 Inventor。重建前请关闭 Inventor（DLL 锁定）。需要 `InventorInteropDir` 时见 [构建与开发](#构建与开发)。
-
-### 3. 接入 MCP client
-
-```json
-{
-  "mcpServers": {
-    "ipt-mcp": {
-      "command": "bimwright-ipt",
-      "args": []
-    }
-  }
-}
-```
-
-固定年份：`"args": ["--target", "2025"]` 或 `BIMWRIGHT_INVENTOR_TARGET=2025`。
-
-Add-in 自动发现：`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。多实例时先 `inventor_list_available_targets` 再 `inventor_switch_target`。
-
-`inventor_send_code` 默认关闭，需 server + plugin 双侧 opt-in——见 [安全](#安全)。
+发现文件：`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。`inventor_send_code` 需双侧 opt-in——见 [安全](#安全)。
 
 ---
 
