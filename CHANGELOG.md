@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Assembly-oriented tools (interference check, minimum distance, BOM, assembly-level mass properties) and ToolBaker allow-list for five read-only assembly queries. Documented surface: **58** tools by default, **59** with `send_code`.
+- Japanese and Simplified Chinese README mirrors.
+
+### Fixed
+
+- Live feature and iMate runtime paths; handler response/error contracts aligned with the assembly spec.
+
+### Changed
+
+- Install path and locale README parity; custom export root and `--disable-toolbaker` documented.
+- Inventor-API handlers exercised against a live Inventor session (supersedes the 0.1.0 “not validated against a running Inventor” limitation below).
+
 ## [0.1.0] - Unreleased
 
 First public surface of `bimwright/ipt-mcp` — a local MCP gateway that lets Claude Code
