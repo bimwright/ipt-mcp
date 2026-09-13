@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
@@ -88,14 +89,39 @@ public sealed class PluginClient
             ReadOnly = _config.ReadOnly
         };
 
-        var line = JsonConvert.SerializeObject(env) + "\n";
-        var response = await SendLineAsync(target, line, ct);
+        var requestId = env.Id.ToString("N");
+        var sw = Stopwatch.StartNew();
+        ServerLogger.LogStart(requestId, command, env.Params);
+        var ok = false;
+        string? err = null;
+        try
+        {
+            var line = JsonConvert.SerializeObject(env) + "\n";
+            var response = await SendLineAsync(target, line, ct);
 
-        var result = JsonConvert.DeserializeObject<InventorCommandResult>(response)
-                     ?? throw new InventorGatewayException(InventorErrorCodes.API_ERROR, "unparseable response");
-        if (!result.Ok)
-            throw new InventorGatewayException(result.Error?.Code ?? InventorErrorCodes.API_ERROR, result.Error?.Message ?? "unknown error");
-        return result.Data ?? JValue.CreateNull();
+            var result = JsonConvert.DeserializeObject<InventorCommandResult>(response)
+                         ?? throw new InventorGatewayException(InventorErrorCodes.API_ERROR, "unparseable response");
+            if (!result.Ok)
+            {
+                var code = result.Error?.Code ?? InventorErrorCodes.API_ERROR;
+                var message = result.Error?.Message ?? "unknown error";
+                err = code + ": " + message;
+                throw new InventorGatewayException(code, message);
+            }
+
+            ok = true;
+            return result.Data ?? JValue.CreateNull();
+        }
+        catch (Exception ex)
+        {
+            err ??= ex.Message;
+            throw;
+        }
+        finally
+        {
+            sw.Stop();
+            ServerLogger.LogFinish(requestId, command, ok, sw.ElapsedMilliseconds, err);
+        }
     }
 
     private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct)
