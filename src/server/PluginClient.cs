@@ -75,32 +75,45 @@ public sealed class PluginClient
 
     public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct)
     {
-        var target = CurrentTarget ?? throw new InventorGatewayException(
-            InventorErrorCodes.NO_TARGET,
-            "No live Inventor target. Start Inventor with the bimwright add-in loaded.");
-
-        var env = new InventorCommandEnvelope
-        {
-            Id = Guid.NewGuid(),
-            Command = command,
-            Params = parameters as JObject ?? JObject.FromObject(parameters),
-            TimeoutMs = _config.TimeoutMs,
-            AuthToken = target.AuthToken,
-            ReadOnly = _config.ReadOnly
-        };
-
-        var requestId = env.Id.ToString("N");
+        // LogStart before target resolution so NO_TARGET calls still leave a journal entry (spec F1-R1).
+        var requestId = Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
-        ServerLogger.LogStart(requestId, command, env.Params);
+        var @params = parameters as JObject ?? JObject.FromObject(parameters);
+        ServerLogger.LogStart(requestId, command, @params);
         var ok = false;
         string? err = null;
+        string? errCode = null;
+        string? targetId = null;
+        long? responseBytes = null;
+        long? pluginDurationMs = null;
+        JToken? data = null;
         try
         {
+            var target = CurrentTarget ?? throw new InventorGatewayException(
+                InventorErrorCodes.NO_TARGET,
+                "No live Inventor target. Start Inventor with the bimwright add-in loaded.");
+            targetId = target.TargetId;
+
+            var env = new InventorCommandEnvelope
+            {
+                Id = new Guid(requestId),
+                Command = command,
+                Params = @params,
+                TimeoutMs = _config.TimeoutMs,
+                AuthToken = target.AuthToken,
+                ReadOnly = _config.ReadOnly
+            };
+
             var line = JsonConvert.SerializeObject(env) + "\n";
             var response = await SendLineAsync(target, line, ct);
+            responseBytes = Encoding.UTF8.GetByteCount(response);
 
             var result = JsonConvert.DeserializeObject<InventorCommandResult>(response)
                          ?? throw new InventorGatewayException(InventorErrorCodes.API_ERROR, "unparseable response");
+            // "meta": null in the wire JSON overrides the initializer, so guard before reading it.
+            targetId = result.Meta?.TargetId ?? targetId;
+            pluginDurationMs = result.Meta?.DurationMs;
+            data = result.Data;
             if (!result.Ok)
             {
                 var code = result.Error?.Code ?? InventorErrorCodes.API_ERROR;
@@ -115,12 +128,14 @@ public sealed class PluginClient
         catch (Exception ex)
         {
             err ??= ex.Message;
+            errCode = (ex as InventorGatewayException)?.Code;
             throw;
         }
         finally
         {
             sw.Stop();
-            ServerLogger.LogFinish(requestId, command, ok, sw.ElapsedMilliseconds, err);
+            ServerLogger.LogFinish(requestId, command, ok, sw.ElapsedMilliseconds, err, errCode, targetId,
+                responseBytes, pluginDurationMs, data);
         }
     }
 

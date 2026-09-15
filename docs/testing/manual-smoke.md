@@ -143,3 +143,46 @@ integration end to end.
     5. Run `inventor_set_view_orientation` for at least two orientations, `inventor_view_fit`, and
        `inventor_capture_view` in output-path mode. **Expected:** each orientation is echoed, fit reports
        `fitted: true`, and every PNG exists, has non-zero size, and is visually non-blank.
+
+18. **Call journal v2** (improvement spec F1; server-only, no add-in rebuild)
+    `scripts\mcp-smoke.ps1` starts its own server with the journal redirected to
+    `%TEMP%\ipt-mcp-smoke-calls.jsonl`, so MCP servers already running for other clients (which lock
+    `src\server\bin\`) can stay up. Start Inventor with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`,
+    then in a pwsh 7 session (not `pwsh -File`, which cannot bind `-ToolCalls`):
+    ```powershell
+    dotnet build src/server -c Debug --artifacts-path bin\f1-artifacts
+    # --enable-send-code alone does not register inventor_send_code: `code` is not in the default
+    # toolset list, so request it explicitly (known gap, tracked outside F1).
+    $env:BIMWRIGHT_INVENTOR_TOOLSETS = "all"
+    & .\scripts\mcp-smoke.ps1 -EnableSendCode `
+        -ServerExe .\bin\f1-artifacts\bin\Bimwright.Ipt.Server\debug\Bimwright.Ipt.Server.exe `
+        -ToolCalls @(
+            @{ name = 'inventor_get_current_target'; arguments = @{} },
+            @{ name = 'inventor_new_part';           arguments = @{} },
+            @{ name = 'inventor_get_document_info';  arguments = @{} },
+            @{ name = 'inventor_send_code';          arguments = @{ code = 'var x = ;' } },
+            @{ name = 'inventor_send_code';          arguments = @{ code = 'Console.WriteLine(app.ActiveDocument.DisplayName);' } })
+    ```
+    **Expected:** all `finish` lines share one `session_id` (`server-<yyyyMMddTHHmmssZ>-<pid>`) and
+    always carry `error_code`, `target_id`, `response_bytes`, `plugin_duration_ms`, `data_ok`,
+    `data_error`, `stdout_bytes` (null when not applicable). For add-in calls `target_id` equals the
+    `inventor_get_current_target` id, `response_bytes > 0` and `plugin_duration_ms >= 0`.
+    - `get_document_info` → `success: true`, `data_ok: null`.
+    - `send_code` with `var x = ;` → `success: true`, `data_ok: false`, `data_error` starts with
+      `compile error`.
+    - `send_code` with `Console.WriteLine(...)` → `data_ok: true`, `stdout_bytes > 0`.
+    - With no Inventor running, an add-in call such as `inventor_get_document_info` still leaves a
+      `finish` line with `success: false`, `error_code: "NO_TARGET"`.
+
+    **Recorded 2026-09-15** — branch `feat/call-journal-v2`, Inventor 2027 (`inventor-2027-74076`):
+    all expectations met. `new_part` logged `duration_ms` 9073 / `plugin_duration_ms` 9055, i.e. the
+    time is spent inside the add-in, not in transport.
+    ```text
+    {"timestamp":"2026-09-15T16:07:21.9410448Z","session_id":"server-20260915T160712Z-9516","request_id":"907b268f06594a479a01e4cf6d67cf2a","tool":"get_document_info","phase":"finish","success":true,"duration_ms":6,"error":null,"error_code":null,"target_id":"inventor-2027-74076","response_bytes":250,"plugin_duration_ms":0,"data_ok":null,"data_error":null,"stdout_bytes":null}
+    {"timestamp":"2026-09-15T16:07:22.6167580Z","session_id":"server-20260915T160712Z-9516","request_id":"494f6b4a01e74a2dafbec2be7c040031","tool":"send_code","phase":"finish","success":true,"duration_ms":670,"error":null,"error_code":null,"target_id":"inventor-2027-74076","response_bytes":283,"plugin_duration_ms":223,"data_ok":false,"data_error":"compile error: (1,9): error CS1525: Invalid expression term ';'","stdout_bytes":0}
+    {"timestamp":"2026-09-15T16:07:26.1950946Z","session_id":"server-20260915T160712Z-9516","request_id":"e780d3a3da9b40bab1ee9fd9f092e723","tool":"send_code","phase":"finish","success":true,"duration_ms":3574,"error":null,"error_code":null,"target_id":"inventor-2027-74076","response_bytes":231,"plugin_duration_ms":3571,"data_ok":true,"data_error":null,"stdout_bytes":7}
+    ```
+    No Inventor running (same build):
+    ```text
+    {"timestamp":"2026-09-15T16:03:54.1462388Z","session_id":"server-20260915T160354Z-27180","request_id":"b7596b5cdb5c456bb9fe74b41339dbc4","tool":"get_document_info","phase":"finish","success":false,"duration_ms":0,"error":"No live Inventor target. Start Inventor with the bimwright add-in loaded.","error_code":"NO_TARGET","target_id":null,"response_bytes":null,"plugin_duration_ms":null,"data_ok":null,"data_error":null,"stdout_bytes":null}
+    ```

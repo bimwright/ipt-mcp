@@ -130,6 +130,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 
 ### Config precedence
 `InventorMcpConfig.Load(args)`: JSON file (`--config`) < environment (`BIMWRIGHT_INVENTOR_*`) < CLI flags. Descriptor dir defaults to `%LOCALAPPDATA%\Bimwright\ipt-mcp`.
+The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; default `%LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
 
 ## Error Codes (`InventorErrorCodes`)
 `NO_TARGET, TARGET_UNAVAILABLE, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.

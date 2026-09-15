@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Call journal v2: `finish` lines now record `error_code`, `target_id`, `response_bytes`, `plugin_duration_ms` and the payload-level outcome (`data_ok`, `data_error`, `stdout_bytes`) of `send_code` / `run_baked_tool` and of meta tools whose payload carries `ok` (`success` stays envelope-level); calls that fail before reaching a target (`NO_TARGET`) are journaled too; `session_id` identifies each server start (`server-<utc>-<pid>`); the journal path can be overridden with env `BIMWRIGHT_INVENTOR_CALL_LOG` (the test suite redirects it to `%TEMP%`).
+
 ## [0.1.0] - 2026-08-28
 
 First GitHub Release. Client setup ZIP: `IptMcp.Setup-v0.1.0-win-x64.zip` (self-contained `ipt-mcp.exe`). **Plugin years in this ZIP:** Inventor **2025** and **2027**. Source still supports 2022–2027; other years need a local Inventor interop build (shape-only DLLs are not shipped).

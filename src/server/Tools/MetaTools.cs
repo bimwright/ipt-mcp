@@ -5,6 +5,7 @@ using System.Linq;
 using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
 
@@ -54,7 +55,10 @@ public sealed class MetaTools
         {
             var result = run();
             sw.Stop();
-            ServerLogger.LogFinish(requestId, tool, true, sw.ElapsedMilliseconds);
+            // Feed the JSON payload as `data` so payload-level ok:false (e.g. NO_TARGET) lands in data_ok (spec F1-R3).
+            JToken? payload = null;
+            try { payload = JToken.Parse(result); } catch { /* non-JSON payload */ }
+            ServerLogger.LogFinish(requestId, tool, true, sw.ElapsedMilliseconds, data: payload);
             return result;
         }
         catch (Exception ex)
