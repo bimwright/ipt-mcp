@@ -48,6 +48,18 @@ public sealed class CommandDispatcher
             var result = cmd.Execute(ctx, env.Params ?? new JObject());
             Normalize(env, ctx, result, started);
             SanitizeResult(result);
+
+            // F3-a: three-tier guard on the compact payload. Above the reject budget the call
+            // fails with RESPONSE_TOO_LARGE + a narrowing hint; in the warning bands the hint is
+            // attached to the response data as `size_warning` (handlers always return JObject).
+            var decision = ResponseSizeGuard.Evaluate(env.Command, JsonConvert.SerializeObject(result.Data));
+            if (decision.Reject)
+                return InventorCommandResult.Fail(env.Id, InventorErrorCodes.RESPONSE_TOO_LARGE,
+                    decision.RejectError ?? "response too large", result.Meta);
+            if (decision.AgentWarning is not null && result.Data is JObject dataObj)
+                dataObj["size_warning"] = decision.AgentWarning;
+
+            // Final transport fence (5 MB in production).
             var serialized = JsonConvert.SerializeObject(result.Data);
             if (!ResponseSizeGuard.Check(serialized, _maxResponseBytes, out var sizeError))
                 return InventorCommandResult.Fail(env.Id, sizeError!.Code, sizeError.Message, result.Meta);

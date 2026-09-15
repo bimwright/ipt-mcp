@@ -95,10 +95,10 @@ public sealed class SendCodeHandler : IInventorCommand
             var data = new JObject
             {
                 ["ok"] = true,
-                ["stdout"] = captured.ToString(),
                 ["error"] = null,
                 ["result"] = null
             };
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString());
             if (state.ReturnValue is { } returnValue)
             {
                 var token = ScriptResultToken.ToResultToken(returnValue, out var resultError);
@@ -119,9 +119,9 @@ public sealed class SendCodeHandler : IInventorCommand
             var data = new JObject
             {
                 ["ok"] = false,
-                ["stdout"] = captured.ToString(),
                 ["error"] = ErrorSanitizer.Sanitize("compile error: " + string.Join("\n", ex.Diagnostics))
             };
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString());
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
         catch (AggregateException ex) when (ex.InnerException != null)
@@ -129,9 +129,9 @@ public sealed class SendCodeHandler : IInventorCommand
             var data = new JObject
             {
                 ["ok"] = false,
-                ["stdout"] = captured.ToString(),
                 ["error"] = ErrorSanitizer.Sanitize($"{ex.InnerException.GetType().Name}: {ex.InnerException.Message}")
             };
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString());
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
         catch (Exception ex)
@@ -139,9 +139,9 @@ public sealed class SendCodeHandler : IInventorCommand
             var data = new JObject
             {
                 ["ok"] = false,
-                ["stdout"] = captured.ToString(),
                 ["error"] = ErrorSanitizer.Sanitize($"{ex.GetType().Name}: {ex.Message}")
             };
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString());
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
         finally

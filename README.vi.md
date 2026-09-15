@@ -174,7 +174,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 
 | Tool | Mô tả |
 |---|---|
-| `inventor_capture_view` | Capture view active thành PNG base64 có giới hạn, hoặc ghi ra một output path. |
+| `inventor_capture_view` | Capture view active ra file PNG (dưới `<export-root>\captures\` hoặc `output_path`); `inline=true` trả PNG base64 có giới hạn. |
 | `inventor_export_step` | Export part/assembly active sang STEP (.stp/.step). |
 | `inventor_export_stl` | Export part/assembly active sang STL (.stl). |
 | `inventor_export_dxf` | Export DXF 2D; phải khai báo source (`sketch` hoặc `flat_pattern`). |

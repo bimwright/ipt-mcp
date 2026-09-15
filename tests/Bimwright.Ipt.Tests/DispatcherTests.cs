@@ -129,5 +129,60 @@ public sealed class DispatcherTests
         Assert.Equal(id, r.Id);
         Assert.True(r.Ok);
     }
+
+    // ---- F3-a: size_warning attach + reject ----------------------------------------------
+
+    [Fact]
+    public void WarningBandResponseCarriesSizeWarning()
+    {
+        var d = Make(new FakeCmd
+        {
+            Name = "list_parameters",
+            IsReadOnly = true,
+            Body = () => InventorCommandResult.Success(Guid.Empty,
+                new JObject { ["ok"] = true, ["blob"] = new string('x', ResponseSizeGuard.WarningBytes) },
+                new InventorResponseMeta()),
+        });
+
+        var r = d.Dispatch(new InventorCommandContext(), new InventorCommandEnvelope { Command = "list_parameters" });
+
+        Assert.True(r.Ok);
+        Assert.NotNull(r.Data!["size_warning"]);
+    }
+
+    [Fact]
+    public void OverBudgetResponseIsRejected()
+    {
+        var d = Make(new FakeCmd
+        {
+            Name = "get_assembly_bom",
+            IsReadOnly = true,
+            Body = () => InventorCommandResult.Success(Guid.Empty,
+                new JObject { ["ok"] = true, ["blob"] = new string('x', ResponseSizeGuard.RejectBytes + 1) },
+                new InventorResponseMeta()),
+        });
+
+        var r = d.Dispatch(new InventorCommandContext(), new InventorCommandEnvelope { Command = "get_assembly_bom" });
+
+        Assert.False(r.Ok);
+        Assert.Equal(InventorErrorCodes.RESPONSE_TOO_LARGE, r.Error!.Code);
+        Assert.Contains("max_rows", r.Error.Message);   // catalog hint reaches the caller
+    }
+
+    [Fact]
+    public void SmallResponseHasNoSizeWarning()
+    {
+        var d = Make(new FakeCmd
+        {
+            Name = "health",
+            IsReadOnly = true,
+            Body = () => InventorCommandResult.Success(Guid.Empty, new JObject { ["ok"] = true }, new InventorResponseMeta()),
+        });
+
+        var r = d.Dispatch(new InventorCommandContext(), new InventorCommandEnvelope { Command = "health" });
+
+        Assert.True(r.Ok);
+        Assert.Null(r.Data!["size_warning"]);
+    }
 }
 #endif

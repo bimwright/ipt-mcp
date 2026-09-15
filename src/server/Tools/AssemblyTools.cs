@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
@@ -152,18 +151,18 @@ public sealed class AssemblyTools
     }
 
     private static string Error(string code, string message)
-        => JsonConvert.SerializeObject(new { ok = false, error = new { code, message } }, Formatting.Indented);
+        => ToolResponse.Error(code, message);
 
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try
         {
             var data = await _client.SendAsync(command, p, ct);
-            return JsonConvert.SerializeObject(data, Formatting.Indented);
+            return ToolResponse.Serialize(data);
         }
         catch (InventorGatewayException ex)
         {
-            return JsonConvert.SerializeObject(new { ok = false, error = new { code = ex.Code, message = ex.Message } }, Formatting.Indented);
+            return ToolResponse.Error(ex.Code, ex.Message);
         }
     }
 }

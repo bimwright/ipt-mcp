@@ -174,7 +174,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 | ツール | 説明 |
 |---|---|
-| `inventor_capture_view` | アクティブビューをサイズ制限付き base64 PNG としてキャプチャ、または出力パスに書き込み。 |
+| `inventor_capture_view` | アクティブビューを PNG ファイルとしてキャプチャ（`<export-root>\captures\` または出力パス）。`inline=true` でサイズ制限付き base64 PNG を返す。 |
 | `inventor_export_step` | アクティブパーツ/アセンブリを STEP（.stp/.step）にエクスポート。 |
 | `inventor_export_stl` | アクティブパーツ/アセンブリを STL（.stl）にエクスポート。 |
 | `inventor_export_dxf` | 2D DXF をエクスポート。ソース（`sketch` または `flat_pattern`）を指定する必要あり。 |

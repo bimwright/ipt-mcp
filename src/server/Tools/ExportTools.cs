@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
@@ -12,8 +11,9 @@ namespace Bimwright.Ipt.Server.Tools;
 /// View capture + export tools (toolset <c>export</c>). These write output files but do not mutate the
 /// active Inventor document. Phase 1 has no first-class output-path policy, so <c>export</c> is in
 /// <see cref="ToolsetFilter.WriteCapable"/> (hidden under <c>--read-only</c>); the wrappers still apply
-/// a basic allowed-output-path check before round-tripping to the add-in. <c>capture_view</c> returns a
-/// bounded base64 PNG. <c>export_dxf</c> must declare its DXF source (sketch or sheet-metal flat pattern)
+/// a basic allowed-output-path check before round-tripping to the add-in. <c>capture_view</c> writes a
+/// PNG to the captures dir by default; <c>inline=true</c> returns a bounded base64 PNG.
+/// <c>export_dxf</c> must declare its DXF source (sketch or sheet-metal flat pattern)
 /// because Phase 1 ships no drawing tools.
 /// </summary>
 [McpServerToolType]
@@ -23,8 +23,8 @@ public sealed class ExportTools
     public ExportTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_capture_view"),
-     Description("Capture the active Inventor view as an image. Default: returns a base64-encoded PNG inline (bounded resolution). If output_path is given (absolute path under an allowed root, ending in .png/.jpg/.jpeg/.bmp), the image is written to that file and only the path is returned (no base64) — preferred for larger images to avoid the response size limit. Optional width/height in pixels (clamped). Does not mutate the document.")]
-    public Task<string> CaptureView(int width = 1280, int height = 720, string? outputPath = null, CancellationToken ct = default)
+     Description("Capture the active Inventor view as an image. Default: writes a PNG to <export-root>\\captures\\ (or output_path when given — absolute, under an allowed root, ending .png/.jpg/.jpeg/.bmp; output_path wins over inline) and returns only {path,width,height,bytes}. Pass inline=true for the legacy base64 response (rejected above 256 KiB — use file mode or reduce width/height). Optional width/height in pixels (clamped). Does not mutate the document.")]
+    public Task<string> CaptureView(int width = 1280, int height = 720, string? outputPath = null, bool inline = false, CancellationToken ct = default)
     {
         var p = new JObject
         {
@@ -37,6 +37,7 @@ public sealed class ExportTools
                 return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
             p["output_path"] = outputPath;
         }
+        if (inline) p["inline"] = true;
         return Call("capture_view", p, ct);
     }
 
@@ -94,7 +95,7 @@ public sealed class ExportTools
         => Call("view_fit", new JObject(), ct);
 
     [McpServerTool(Name = "inventor_set_view_orientation"),
-     Description("Set the active view camera to a standard orientation: iso_top_right|iso_top_left|iso_bottom_right|iso_bottom_left|front|back|top|bottom|left|right (fit=true refits). Loop over several orientations + capture_view (output_path mode) to photograph a model from multiple angles. Does not modify the document.")]
+     Description("Set the active view camera to a standard orientation: iso_top_right|iso_top_left|iso_bottom_right|iso_bottom_left|front|back|top|bottom|left|right (fit=true refits). Loop over several orientations + capture_view to photograph a model from multiple angles. Does not modify the document.")]
     public Task<string> SetViewOrientation(string orientation, bool fit = true, CancellationToken ct = default)
         => Call("set_view_orientation", new JObject { ["orientation"] = orientation, ["fit"] = fit }, ct);
 
@@ -103,18 +104,18 @@ public sealed class ExportTools
     private static int ClampPixels(int px) => px < 16 ? 16 : (px > 4096 ? 4096 : px);
 
     private static string Error(string code, string message)
-        => JsonConvert.SerializeObject(new { ok = false, error = new { code, message } }, Formatting.Indented);
+        => ToolResponse.Error(code, message);
 
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try
         {
             var data = await _client.SendAsync(command, p, ct);
-            return JsonConvert.SerializeObject(data, Formatting.Indented);
+            return ToolResponse.Serialize(data);
         }
         catch (InventorGatewayException ex)
         {
-            return JsonConvert.SerializeObject(new { ok = false, error = new { code = ex.Code, message = ex.Message } }, Formatting.Indented);
+            return ToolResponse.Error(ex.Code, ex.Message);
         }
     }
 }

@@ -38,7 +38,7 @@ public sealed class ToolBakerTools
                 created_at = record.CreatedAt
             })
             .ToArray();
-        return JsonConvert.SerializeObject(new { tools }, Formatting.Indented);
+        return ToolResponse.Serialize(new { tools });
     }
 
     [McpServerTool(Name = "inventor_list_bake_suggestions"), Description("List active ToolBaker suggestions generated from recurrent Inventor workflows.")]
@@ -79,10 +79,10 @@ public sealed class ToolBakerTools
             "```"
         });
 
-        return JsonConvert.SerializeObject(new
+        return ToolResponse.Serialize(new
         {
             ok = true,
             issue = new { title, body }
-        }, Formatting.Indented);
+        });
     }
 }

@@ -178,7 +178,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 | Tool | 描述 |
 |---|---|
-| `inventor_capture_view` | 把 active view 捕获为受限的 base64 PNG，或写入输出路径。 |
+| `inventor_capture_view` | 把 active view 捕获为 PNG 文件（写入 `<export-root>\captures\` 或输出路径）；`inline=true` 返回受限 base64 PNG。 |
 | `inventor_export_step` | 把 active part/assembly 导出为 STEP（.stp/.step）。 |
 | `inventor_export_stl` | 把 active part/assembly 导出为 STL（.stl）。 |
 | `inventor_export_dxf` | 导出 2D DXF；必须声明 source（`sketch` 或 `flat_pattern`）。 |

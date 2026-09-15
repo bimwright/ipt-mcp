@@ -56,12 +56,13 @@ public sealed class RunBakedToolHandler : IInventorCommand
             results.Add(result.Data ?? JValue.CreateNull());
         }
 
-        return InventorCommandResult.Success(Guid.Empty, new JObject
+        var data = new JObject
         {
             ["ok"] = true,
             ["tool_name"] = record.Name,
-            ["results"] = results
-        }, meta);
+        };
+        ResponseSpillWriter.AttachResults("run_baked_tool", data, results);
+        return InventorCommandResult.Success(Guid.Empty, data, meta);
     }
 
     private static InventorCommandResult ExecuteOne(InventorCommandContext ctx, string command, JObject parameters, InventorResponseMeta meta)
