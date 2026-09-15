@@ -193,7 +193,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 | Tool | Description |
 |---|---|
-| `inventor_capture_view` | Capture the active view as a bounded base64 PNG, or write to an output path. |
+| `inventor_capture_view` | Capture the active view to a PNG file (under `<export-root>\captures\` or `output_path`); `inline=true` returns a bounded base64 PNG instead. |
 | `inventor_export_step` | Export the active part/assembly to STEP (.stp/.step). |
 | `inventor_export_stl` | Export the active part/assembly to STL (.stl). |
 | `inventor_export_dxf` | Export a 2D DXF; must declare source (`sketch` or `flat_pattern`). |

@@ -216,3 +216,24 @@ integration end to end.
     Journal note: `plugin_duration_ms:0` on TIMEOUT/denylist/health lines means "not measured"
     (response generated before/without a STA dispatch), not a real 0 ms — `target_id` is now filled on
     these `Err()` lines (F1 hand-off item, verified).
+
+20. **Output guardrails** (improvement spec F3; needs the REBUILT add-in deployed and the F3
+    server build — run via `scripts\mcp-smoke.ps1` like step 18/19):
+    - `inventor_send_code` `Console.Write(new string('x', 100*1024));` → `ok:true`,
+      `stdout` = first 8 KiB only, `stdout_truncated:true`, `stdout_file` →
+      `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill\send_code-<ts>-<id>.txt` holding the full 100 KiB.
+      Journal: `stdout_bytes:8192`, `response_bytes` stays ~8.5 KB (F3-b).
+    - `inventor_capture_view` with no `output_path` → `{path,width,height,bytes}` pointing at
+      `%LOCALAPPDATA%\Bimwright\ipt-mcp\captures\capture-<ts>-<seq>.png`, no base64 (F3-c default).
+    - `inventor_capture_view` `inline=true` + small size → legacy `{mime_type,width,height,bytes,base64}`.
+    - `inventor_list_parameters` on a small part → indented JSON text (F3-d small-payload path);
+      the inline base64 response above is single-line compact (F3-d >4 KiB path).
+
+    **Recorded 2026-09-16** — branch `feat/output-guardrails`, Inventor 2027
+    (`inventor-2027-29540`, pipe): all expectations met.
+    ```text
+    {"tool":"send_code","phase":"finish","success":true,"duration_ms":1060,"target_id":"inventor-2027-29540","response_bytes":8568,"plugin_duration_ms":1051,"data_ok":true,"stdout_bytes":8192}   # 100 KiB stdout → 8 KiB inline + spill file (102400 B on disk)
+    {"tool":"capture_view","phase":"finish","success":true,"response_bytes":332,...}    # file mode → captures\capture-20260915-193057-001.png (356233 B)
+    {"tool":"capture_view","phase":"finish","success":true,"response_bytes":44272,...}  # inline=true → compact base64 response
+    {"tool":"list_parameters","phase":"finish","success":true,"response_bytes":211,...} # indented small response
+    ```

@@ -11,18 +11,18 @@ using Inventor;
 namespace Bimwright.Ipt.Shared.Handlers.Export;
 
 /// <summary>
-/// <c>capture_view</c> — read-only. Renders the active view to a bounded PNG via
-/// <c>Camera.SaveAsBitmap</c> (writing to a temp file), then returns it base64-encoded. Width/height are
-/// clamped both server-side and here; the resulting base64 is size-guarded so the response never blows
-/// the transport bound.
+/// <c>capture_view</c> — read-only. Renders the active view via <c>Camera.SaveAsBitmap</c>.
+/// File mode is the default (spec F3-c): without <c>output_path</c> the PNG lands under the
+/// capture root's <c>captures\</c> dir and only its path/size come back — no base64. The old
+/// base64 response is still available via <c>inline=true</c>, bounded to 256 KiB. Width/height
+/// are clamped both server-side and here.
 /// </summary>
 public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
 {
     public string Name => "capture_view";
     public bool IsReadOnly => true;
 
-    // Hard cap on the encoded image so a huge render can't overflow the response guard.
-    private const int MaxBase64Bytes = 3_500_000;
+    private static int _captureSeq;
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
@@ -68,6 +68,39 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
             });
         }
 
+        // Default (spec F3-c): file mode — generate captures\capture-<ts>-<seq>.png under the
+        // capture root and return only its path/size. The root is always an allowed export
+        // root by construction, so no ExportPathPolicy check is needed here.
+        var inline = p.Value<bool?>("inline") == true;
+        if (!inline)
+        {
+            var root = CaptureImagePolicy.ResolveCaptureRoot();
+            var stamp = DateTime.UtcNow;
+            var seq = System.Threading.Interlocked.Increment(ref _captureSeq);
+            var capturePath = CaptureImagePolicy.DefaultCapturePath(root, stamp, seq);
+            // Multiple Inventor instances share the captures dir — step over a same-second
+            // name already taken by a peer process.
+            while (IoFile.Exists(capturePath))
+                capturePath = CaptureImagePolicy.DefaultCapturePath(root, stamp, ++seq);
+            try
+            {
+                System.IO.Directory.CreateDirectory(IoPath.GetDirectoryName(capturePath)!);
+                view.Camera.SaveAsBitmap(capturePath, width, height, Type.Missing, Type.Missing);
+            }
+            catch (Exception ex)
+            {
+                return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to capture view to file: " + ex.Message);
+            }
+            return Ok(ctx, new JObject
+            {
+                ["path"] = capturePath,
+                ["width"] = width,
+                ["height"] = height,
+                ["bytes"] = new System.IO.FileInfo(capturePath).Length,
+            });
+        }
+
+        // inline=true: legacy base64 response, bounded to 256 KiB.
         var tempPng = IoPath.Combine(IoPath.GetTempPath(), "ipt-mcp-capture-" + Guid.NewGuid().ToString("N") + ".png");
         try
         {
@@ -76,9 +109,8 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
 
             byte[] bytes = IoFile.ReadAllBytes(tempPng);
             var base64 = Convert.ToBase64String(bytes);
-            if (base64.Length > MaxBase64Bytes)
-                return Fail(ctx, InventorErrorCodes.RESPONSE_TOO_LARGE,
-                    $"captured image is too large ({base64.Length} base64 bytes); request a smaller width/height");
+            if (CaptureImagePolicy.TryRejectInline(base64.Length, out var inlineRejection))
+                return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, inlineRejection);
 
             return Ok(ctx, new JObject
             {

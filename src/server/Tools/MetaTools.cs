@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Linq;
 using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
@@ -25,7 +24,7 @@ public sealed class MetaTools
      Description("List detected live Inventor add-in targets (year, pid, transport, active document). Use 4-digit calendar years (2022..2027), never legacy version codes.")]
     public string ListAvailableTargets() =>
         LoggedMeta("inventor_list_available_targets", null,
-            () => JsonConvert.SerializeObject(_client.ListTargets().Select(PublicTarget), Formatting.Indented));
+            () => ToolResponse.Serialize(_client.ListTargets().Select(PublicTarget)));
 
     [McpServerTool(Name = "inventor_get_current_target"),
      Description("Report the server's currently selected Inventor target, or NO_TARGET if none is live.")]
@@ -35,8 +34,8 @@ public sealed class MetaTools
         {
             var t = _client.CurrentTarget;
             return t is null
-                ? JsonConvert.SerializeObject(new { ok = false, error = new { code = "NO_TARGET", message = "no live target" } }, Formatting.Indented)
-                : JsonConvert.SerializeObject(PublicTarget(t), Formatting.Indented);
+                ? ToolResponse.Error("NO_TARGET", "no live target")
+                : ToolResponse.Serialize(PublicTarget(t));
         });
     }
 
@@ -44,7 +43,7 @@ public sealed class MetaTools
      Description("Select the active target by descriptor id, year, or session. Server-side only; does not change the Inventor document. Use 4-digit years (2022..2027).")]
     public string SwitchTarget(string target) =>
         LoggedMeta("inventor_switch_target", new { target },
-            () => JsonConvert.SerializeObject(new { ok = _client.SwitchTarget(target), target }, Formatting.Indented));
+            () => ToolResponse.Serialize(new { ok = _client.SwitchTarget(target), target }));
 
     private static string LoggedMeta(string tool, object? parameters, Func<string> run)
     {

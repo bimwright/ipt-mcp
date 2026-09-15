@@ -1,0 +1,152 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+
+namespace Bimwright.Ipt.Shared.Infrastructure;
+
+/// <summary>
+/// Writes oversized command output to local, agent-readable spill files under
+/// <c>%LOCALAPPDATA%\Bimwright\ipt-mcp\spill\</c> (spec F3-b — the ipt-mcp cut of rvt-mcp's
+/// spill machinery: text/JSON artifacts only, no sqlite/ndjson autoformat). Files expire
+/// after 24 h and the directory keeps at most 50 of them. API-agnostic so the test suite
+/// exercises it without Inventor.
+/// </summary>
+public sealed class ResponseSpillWriter
+{
+    /// <summary>Output above this many UTF-8 bytes is spilled (same as the 64 KiB warn tier).</summary>
+    public const int SpillThresholdBytes = 64 * 1024;
+
+    /// <summary>How much of the spilled payload stays inline in the response.</summary>
+    public const int InlineKeepBytes = 8 * 1024;
+
+    public const int MaxRetainedFiles = 50;
+    public static readonly TimeSpan MaxFileAge = TimeSpan.FromHours(24);
+
+    private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
+    private readonly string _directory;
+
+    public ResponseSpillWriter()
+        : this(DefaultDirectory)
+    {
+    }
+
+    public ResponseSpillWriter(string directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+            throw new ArgumentException("Spill directory is required.", nameof(directory));
+        _directory = Path.GetFullPath(directory);
+    }
+
+    public static string DefaultDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Bimwright", "ipt-mcp", "spill");
+
+    /// <summary>True when the payload is large enough to spill.</summary>
+    public static bool ShouldSpill(string? text)
+        => text is not null && Encoding.UTF8.GetByteCount(text) > SpillThresholdBytes;
+
+    /// <summary>
+    /// First <paramref name="maxBytes"/> UTF-8 bytes of <paramref name="text"/> without
+    /// splitting a multi-byte character at the cut.
+    /// </summary>
+    public static string Utf8Prefix(string text, int maxBytes)
+    {
+        if (text is null) return string.Empty;
+        var bytes = Encoding.UTF8.GetBytes(text);
+        if (bytes.Length <= maxBytes) return text;
+
+        // A UTF-8 continuation byte is 10xxxxxx — walk back over it so the prefix
+        // ends on a complete character.
+        var cut = maxBytes;
+        while (cut > 0 && (bytes[cut] & 0xC0) == 0x80) cut--;
+        return Encoding.UTF8.GetString(bytes, 0, cut);
+    }
+
+    /// <summary>
+    /// Persist <paramref name="content"/> as <c>&lt;command&gt;-&lt;yyyyMMdd-HHmmss&gt;-&lt;id&gt;&lt;ext&gt;</c>
+    /// in the spill directory, then enforce TTL + retention cap. Returns the full path.
+    /// </summary>
+    public string Write(string commandName, string extension, string content)
+    {
+        Directory.CreateDirectory(_directory);
+        var name = SanitizeName(commandName) + "-"
+            + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)
+            + "-" + Guid.NewGuid().ToString("N").Substring(0, 8) + extension;
+        var path = Path.Combine(_directory, name);
+        File.WriteAllText(path, content, Utf8NoBom);
+        Cleanup(DateTime.UtcNow);
+        return path;
+    }
+
+    /// <summary>Deletes files older than <see cref="MaxFileAge"/>, then oldest-first beyond
+    /// <see cref="MaxRetainedFiles"/>. Returns how many files were deleted.</summary>
+    public int Cleanup(DateTime utcNow)
+    {
+        if (!Directory.Exists(_directory)) return 0;
+        var deleted = 0;
+        var dir = new DirectoryInfo(_directory);
+
+        foreach (var f in dir.GetFiles().Where(f => utcNow - f.LastWriteTimeUtc > MaxFileAge))
+        {
+            try { f.Delete(); deleted++; } catch { /* locked file — skip */ }
+        }
+
+        // Re-enumerate: net48 FileInfo.Delete() doesn't invalidate the cached Exists.
+        var remaining = dir.GetFiles()
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .ToList();
+        foreach (var f in remaining.Skip(MaxRetainedFiles))
+        {
+            try { f.Delete(); deleted++; } catch { /* locked file — skip */ }
+        }
+        return deleted;
+    }
+
+    /// <summary>
+    /// Sets <c>data["stdout"]</c>; when the text is oversized it is written to a spill file and
+    /// the field is replaced by an 8 KiB prefix plus <c>stdout_truncated</c>/<c>stdout_file</c>
+    /// (spec F3-b). A failed spill keeps the full stdout inline — the size guard still applies.
+    /// </summary>
+    public static void AttachStdout(string commandName, Newtonsoft.Json.Linq.JObject data, string stdout,
+        ResponseSpillWriter? writer = null)
+    {
+        data["stdout"] = stdout;
+        if (!ShouldSpill(stdout)) return;
+        try
+        {
+            var file = (writer ?? new ResponseSpillWriter()).Write(commandName, ".txt", stdout);
+            data["stdout"] = Utf8Prefix(stdout, InlineKeepBytes);
+            data["stdout_truncated"] = true;
+            data["stdout_file"] = file;
+        }
+        catch { /* keep full stdout inline */ }
+    }
+
+    /// <summary>Same policy for <c>run_baked_tool</c>'s <c>results</c> array, spilled as .json.</summary>
+    public static void AttachResults(string commandName, Newtonsoft.Json.Linq.JObject data, Newtonsoft.Json.Linq.JArray results,
+        ResponseSpillWriter? writer = null)
+    {
+        var serialized = results.ToString(Newtonsoft.Json.Formatting.None);
+        data["results"] = results;
+        if (!ShouldSpill(serialized)) return;
+        try
+        {
+            var file = (writer ?? new ResponseSpillWriter()).Write(commandName, ".json", serialized);
+            data.Remove("results");
+            data["results_truncated"] = true;
+            data["results_file"] = file;
+            data["results_count"] = results.Count;
+            data["results_preview"] = Utf8Prefix(serialized, InlineKeepBytes);
+        }
+        catch { /* keep full results inline */ }
+    }
+
+    private static string SanitizeName(string commandName)
+    {
+        var chars = commandName
+            .Select(c => char.IsLetterOrDigit(c) || c == '_' || c == '-' ? c : '_')
+            .ToArray();
+        return new string(chars);
+    }
+}

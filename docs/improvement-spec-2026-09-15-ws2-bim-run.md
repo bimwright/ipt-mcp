@@ -534,6 +534,28 @@ server (`CodeTools.cs`, `PluginClient.cs`). Cần đóng Inventor và rebuild ad
 `output_path` → trả path trong `captures\`, không base64; `inventor_list_parameters` trên part nhỏ → output indented.
 Thứ tự implement gợi ý trong F3: **F3-d trước** (nhỏ, tạo điểm thoát chung) → F3-a → F3-b → F3-c.
 
+**Status F3 (2026-09-16, implement bởi Devin, branch `feat/output-guardrails`): code xong + verify đủ — chờ review cuối + commit.**
+
+- F3-d: `src/server/ToolResponse.cs` mới; 34 site `Formatting.Indented` trong `src/server/Tools/` → 0; `ToolResponseTests` 4 case.
+- F3-a: `ResponseSizeGuard.Evaluate` + `ResponseSizePolicyCatalog` mới; `CommandDispatcher` gắn `size_warning` /
+  reject `RESPONSE_TOO_LARGE` trước hàng rào 5 MB. Review sub-agent: APPROVE → đã fix fallback hint
+  (`max_items/max_depth` không tồn tại trong ipt → bỏ), `list_interfaces` nêu `occurrence=<name>`, thêm 3 test boundary.
+- F3-b: `ResponseSpillWriter` mới (spill dir + TTL 24 h + cap 50); stdout `send_code` và `results`
+  `run_baked_tool` >64 KiB spill, inline 8 KiB. Review sub-agent: blocker `[..8]` cần `System.Range` (net48 thiếu) →
+  đổi `Substring`; fix nit InvariantCulture timestamp, re-enumerate sau delete (net48 cache `FileInfo.Exists`).
+- F3-c: `capture_view` file-mode mặc định + `inline=true` (≤256 KiB); `CaptureImagePolicy` thêm
+  `ResolveCaptureRoot`/`DefaultCapturePath`/`TryRejectInline`. BREAKING → CHANGELOG § Changed + version 0.2.0.
+  Review sub-agent: APPROVE-with-issues → đã fix env root không rooted (fallback LocalAppData), collision filename
+  giữa 2 Inventor instance (step-over khi file tồn tại), summary/Description/README×4 cũ, thêm test
+  `TryRejectPath(generatedPath)=false`.
+- Verified: `dotnet test` **293/293**; `plugin-inv27` build 0 lỗi; `plugin-inv24` compat (net48, interop 2027) 0 lỗi;
+  server build 0 lỗi; `Formatting.Indented` trong `src/server/Tools/` = 0.
+- Live smoke **2026-09-16** (Inventor 2027, `inventor-2027-29540`, add-in F3 đã deploy): send_code 100 KiB stdout →
+  `stdout_bytes:8192` + spill file 102400 B; `capture_view` default → `captures\capture-…-001.png` (356233 B, không
+  base64); `inline=true` → base64 compact; `list_parameters` part rỗng → indented. Bằng chứng: manual-smoke bước 20.
+- Không verify: build `plugin-inv22/23/25/26` (máy thiếu interop); `run_baked_tool` spill chưa chạy live (unit test
+  đủ — cùng code path `ResponseSpillWriter`).
+
 ### F4. Bước 4+ — Typed tools theo tần suất trong run
 
 Xếp theo **số lần bị ép vào send_code / COM** (cột bằng chứng), không theo cảm tính. Mỗi tool: mini-spec riêng trước
