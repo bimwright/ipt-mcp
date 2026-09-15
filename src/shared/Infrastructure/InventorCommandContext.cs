@@ -29,4 +29,10 @@ public sealed class InventorCommandContext
 
     /// <summary>The full command map, so commands like <c>run_baked_tool</c> can dispatch sub-commands.</summary>
     public IReadOnlyDictionary<string, IInventorCommand>? Commands { get; init; }
+
+    /// <summary>
+    /// Live STA-queue counters shared with the dispatcher (spec F2-b). Read-only views such as
+    /// <c>health</c> use this to report <c>sta_busy</c> / <c>pending_commands</c>; null in tests.
+    /// </summary>
+    public StaQueueStats? StaQueue { get; init; }
 }

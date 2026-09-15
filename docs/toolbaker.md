@@ -57,20 +57,23 @@ write lock independent of the server process, launch Inventor with
 ## Compiler Safety Policy (banned APIs)
 
 Before any dynamic C# snippet — from `inventor_send_code` **or** a baked tool — is compiled, its
-source is validated against `BakeCompilerPolicy.ValidateSource`. If the source contains any
-forbidden token (case-insensitive substring match), compilation is refused with an
-`INVALID_ARGUMENT` error naming the offending token. The shared policy is the same one used by
-`nwd-mcp`'s `BakeCompilerPolicy`.
+source is validated against `BakeCompilerPolicy.ValidateSource`. The scan is token-aware: comments
+and string/char literals are stripped first (interpolation holes are still scanned as code), and
+tokens match on word boundaries, case-sensitively — so `VisibleSocket`, a lowercase `file.`
+variable, or a `GetType` inside a `catch` no longer trip the gate. Rejection is an
+`INVALID_ARGUMENT` error naming the offending token, prefixed by the calling surface
+(`send_code` or `Baked tool`).
 
 The forbidden tokens block destructive file operations, process spawning, environment mutation,
-external network access, reflection, and any attempt to re-enter the ToolBaker layer:
+external network access, invoke/load-style reflection, and any attempt to re-enter the ToolBaker
+layer. Type-metadata reads (`typeof`, `GetType`) are allowed:
 
 | Category | Forbidden tokens |
 |---|---|
 | File / disk | `System.IO`, `File.`, `Directory.` |
 | Network | `System.Net`, `Socket`, `HttpClient` |
-| Process / environment | `System.Diagnostics`, `Process.`, `Environment.`, `Microsoft.Win32` |
-| Reflection / dynamic typing | `System.Reflection`, `Activator.`, `Assembly.`, `MethodInfo`, `PropertyInfo`, `FieldInfo`, `GetType(`, `typeof(` |
+| Process / environment | `System.Diagnostics`, `Process`, `Environment.`, `Microsoft.Win32` |
+| Reflection / dynamic invoke | `System.Reflection`, `Activator.`, `Assembly.Load*`, `MethodInfo`, `PropertyInfo`, `FieldInfo`, `GetMethod(`, `GetProperty(`, `GetField(`, `GetMember(`, `GetEvent(`, `GetConstructor(`, `Invoke(`, `DynamicInvoke(`, `BeginInvoke(`, `EndInvoke(`, `CreateDelegate(` |
 | ToolBaker re-entry | `Bimwright.Ipt.Shared.ToolBaker` |
 
 > The policy is a coarse source-text gate, not a sandbox. It is one of several layers; the

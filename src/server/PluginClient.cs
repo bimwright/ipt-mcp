@@ -73,7 +73,21 @@ public sealed class PluginClient
         return true;
     }
 
-    public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct)
+    /// <summary>
+    /// Per-call STA budget (spec F2-b): the envelope carries <paramref name="timeoutMs"/> and the
+    /// add-in's <c>task.Wait</c> is the single owner of the TIMEOUT decision. The transport waits
+    /// an extra 5 s so the add-in's own TIMEOUT response reaches the client first.
+    /// </summary>
+    internal static int ResolveEffectiveTimeout(int configuredMs, int? requestedMs)
+    {
+        var t = requestedMs ?? configuredMs;
+        if (t < 1) t = 1;
+        return t > 600_000 ? 600_000 : t;
+    }
+
+    private const int TransportGraceMs = 5000;
+
+    public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct, int? timeoutMs = null)
     {
         // LogStart before target resolution so NO_TARGET calls still leave a journal entry (spec F1-R1).
         var requestId = Guid.NewGuid().ToString("N");
@@ -94,18 +108,19 @@ public sealed class PluginClient
                 "No live Inventor target. Start Inventor with the bimwright add-in loaded.");
             targetId = target.TargetId;
 
+            var effectiveTimeoutMs = ResolveEffectiveTimeout(_config.TimeoutMs, timeoutMs);
             var env = new InventorCommandEnvelope
             {
                 Id = new Guid(requestId),
                 Command = command,
                 Params = @params,
-                TimeoutMs = _config.TimeoutMs,
+                TimeoutMs = effectiveTimeoutMs,
                 AuthToken = target.AuthToken,
                 ReadOnly = _config.ReadOnly
             };
 
             var line = JsonConvert.SerializeObject(env) + "\n";
-            var response = await SendLineAsync(target, line, ct);
+            var response = await SendLineAsync(target, line, ct, effectiveTimeoutMs);
             responseBytes = Encoding.UTF8.GetByteCount(response);
 
             var result = JsonConvert.DeserializeObject<InventorCommandResult>(response)
@@ -139,10 +154,14 @@ public sealed class PluginClient
         }
     }
 
-    private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct)
+    private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct, int timeoutMs)
     {
         Stream stream;
         IDisposable owner;
+
+        // Connect is transport setup, not the STA budget — keep a floor so a pathological
+        // timeout_ms (clamped to 1) cannot starve the loopback handshake.
+        var connectBudgetMs = Math.Max(timeoutMs, TransportGraceMs);
 
         if (string.Equals(target.Transport, "pipe", StringComparison.OrdinalIgnoreCase))
         {
@@ -151,7 +170,7 @@ public sealed class PluginClient
             try
             {
                 var connect = pipe.ConnectAsync(ct);
-                if (await Task.WhenAny(connect, Task.Delay(_config.TimeoutMs, ct)) != connect)
+                if (await Task.WhenAny(connect, Task.Delay(connectBudgetMs, ct)) != connect)
                     throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"connect to target {target.TargetId} timed out");
                 await connect;
             }
@@ -170,7 +189,7 @@ public sealed class PluginClient
             try
             {
                 var connect = client.ConnectAsync("127.0.0.1", target.Port);
-                if (await Task.WhenAny(connect, Task.Delay(_config.TimeoutMs, ct)) != connect)
+                if (await Task.WhenAny(connect, Task.Delay(connectBudgetMs, ct)) != connect)
                     throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"connect to target {target.TargetId} timed out");
                 await connect;
             }
@@ -189,9 +208,12 @@ public sealed class PluginClient
             await stream.WriteAsync(Encoding.UTF8.GetBytes(line), ct);
 
             using var reader = new StreamReader(stream, Encoding.UTF8);
+            // Grace: the add-in declares TIMEOUT at timeoutMs; wait a little longer so its
+            // error response (which carries the useful send_code guidance) reaches us first.
             var readTask = NdjsonLineReader.ReadLineBoundedAsync(reader, _config.MaxResponseBytes);
-            if (await Task.WhenAny(readTask, Task.Delay(_config.TimeoutMs, ct)) != readTask)
-                throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"request {target.TargetId} timed out after {_config.TimeoutMs} ms");
+            if (await Task.WhenAny(readTask, Task.Delay(timeoutMs + TransportGraceMs, ct)) != readTask)
+                throw new InventorGatewayException(InventorErrorCodes.TIMEOUT,
+                    $"add-in did not respond within {timeoutMs + TransportGraceMs} ms (command budget {timeoutMs} ms)");
             var read = await readTask;
             if (read.Overflow)
                 throw new InventorGatewayException(InventorErrorCodes.RESPONSE_TOO_LARGE, $"add-in response exceeded {_config.MaxResponseBytes} bytes");

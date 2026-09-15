@@ -53,7 +53,11 @@ authenticated localhost transport — **TCP on `127.0.0.1` for Inventor 2022–2
 - Run with `--read-only` or `--disable-toolbaker` for host profiles that must not expose
   dynamic-code execution.
 - Both `send_code` and baked-tool source pass the `BakeCompilerPolicy` banned-API gate
-  (no file/process/network/environment/reflection APIs) before compilation.
+  (no file/process/network/environment APIs, no invoke/load-style reflection) before
+  compilation. The gate is a best-effort token scan, not a sandbox: file writes performed
+  *through the Inventor API itself* (`SaveAs`, `SaveCopyAs`, translator add-ins) are
+  **not** constrained by `ExportPathPolicy` (which only governs the typed export tools).
+  The two-sided opt-in above is the trust boundary — treat `send_code` as full local trust.
 - Baked-tool execution is restricted by `BakedToolDispatchAuthorizer` to read-only query commands
   and may never re-enter the platform layer.
 - See [`docs/toolbaker.md`](docs/toolbaker.md) for the full model.

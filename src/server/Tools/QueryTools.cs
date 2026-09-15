@@ -18,7 +18,7 @@ public sealed class QueryTools
     public QueryTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_health"),
-     Description("Probe the active Inventor add-in target: reports inventor_year, process_id, whether a document is open, and the active document type. Read-only; use it to confirm the add-in is reachable.")]
+     Description("Probe the active Inventor add-in target: reports inventor_year, process_id, whether a document is open, the active document type, and sta_busy/pending_commands (the STA work queue — check it before retrying a timed-out send_code). Read-only; answers even while the STA thread is jammed.")]
     public Task<string> Health(CancellationToken ct = default)
         => Call("health", new JObject(), ct);
 

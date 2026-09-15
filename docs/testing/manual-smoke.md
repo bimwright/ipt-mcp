@@ -186,3 +186,33 @@ integration end to end.
     ```text
     {"timestamp":"2026-09-15T16:03:54.1462388Z","session_id":"server-20260915T160354Z-27180","request_id":"b7596b5cdb5c456bb9fe74b41339dbc4","tool":"get_document_info","phase":"finish","success":false,"duration_ms":0,"error":"No live Inventor target. Start Inventor with the bimwright add-in loaded.","error_code":"NO_TARGET","target_id":null,"response_bytes":null,"plugin_duration_ms":null,"data_ok":null,"data_error":null,"stdout_bytes":null}
     ```
+
+19. **send_code contract** (improvement spec F2; needs the REBUILT add-in deployed and the
+    F2 server build — run via `scripts\mcp-smoke.ps1` like step 18):
+    - `inventor_send_code` `return new { a = 1 };` → `ok:true`, `result:{a:1}` (F2-a return value).
+    - `inventor_send_code` `return app;` → `ok:false`, error `"return a DTO (anonymous object /
+      primitives / arrays), not an Inventor API object"` (F2-a API-object rejection).
+    - `inventor_send_code` `var x = ;` → `ok:false`, `compile error` (script-level error still in data).
+    - Denylist regression (F2-c): `"Drain_1p5NPT_VisibleSocket"` in a string literal and
+      `ex.GetType().Name` inside a catch block both run (`ok:true`); `System.IO.File.Exists` is still
+      rejected with `INVALID_ARGUMENT: send_code source uses forbidden token: System.IO`.
+    - `inventor_send_code` `Thread.Sleep(40000)` with `timeout_ms=5000` → `TIMEOUT` after ~5 s with the
+      new message warning the script may still be running; the script keeps occupying the STA thread.
+    - `inventor_health` while the script is still running → `sta_busy:true`, `pending_commands:1`,
+      `answered_without_sta:true` (fast-path, F2-b). After the queue drains → `sta_busy:false`,
+      `pending_commands:0`.
+    - A `send_code` submitted while the STA is still busy queues behind it: `duration_ms` includes the
+      wait while `plugin_duration_ms` reflects only the actual script run.
+
+    **Recorded 2026-09-16** — branch `feat/send-code-contract`, Inventor 2027
+    (`inventor-2027-34876`, pipe): all expectations met. Queued `Thread.Sleep(5000)` returned
+    `duration_ms` 38488 / `plugin_duration_ms` 5346 — the queue wait is visible in the journal.
+    ```text
+    {"tool":"send_code","phase":"finish","success":false,"duration_ms":5004,"error":"TIMEOUT: send_code exceeded 5000 ms. The script MAY STILL BE RUNNING on Inventor's STA thread and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; do not resend the same script.","error_code":"TIMEOUT","target_id":"inventor-2027-34876",...}
+    {"tool":"health","phase":"finish","success":true,"duration_ms":2014,...,"target_id":"inventor-2027-34876"}   # sta_busy:true, answered_without_sta:true
+    {"tool":"send_code","phase":"finish","success":true,"duration_ms":38488,"plugin_duration_ms":5346,...}     # queued behind the 40 s script
+    {"tool":"health","phase":"finish","success":true,"duration_ms":27,...}                                    # sta_busy:false, pending_commands:0
+    ```
+    Journal note: `plugin_duration_ms:0` on TIMEOUT/denylist/health lines means "not measured"
+    (response generated before/without a STA dispatch), not a real 0 ms — `target_id` is now filled on
+    these `Err()` lines (F1 hand-off item, verified).

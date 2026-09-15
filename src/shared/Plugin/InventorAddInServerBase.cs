@@ -29,6 +29,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private InventorStaDispatcher? _sta;
     private TargetDescriptorWriter? _descriptorWriter;
     private TargetDescriptor? _descriptor;
+    private const int HealthFastPathMs = 2000;
     private int _year;
     private string _descriptorDir = "";
 
@@ -68,12 +69,17 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         TargetDescriptor descriptor,
         TaskCompletionSource<string> tcs)
     {
+        // Meta filled even on early-error paths (UNAUTHORIZED/TIMEOUT/API_ERROR) so the server
+        // journal can attribute the call to this target (F1 hand-off note, spec F2).
+        var meta = new InventorResponseMeta { TargetId = descriptor.TargetId, InventorYear = o.Year };
+        var envId = Guid.Empty;
         try
         {
             var env = JsonConvert.DeserializeObject<InventorCommandEnvelope>(line)!;
+            envId = env.Id;
             if (!AuthToken.Verify(descriptor.AuthToken, env.AuthToken))
             {
-                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token."));
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token.", meta));
                 return;
             }
 
@@ -85,20 +91,63 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 TargetId = descriptor.TargetId,
                 Application = _app,
                 Commands = dispatcher.Commands,
+                StaQueue = _sta!.Stats,
             };
 
-            // Marshal the actual API work onto the STA thread.
-            var task = _sta!.InvokeAsync(() => dispatcher.Dispatch(ctx, env), env.TimeoutMs);
-            if (task.Wait(env.TimeoutMs))
+            // Marshal the actual API work onto the STA thread. task.Wait is the single owner of
+            // the timeout (spec F2-b): nothing else can interrupt work running on the STA thread.
+            var task = _sta!.InvokeAsync(() => dispatcher.Dispatch(ctx, env));
+
+            // A liveness probe must still answer when the STA thread is jammed, so `health`
+            // gets a short fast-path wait and then a synthesized busy response built purely
+            // from the queue counters (the dispatched item stays queued and completes unseen).
+            var waitMs = env.Command == "health" ? Math.Min(env.TimeoutMs, HealthFastPathMs) : env.TimeoutMs;
+            if (task.Wait(waitMs))
+            {
                 tcs.TrySetResult(JsonConvert.SerializeObject(task.Result));
+            }
+            else if (env.Command == "health")
+            {
+                tcs.TrySetResult(JsonConvert.SerializeObject(
+                    InventorCommandResult.Success(env.Id, BusyHealthData(o), meta)));
+            }
+            else if (env.Command == "send_code")
+            {
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
+                    $"send_code exceeded {env.TimeoutMs} ms. The script MAY STILL BE RUNNING on Inventor's STA thread " +
+                    "and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; " +
+                    "do not resend the same script.", meta));
+            }
             else
-                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT, "STA dispatch timed out"));
+            {
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT, "STA dispatch timed out", meta));
+            }
         }
         catch (Exception ex)
         {
-            tcs.TrySetResult(Err(Guid.Empty, InventorErrorCodes.API_ERROR, ex.Message));
+            // task.Wait surfaces STA-side failures as AggregateException — unwrap for a useful message.
+            var inner = ex is AggregateException agg ? agg.GetBaseException() : ex;
+            tcs.TrySetResult(Err(envId, InventorErrorCodes.API_ERROR, inner.Message, meta));
         }
     }
+
+    /// <summary>
+    /// Health payload for the fast path: the STA thread did not answer in time, so report the
+    /// queue counters without touching <c>Inventor.Application</c> (spec F2-b).
+    /// </summary>
+    private Newtonsoft.Json.Linq.JObject BusyHealthData(PluginOptions o)
+        => new()
+        {
+            ["inventor_year"] = o.Year,
+            ["process_id"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+            ["has_active_document"] = null,
+            ["document_type"] = null,
+            ["sta_busy"] = true,
+            // The queued health item itself still holds a slot — subtract it (same convention
+            // as HealthHandler) so this reports *other* work backed up on the STA thread.
+            ["pending_commands"] = Math.Max(0, (_sta?.Stats.PendingCommands ?? 0) - 1),
+            ["answered_without_sta"] = true,
+        };
 
     /// <summary>Reads the active document's display name and full path (best effort) off the STA thread.</summary>
     private void ReadActiveDocument(out string? title, out string? path)
@@ -137,8 +186,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
     public void ExecuteCommand(int commandID) { }   // legacy no-op
 
-    private static string Err(Guid id, string code, string message)
-        => JsonConvert.SerializeObject(InventorCommandResult.Fail(id, code, message, new InventorResponseMeta()));
+    private static string Err(Guid id, string code, string message, InventorResponseMeta meta)
+        => JsonConvert.SerializeObject(InventorCommandResult.Fail(id, code, message, meta));
 
     private static bool EnvFlag(string name)
     {

@@ -224,7 +224,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 | Tool | Description |
 |---|---|
-| `inventor_send_code` | **Dangerous, opt-in only.** Execute a C# snippet in-process against `Inventor.Application`. Disabled unless both server and add-in opt in (else `SEND_CODE_DISABLED`); banned APIs (file/process/network/environment) are rejected. |
+| `inventor_send_code` | **Dangerous, opt-in only.** Execute a C# snippet in-process against `Inventor.Application`. Disabled unless both server and add-in opt in (else `SEND_CODE_DISABLED`); banned APIs are rejected. Returns the script's `result` + captured `stdout`; `timeout_ms` overrides the per-call timeout. |
 
 ### toolbaker (3, read-only) — operate purely on the server-side bake database
 
@@ -249,7 +249,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 Short version: your model stays on your machine, and write/dangerous tools are gated.
 
 - **Read-only mode.** `--read-only` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`) removes every write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`) but keeps `meta` + `query` + `assembly_query` + read-only `toolbaker`, and **keeps `inventor_switch_target` exposed**. The server sends read-only mode in each command envelope; the add-in also honors `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. A write command under enforced read-only returns `READ_ONLY`.
-- **send_code two-sided opt-in.** `inventor_send_code` is **disabled by default**. It is exposed only when **both** gates are set: the server with `--enable-send-code` (or `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **and** the add-in process with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Otherwise the dispatcher returns `SEND_CODE_DISABLED`. Banned APIs (file/process/network/environment) are rejected.
+- **send_code two-sided opt-in.** `inventor_send_code` is **disabled by default**. It is exposed only when **both** gates are set: the server with `--enable-send-code` (or `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **and** the add-in process with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Otherwise the dispatcher returns `SEND_CODE_DISABLED`. Banned APIs (file/process/network/environment/dynamic-invocation) are rejected by a best-effort source scan — note that file writes made *through the Inventor API* (`SaveAs`, `SaveCopyAs`, translators) are **not** constrained by the export-root policy below; the two-sided opt-in is the trust boundary.
 - **Local, authenticated transport.** TCP binds loopback; Named Pipe is local-machine scoped. Each per-session descriptor carries a random auth token, but MCP meta tools never return it.
 - **Sanitized errors.** Error messages returned to the model are sanitized to avoid leaking absolute paths/secrets.
 - **ToolBaker controls.** ToolBaker is enabled by default. It can be completely disabled by passing the --disable-toolbaker CLI flag or setting BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0.
