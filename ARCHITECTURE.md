@@ -28,7 +28,7 @@ Inventor has **no `ExternalEvent`** — the mechanism `rvt-mcp` relies on to hop
 
 - During the add-in's `Activate` (which runs on Inventor's STA thread), the dispatcher creates a **hidden, message-only WinForms `Control`** and forces its window handle to be created so `BeginInvoke` works.
 - The TCP / Named-Pipe **listener runs on a background thread** and never touches the Inventor API directly.
-- Each request is dispatched via `InventorStaDispatcher.InvokeAsync(work, timeoutMs)`, which posts the work through `Control.BeginInvoke` so it executes on the STA (UI) thread, and awaits the result with a timeout.
+- Each request is dispatched via `InventorStaDispatcher.InvokeAsync(work)`, which posts the work through `Control.BeginInvoke` so it executes on the STA (UI) thread; `HandleLine` awaits the result with the `env.TimeoutMs` budget and owns the TIMEOUT decision.
 - `CommandDispatcher.Dispatch` runs **inside** `InvokeAsync`, so every `Inventor.Application` access is STA-bound by construction. The listener thread only ever reaches the marshalled state via `BeginInvoke`.
 - On shutdown (`Deactivate`): dispose the transport, dispose the dispatcher, null out the cached `Application`, and `GC.Collect()` to release the COM references.
 

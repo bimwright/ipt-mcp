@@ -59,6 +59,14 @@ Inventor roadmap — not a replacement for it. Everything below is deferred.
 - Inventor Apprentice Server read workflows.
 - Autodesk Platform Services (APS) Design Automation for Inventor.
 
+## Field Evidence
+
+- [Gap analysis — WS2 BIM-authoring run (2026-09-15)](gap-analysis-2026-09-15-ws2-bim-run.md):
+  first fully-agent-built Inventor model via this MCP. 91/147 calls were `send_code`; documents
+  which missing typed tools hurt most (`export_sat`, sweep/loft, BRep face/edge probe, derive
+  envelope) and three `send_code` ergonomics issues (timeout semantics, no return value,
+  over-broad denylist tokens) with call-log evidence.
+
 ## Explicit Non-Goals (not on the roadmap unless re-scoped)
 
 These are excluded by design, not merely deferred:

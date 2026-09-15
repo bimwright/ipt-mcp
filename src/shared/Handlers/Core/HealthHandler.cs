@@ -26,12 +26,18 @@ public sealed class HealthHandler : IInventorCommand
         try { doc = app.ActiveDocument; }
         catch { doc = null; }
 
+        // This health call itself occupies one queue slot while it executes — subtract it so
+        // `pending_commands`/`sta_busy` describe *other* work on the STA thread (spec F2-b).
+        var pendingOthers = Math.Max(0, (ctx.StaQueue?.PendingCommands ?? 0) - 1);
+
         var data = new JObject
         {
             ["inventor_year"] = ctx.InventorYear,
             ["process_id"] = System.Diagnostics.Process.GetCurrentProcess().Id,
             ["has_active_document"] = doc != null,
             ["document_type"] = doc != null ? doc.DocumentType.ToString() : null,
+            ["sta_busy"] = pendingOthers > 0,
+            ["pending_commands"] = pendingOthers,
         };
         return InventorCommandResult.Success(Guid.Empty, data, meta);
     }

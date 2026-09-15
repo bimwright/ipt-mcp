@@ -104,8 +104,9 @@ Inventor must be CLOSED before deploying add-in DLLs it would otherwise lock. Th
 ### Threading / STA marshalling (the novel piece)
 Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every command onto Inventor's main STA thread via `InventorStaDispatcher`: a hidden message-only WinForms `Control` created during `Activate` (on the STA thread), whose handle is forced so `BeginInvoke` works.
 - TCP / Named-Pipe listener runs on a background thread.
-- Each request → `InventorStaDispatcher.InvokeAsync(work, timeoutMs)` → `Control.BeginInvoke` → runs on the UI thread.
+- Each request → `InventorStaDispatcher.InvokeAsync(work)` → `Control.BeginInvoke` → runs on the UI thread; `HandleLine` applies the `env.TimeoutMs` wait and is the single owner of TIMEOUT.
 - `CommandDispatcher.Dispatch` runs **inside** `InvokeAsync`, so all `Inventor.Application` access is STA-bound.
+- `InventorStaDispatcher.Stats` counts queued/executing work; `health` reports `sta_busy`/`pending_commands` and still answers (queue counters only) when the STA thread is jammed.
 - The listener thread NEVER touches `_marshal` except via `BeginInvoke`.
 - Shutdown (`Deactivate`): dispose transport, dispose dispatcher, null out `_app`, `GC.Collect()`.
 
@@ -124,7 +125,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - `ServerInstructions.Text` is keyword-dense (part/sketch/extrude/parameter/iproperty/export) so MCP Tool Search can discover the surface.
 
 ### Read-only & opt-in gates
-- `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in).
+- `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in). Its banned-API source scan is best-effort and file writes made through the Inventor API (`SaveAs`/`SaveCopyAs`/translators) bypass `ExportPathPolicy` by design (spec F2-d) — the two-sided opt-in is the trust boundary.
 - `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write`) but keeps `meta` + `query` + `assembly_query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 
