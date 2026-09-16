@@ -378,4 +378,17 @@ integration end to end.
         profile at all).
 
     **Recorded 2026-09-16** — branch `feat/f4-typed-tools`.
+  28. `inventor_probe_brep` (F4-P1) — Inventor 2027 (`inventor-2027-80000`, pipe).
+      Plate 60x40x8 with a through hole d=10 at (30,20):
+      - Full survey → exactly 2 ports: top mouth (face 6, normal [0,0,1],
+        center z=8) and bottom mouth (face 7, normal [0,0,-1], center z=0) —
+        the IsParamReversed correction is visible in the flipped bottom normal.
+        Both report port_diameter_mm=10, inner_loop circle r=5 at (30,20).
+        planar_faces_scanned=6, bodies_scanned=1.
+      - min/max_diameter_mm [9,11] → 2 ports; min_diameter_mm=50 → 0 ports.
+      - body:"plate_body" scopes the scan; body:"body:9" → INVALID_ARGUMENT
+        "body index 9 out of range (1..1)".
+      - min>max → INVALID_ARGUMENT "min_diameter_mm must be <= max_diameter_mm".
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`.
 

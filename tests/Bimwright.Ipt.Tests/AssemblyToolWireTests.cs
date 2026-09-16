@@ -80,6 +80,8 @@ public sealed class AssemblyToolWireTests : IDisposable
         AssertEnvelope(await CaptureAsync(() => tools.ListBodies(50)), "list_bodies", "max_items");
         AssertEnvelope(await CaptureAsync(() => tools.ListFeatures(10, include_health: false)),
             "list_features", "max_items", "include_health");
+        AssertEnvelope(await CaptureAsync(() => tools.ProbeBrep("body:2", min_diameter_mm: 5, max_diameter_mm: 40, max_items: 50)),
+            "probe_brep", "body", "min_diameter_mm", "max_diameter_mm", "max_items");
     }
 
     [Fact]

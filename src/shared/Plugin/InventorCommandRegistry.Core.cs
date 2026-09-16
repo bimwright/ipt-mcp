@@ -22,6 +22,7 @@ public static partial class InventorCommandRegistry
         add(new GetDocumentInfoHandler());
         add(new ListBodiesHandler());
         add(new ListFeaturesHandler());
+        add(new ProbeBrepHandler());
     }
 }
 #endif

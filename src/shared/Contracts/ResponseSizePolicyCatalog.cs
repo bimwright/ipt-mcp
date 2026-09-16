@@ -26,6 +26,7 @@ public static class ResponseSizePolicyCatalog
             ["run_baked_tool"] = "Narrow the baked tool's params; oversized results auto-spill to a local file.",
             ["batch_execute"] = "Split the batch or narrow the sub-commands; oversized results auto-spill to a local file.",
             ["fillet"] = "Narrow the edge selector (radius_mm, center_mm, on_body, adjacent_surface_types) or pass explicit edge ids.",
+            ["probe_brep"] = "Retry with a smaller max_items, a body=<name> scope, or min_diameter_mm.",
         };
 
     public static string GetNarrowingHint(string? commandName)

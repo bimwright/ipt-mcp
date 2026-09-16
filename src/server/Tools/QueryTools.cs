@@ -41,6 +41,17 @@ public sealed class QueryTools
     public Task<string> ListFeatures(int max_items = 200, bool include_health = true, CancellationToken ct = default)
         => Call("list_features", new JObject { ["max_items"] = max_items, ["include_health"] = include_health }, ct);
 
+    [McpServerTool(Name = "inventor_probe_brep"),
+     Description("Survey the active part's B-rep for port mouths: planar faces carrying an inner-loop circular edge (hole/pipe openings). Reports per face: body, face_index, normal (unit vector corrected for IsParamReversed), center_mm, port_diameter_mm (2 × smallest inner-loop radius), and every full-circle edge on the face (radius_mm, center_mm, inner_loop) so concentric flange rims are visible — a face with several openings is one port; check circles[] for the rest. Full circles only (arcs/slots excluded); a cylindrical boss on a face looks identical and is also reported. body scopes to one body ('1'/'body:N'/name); min/max_diameter_mm filter; max_items caps (default 200), truncated reports overflow. Read-only.")]
+    public Task<string> ProbeBrep(string? body = null, double? min_diameter_mm = null, double? max_diameter_mm = null, int max_items = 200, CancellationToken ct = default)
+    {
+        var p = new JObject { ["max_items"] = max_items };
+        if (!string.IsNullOrWhiteSpace(body)) p["body"] = body;
+        if (min_diameter_mm is { } mn) p["min_diameter_mm"] = mn;
+        if (max_diameter_mm is { } mx) p["max_diameter_mm"] = mx;
+        return Call("probe_brep", p, ct);
+    }
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try

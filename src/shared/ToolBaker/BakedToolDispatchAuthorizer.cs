@@ -28,7 +28,8 @@ public static class BakedToolDispatchAuthorizer
         "get_assembly_bom",
         "list_constraints",
         "list_bodies",
-        "list_features"
+        "list_features",
+        "probe_brep"
     };
 
     // Platform / mutating commands a baked tool must never reach (recursion + escalation guard).

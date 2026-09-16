@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-64%20or%2065%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-65%20or%2066%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **64** MCP ツール、`send_code` 有効時 **65**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **65** MCP ツール、`send_code` 有効時 **66**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **64 ツール**です（inventor_send_code が有効な場合は **65 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **65 ツール**です（inventor_send_code が有効な場合は **66 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -105,7 +105,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_get_current_target` | サーバーが現在選択しているターゲットを報告。稼働中でない場合は `NO_TARGET`。 |
 | `inventor_switch_target` | ディスクリプタ ID、Inventor のバージョン年、プロセス ID、またはパイプ/セッション名でアクティブターゲットを選択。サーバーサイドのみ。 |
 
-### query (5) — 読み取り専用のドキュメント/ヘルス/モデルプローブ
+### query (6) — 読み取り専用のドキュメント/ヘルス/モデルプローブ
 
 | ツール | 説明 |
 |---|---|
@@ -114,6 +114,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_get_document_info` | アクティブドキュメントのタイトル、完全パス、ドキュメントの種類を取得。 |
 | `inventor_list_bodies` | パートのソリッドボディを一覧: id（`body:N`）、名前、volume_mm3、bbox_mm、face_count、生成フィーチャ（created_by）、visible。 |
 | `inventor_list_features` | パートのフィーチャをツリー順に一覧: 名前、種類、health、suppressed、body_names。 |
+| `inventor_probe_brep` | パートの B-rep をポート口で調査: 内側ループ円エッジを持つ平面 — normal（IsParamReversed 補正済み）、center_mm、port_diameter_mm、面上の全円。 |
 
 ### document (7) — ドキュメントライフサイクル（書き込み）
 

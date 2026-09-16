@@ -146,6 +146,14 @@ privilege escalation and recursion.
 - `get_parameter`
 - `get_iproperty`
 - `get_mass_properties`
+- `list_interfaces`
+- `check_interference`
+- `measure_min_distance`
+- `get_assembly_bom`
+- `list_constraints`
+- `list_bodies`
+- `list_features`
+- `probe_brep`
 
 **Denied** — the platform / mutating commands a baked tool must never reach:
 

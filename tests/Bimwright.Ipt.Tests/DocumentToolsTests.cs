@@ -20,6 +20,7 @@ public sealed class DocumentToolsTests
         "inventor_get_document_info",
         "inventor_list_bodies",
         "inventor_list_features",
+        "inventor_probe_brep",
     };
 
     private static readonly string[] ExpectedDocumentWriteTools =
