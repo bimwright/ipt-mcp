@@ -106,6 +106,10 @@ public sealed class AssemblyToolWireTests : IDisposable
         AssertEnvelope(await CaptureAsync(() => features.RectangularPattern(
             ["Hole1"], "X Axis", 3, 20, "Y Axis", 2, 10)),
             "rectangular_pattern", "feature_names", "dir1", "count1", "spacing_mm1", "dir2", "count2", "spacing_mm2");
+        AssertEnvelope(await CaptureAsync(() => features.Loft(["S1", "S2:1"], "new_body", closed: true, name: "hull")),
+            "loft", "profiles", "operation", "merge_tangent_faces", "closed", "name");
+        AssertEnvelope(await CaptureAsync(() => features.Sweep("Prof", "Path1", orientation: "parallel")),
+            "sweep", "profile", "path", "operation", "orientation");
         AssertEnvelope(await CaptureAsync(() => exports.ViewFit()), "view_fit");
         AssertEnvelope(await CaptureAsync(() => exports.SetViewOrientation("iso_top_right", false)),
             "set_view_orientation", "orientation", "fit");

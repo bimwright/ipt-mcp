@@ -106,6 +106,39 @@ public sealed class FeatureTools
         }, ct, timeoutMs: 120_000);   // 20 steps share one budget — raise over the 30 s default
     }
 
+    [McpServerTool(Name = "inventor_loft"),
+     Description("Loft an ordered list of sketch profiles into a feature. profiles: sketch names in loft order ('SketchName' or 'SketchName:N' for the Nth profile of a multi-profile sketch), at least 2. operation=join|cut|intersect|new_body (with new_body the body is named '<name>_body'). centerline: optional sketch name whose first curve drives a centerline loft. merge_tangent_faces (default true), closed (default false, periodic loft). name renames the feature. Returns feature name, section count and feature-body volume mm^3.")]
+    public Task<string> Loft(string[] profiles, string operation = "join", string? centerline = null,
+        bool merge_tangent_faces = true, bool closed = false, string? name = null, CancellationToken ct = default)
+    {
+        var p = new JObject
+        {
+            ["profiles"] = new JArray(profiles),
+            ["operation"] = operation,
+            ["merge_tangent_faces"] = merge_tangent_faces,
+            ["closed"] = closed,
+        };
+        if (!string.IsNullOrWhiteSpace(centerline)) p["centerline"] = centerline;
+        if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
+        return Call("loft", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_sweep"),
+     Description("Sweep a sketch profile along a sketch path. profile: section sketch ('SketchName' or 'SketchName:N'). path: path sketch name — its first curve is used and connected segments chain automatically (path_entity_count in the response shows the resolved segment count). operation=join|cut|intersect|new_body (with new_body the body is named '<name>_body'). orientation=normal_to_path|parallel. name renames the feature. Returns feature name, path entity count and feature-body volume mm^3.")]
+    public Task<string> Sweep(string profile, string path, string operation = "join",
+        string orientation = "normal_to_path", string? name = null, CancellationToken ct = default)
+    {
+        var p = new JObject
+        {
+            ["profile"] = profile,
+            ["path"] = path,
+            ["operation"] = operation,
+            ["orientation"] = orientation,
+        };
+        if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
+        return Call("sweep", p, ct);
+    }
+
     [McpServerTool(Name = "inventor_revolve"),
      Description("Revolve the profile of a named sketch about an axis (axis_id = a sketch line entity id or an origin axis XAxis|YAxis|ZAxis). angle in degrees; operation=join|cut|intersect. Returns the new feature name.")]
     public Task<string> Revolve(string sketchName, string axisId, double angle, string operation = "join", CancellationToken ct = default)

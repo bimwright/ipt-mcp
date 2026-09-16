@@ -660,6 +660,23 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   **66 default / 67 send_code** — docs×4 + profile + root CLAUDE.md + frozen tests sync.
   Live smoke `inventor-2027-39104` (sau redeploy): default 9→9, include 2→2, bbox
   single_no_seams→1 body, unknown name→INVALID_ARGUMENT kèm danh sách tên.
+- P2-2/3 `inventor_loft` + `inventor_sweep` (feature toolset, write): `LoftHandler` /
+  `SweepHandler` — `profiles[]` sketch names (`"SketchName[:N]"` cho multi-profile sketch,
+  ≥2 sections) + optional `centerline` (set `Centerline` — `LoftType` read-only) +
+  `closed`/`merge_tangent_faces`; sweep `profile` + `path` sketch (first non-construction
+  curve → `CreatePath`, connected segments tự chain → `path_entity_count`). Shared helpers
+  trong `FeatureSupport`: `ProfileOf` (spec `name:N`), `FirstSketchCurve`,
+  `FeatureBodyVolumeMm3`, `NameNewBody`. Deferred: loft rails/section-conditions/area-graph,
+  sweep guide-rail/surface/twist, `affected_bodies`. Mini-spec:
+  `docs/superpowers/specs/2026-09-16-loft-sweep-mini-spec.md`. Surface
+  **68 default / 69 send_code**. Live smoke `inventor-2027-72672` (send_code bisect trên
+  `inventor-2027-72996` xác nhận API trước): loft 2-circle frustum volume khớp tuyệt đối
+  (29321.5 & 3518.58 mm³); sweep path 3-segment (line+arc+line) → `path_entity_count=3`,
+  volume 1446.35 = 25 mm² × 57.85 mm; loft <2 profiles / sketch rỗng / unknown sketch →
+  INVALID_ARGUMENT; `closed` trên 2 sections → API_ERROR kèm hint (E_FAIL của Add wrap
+  guidance: profile-plane coplanar / self-intersection — lỗi geometry thật phát hiện khi
+  bisect, không phải lỗi API). `LoftDefinition.LoftType` read-only — centerline set qua
+  `Centerline` property. `inventor_sweep` smoke trên `inventor-2027-72672` sau redeploy.
 
 ### F5. Run kiểm chứng có kiểm soát
 
