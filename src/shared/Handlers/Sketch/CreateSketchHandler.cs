@@ -66,8 +66,9 @@ public sealed class CreateSketchHandler : HandlerBase, IInventorCommand
             case "YZ": return def.WorkPlanes["YZ Plane"];
         }
 
-        // face reference: "face:F" / "body:B/face:F"
-        if (plane.IndexOf("face", StringComparison.OrdinalIgnoreCase) >= 0)
+        // face reference: "face:F" / "body:B/face:F" — strict prefix match so work-plane
+        // names that merely contain "face" (e.g. "wp_faceplate") resolve by name instead.
+        if (EntityResolver.IsEntityRef(plane, "face"))
         {
             var bodyIdx = EntityResolver.ParseBodyIndex(plane);
             var bodies = def.SurfaceBodies;

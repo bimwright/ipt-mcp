@@ -40,6 +40,21 @@ internal static class EntityResolver
         return idx;
     }
 
+    /// <summary>
+    /// True when <paramref name="id"/> is a typed entity reference — <c>prefix:N</c> or
+    /// <c>body:B/prefix:N</c> — rather than a bare index or a user-chosen name that merely
+    /// contains the prefix as a substring (e.g. a work plane named "wp_faceplate" must not
+    /// be routed to the face-reference branch).
+    /// </summary>
+    public static bool IsEntityRef(string id, string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        var s = id.Trim();
+        var slash = s.LastIndexOf('/');
+        if (slash >= 0) s = s.Substring(slash + 1);
+        return s.StartsWith(prefix + ":", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Optional leading <c>body:N/</c> segment of an edge id (defaults to body 1).</summary>
     public static int ParseBodyIndex(string id)
     {

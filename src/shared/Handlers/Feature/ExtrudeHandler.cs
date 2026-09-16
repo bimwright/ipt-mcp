@@ -89,7 +89,7 @@ public sealed class ExtrudeHandler : HandlerBase, IInventorCommand
             {
                 ["feature_name"] = feature.Name,
                 ["operation"] = (operationStr ?? "join").Trim().ToLowerInvariant(),
-                ["volume_mm3"] = BodyVolumeMm3(def),
+                ["volume_mm3"] = FeatureVolumeMm3(def, feature),
             };
             if (bodyName is not null)
                 data["body_name"] = bodyName;
@@ -108,6 +108,23 @@ public sealed class ExtrudeHandler : HandlerBase, IInventorCommand
         }
         catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
         catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message); }
+    }
+
+    /// <summary>
+    /// Volume of the body the feature produced or last affected (feature.SurfaceBodies' last
+    /// entry), falling back to total part volume when the feature reports no bodies (e.g. a
+    /// cut that consumed nothing reportable).
+    /// </summary>
+    private static double FeatureVolumeMm3(PartComponentDefinition def, ExtrudeFeature feature)
+    {
+        try
+        {
+            var bodies = feature.SurfaceBodies;
+            if (bodies.Count > 0)
+                return UnitConvert.Cm3ToMm3(bodies[bodies.Count].get_Volume(0.01));
+        }
+        catch { }
+        return BodyVolumeMm3(def);
     }
 
     private static double BodyVolumeMm3(PartComponentDefinition def)

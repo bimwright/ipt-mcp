@@ -64,7 +64,7 @@ internal static class FeatureSupport
             case "XZ": return def.WorkPlanes["XZ Plane"];
             case "YZ": return def.WorkPlanes["YZ Plane"];
         }
-        if (r.IndexOf("face", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (Bimwright.Ipt.Shared.Handlers.EntityResolver.IsEntityRef(r, "face"))
             return ResolveFaceRef(def, r);
         var planes = def.WorkPlanes;
         if (int.TryParse(r, out var idx))
@@ -95,7 +95,7 @@ internal static class FeatureSupport
     public static object ResolvePointRef(PartComponentDefinition def, string r)
     {
         var s = r.Trim();
-        if (s.IndexOf("vertex", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (Bimwright.Ipt.Shared.Handlers.EntityResolver.IsEntityRef(s, "vertex"))
         {
             var bodies = def.SurfaceBodies;
             if (bodies.Count < 1) throw new ArgumentException("the part has no solid bodies");

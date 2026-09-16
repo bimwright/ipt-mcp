@@ -59,7 +59,15 @@ internal static class ExportSupport
         configure?.Invoke(options);
         var medium = to.CreateDataMedium();
         medium.FileName = outputPath;
+        // The translators return silently even when they never wrote the file (observed with a
+        // missing parent directory), so create the parent and verify the artifact exists —
+        // callers must never see exported:true for a file that does not exist.
+        var dir = System.IO.Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
         translator.SaveCopyAs(source, context, options, medium);
+        if (!System.IO.File.Exists(outputPath))
+            throw new InvalidOperationException(
+                $"translator completed but produced no file at '{outputPath}' (silent export failure)");
     }
 }
 #endif
