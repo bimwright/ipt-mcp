@@ -18,6 +18,8 @@ public sealed class DocumentToolsTests
         "inventor_health",
         "inventor_list_open_documents",
         "inventor_get_document_info",
+        "inventor_list_bodies",
+        "inventor_list_features",
     };
 
     private static readonly string[] ExpectedDocumentWriteTools =

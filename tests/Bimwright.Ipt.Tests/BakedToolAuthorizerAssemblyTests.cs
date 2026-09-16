@@ -11,6 +11,8 @@ public sealed class BakedToolAuthorizerAssemblyTests
     [InlineData("measure_min_distance")]
     [InlineData("get_assembly_bom")]
     [InlineData("list_constraints")]
+    [InlineData("list_bodies")]
+    [InlineData("list_features")]
     public void New_readonly_assembly_commands_are_bakeable(string cmd)
         => Assert.True(BakedToolDispatchAuthorizer.IsAllowed(cmd));
 

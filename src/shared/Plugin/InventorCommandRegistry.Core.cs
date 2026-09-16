@@ -5,10 +5,12 @@ using System;
 using System.Collections.Generic;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Handlers.Core;
+using Bimwright.Ipt.Shared.Handlers.Query;
 
 /// <summary>
-/// Phase-2 Core registrar: registers the always-present read-only probes <c>health</c> and
-/// <c>get_document_info</c>. Implemented only when an Inventor compile symbol is set (the handlers
+/// Phase-2 Core registrar: registers the always-present read-only probes (<c>health</c>,
+/// <c>get_document_info</c>, and the F4 part-model inspections <c>list_bodies</c> /
+/// <c>list_features</c>). Implemented only when an Inventor compile symbol is set (the handlers
 /// touch the Inventor API); without a symbol the <c>partial void AddCore</c> stays an unimplemented
 /// no-op so the registry still builds.
 /// </summary>
@@ -18,6 +20,8 @@ public static partial class InventorCommandRegistry
     {
         add(new HealthHandler());
         add(new GetDocumentInfoHandler());
+        add(new ListBodiesHandler());
+        add(new ListFeaturesHandler());
     }
 }
 #endif

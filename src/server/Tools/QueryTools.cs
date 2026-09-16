@@ -31,6 +31,16 @@ public sealed class QueryTools
     public Task<string> GetDocumentInfo(CancellationToken ct = default)
         => Call("get_document_info", new JObject(), ct);
 
+    [McpServerTool(Name = "inventor_list_bodies"),
+     Description("List the active part's solid bodies: {id:'body:N', name, volume_mm3, bbox_mm{min,max}, face_count, created_by (producing feature name), visible} plus total/truncated. Use ids/names with extrude affected_bodies. max_items caps the list (default 200). Read-only.")]
+    public Task<string> ListBodies(int max_items = 200, CancellationToken ct = default)
+        => Call("list_bodies", new JObject { ["max_items"] = max_items }, ct);
+
+    [McpServerTool(Name = "inventor_list_features"),
+     Description("List the active part's features in tree order: {name, type, health, suppressed, body_names[]} plus total/truncated. health is the Inventor health status (UpToDate, OutOfDate, InError, …) — check it before assuming a feature worked; include_health=false omits it. max_items caps the list (default 200). Read-only.")]
+    public Task<string> ListFeatures(int max_items = 200, bool include_health = true, CancellationToken ct = default)
+        => Call("list_features", new JObject { ["max_items"] = max_items, ["include_health"] = include_health }, ct);
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try

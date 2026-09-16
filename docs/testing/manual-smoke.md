@@ -263,3 +263,15 @@ integration end to end.
 
     **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
     (`inventor-2027-45036`, pipe): all expectations met.
+
+23. **Model queries** (F4-P0-3; run via `scripts\mcp-smoke.ps1`):
+    - `list_bodies` / `list_features` on an empty part → `[]`, `total:0`, `truncated:false`.
+    - After `extrude {operation:"new_body", name:"base"}` on a 50×30×10 box:
+      `list_bodies` → `{id:"body:1", name:"base_body", visible:true, volume_mm3:15000,
+      bbox_mm:{min:[0,0,0],max:[50,30,10]}, face_count:6, created_by:"base"}`;
+      `list_features` → `{name:"base", type:"ExtrudeFeature", suppressed:false,
+      health:"UpToDate", body_names:["base_body"]}`.
+    - `list_features {include_health:false}` → same rows without the `health` key.
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-80176`, pipe): all expectations met.

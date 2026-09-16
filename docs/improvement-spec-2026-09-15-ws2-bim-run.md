@@ -580,7 +580,7 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
 | P3 | sketch text, `inventor_create_bim_connector`, work point | gap doc | |
 | P3 (nhỏ) | `get_iproperty`: sửa ví dụ sai trong Description (`PropertyTools.cs:23`), nhận alias `Summary Information` → `Inventor Summary Information`; `list_iproperty_sets` | #9 (lỗi do Description của tool) | |
 
-**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0-1 + P0-2 xong (code + test + live smoke + 2 review).**
+**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0-1 + P0-2 + P0-3 xong (code + test + live smoke + review).**
 
 - P0-1 `extrude`: `ExtrudeParams` mới (API-agnostic: distance số\|expression, `affected_bodies`+`new_body`
   reject); `EntityResolver.ResolveBody` mới; `affected_bodies` → `ExtrudeDefinition`/`AffectedBodies`
@@ -597,6 +597,22 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
 - Live smoke **2026-09-16** (Inventor 2027, `inventor-2027-23888`/`45036`/`87144`): P0-1 đủ bộ
   (15000→14500 mm³, reject combo); P0-2 `wp_z25` z=2.5 cm + 3 negative + regression offset;
   `affected_bodies:["base_body"]` resolve theo tên. Bằng chứng: manual-smoke bước 21–22.
+- P0-3 `list_bodies` + `list_features` (query toolset, read-only — sống sót `--read-only`, cho phép
+  baked tool): bodies `{id:"body:N",name,volume_mm3,bbox_mm,face_count,created_by,visible}`;
+  features `{name,type,health,suppressed,body_names}`; `max_items` (default 200) + `total` +
+  `truncated`. `EnumText` helper strip `k*`/`*Object`/`*Health`. `CreatedByFeature` API dùng trực
+  tiếp. Tool surface **58→60 / 59→61** — README×4 + profile + root CLAUDE.md đã sync, frozen-surface
+  tests cập nhật. Live smoke `inventor-2027-80176`: empty part `[]`, populated part đủ trường
+  (`created_by:"base"`, `body_names:["base_body"]`, `health:"UpToDate"`), `include_health=false`
+  bỏ key. Bằng chứng: manual-smoke bước 23.
+- P0-3 review pass (APPROVE-WITH-ISSUES → applied): `max_items` narrowing hints trong
+  `ResponseSizePolicyCatalog`; per-item guard siết lại (stub row giữ `body:N` alignment,
+  `body_names` partial khi enumerate fail midway); README×4 heading `query (3)`→`(5)`;
+  `ARCHITECTURE.md` count 58/59→60/61 + sửa mapping `DocumentTools`→hai toolset (sai) thành
+  `query`→`QueryTools` / `document`→`DocumentTools`; comment decomposition trong
+  `RegistrationCountTests` đúng toolset thật; thêm wire-envelope test + authorizer rows.
+  Deferred: generated `mcps/ipt-mcp/tools/*.json` (publishing artifact, regen khi release).
+- Commit: `f2bad45` (P0-1+P0-2), `c3c5244` (P0-3 + review fixes). **335/335 tests** xanh.
 
 ### F5. Run kiểm chứng có kiểm soát
 

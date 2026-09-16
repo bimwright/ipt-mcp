@@ -72,6 +72,16 @@ public sealed class AssemblyToolWireTests : IDisposable
     }
 
     [Fact]
+    public async Task Query_tools_emit_expected_wire_commands_and_keys()
+    {
+        var tools = new QueryTools(_client);
+
+        AssertEnvelope(await CaptureAsync(() => tools.ListBodies(50)), "list_bodies", "max_items");
+        AssertEnvelope(await CaptureAsync(() => tools.ListFeatures(10, include_health: false)),
+            "list_features", "max_items", "include_health");
+    }
+
+    [Fact]
     public async Task Feature_and_view_tools_emit_expected_wire_commands_and_keys()
     {
         var features = new FeatureTools(_client);

@@ -20,6 +20,8 @@ public static class ResponseSizePolicyCatalog
             ["list_interfaces"] = "Retry with an exact occurrence=<name>.",
             ["list_constraints"] = "No filter yet — fetch a subset via send_code.",
             ["list_parameters"] = "No filter yet — fetch a subset via send_code.",
+            ["list_bodies"] = "Retry with a smaller max_items.",
+            ["list_features"] = "Retry with a smaller max_items (and include_health=false to shrink rows).",
             ["send_code"] = "Return less: a smaller result DTO or shorter stdout (stdout over 64 KiB auto-spills to a local file).",
             ["run_baked_tool"] = "Narrow the baked tool's params; oversized results auto-spill to a local file.",
         };
