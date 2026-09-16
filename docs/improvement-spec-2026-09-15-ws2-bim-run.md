@@ -580,7 +580,7 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
 | P3 | sketch text, `inventor_create_bim_connector`, work point | gap doc | |
 | P3 (nhỏ) | `get_iproperty`: sửa ví dụ sai trong Description (`PropertyTools.cs:23`), nhận alias `Summary Information` → `Inventor Summary Information`; `list_iproperty_sets` | #9 (lỗi do Description của tool) | |
 
-**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0 đủ 5/5; P1 `combine` xong (code + test + live smoke + review).**
+**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0 đủ 5/5; P1 `combine` xong + commit `deed410`; P1 `batch_execute` xong (code + test + live smoke + review-fix round 2 — block-list OrdinalIgnoreCase + doc-lifecycle commands + spill parity + 120 s budget).**
 
 - P0-1 `extrude`: `ExtrudeParams` mới (API-agnostic: distance số\|expression, `affected_bodies`+`new_body`
   reject); `EntityResolver.ResolveBody` mới; `affected_bodies` → `ExtrudeDefinition`/`AffectedBodies`
@@ -634,6 +634,13 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   rỗng. `CombineFeatures.Add(BaseBody, ObjectCollection, Operation, KeepToolBodies)`. Response:
   `feature_name`, `operation`, `keep_tool_bodies`, `tool_bodies` (tên đã resolve), `body_names`
   (kết quả — tên đổi sau combine), `volume_mm3`. Surface **63 default / 64 send_code**.
+- P1 `batch_execute` (feature toolset, write): `BatchExecutor` (API-agnostic, mirror rvt —
+  max 20 sub-command, stop-at-first-error, blocked list `batch_execute`/`send_code`/
+  `run_baked_tool`/`apply_bake`) + `BatchExecuteHandler` (plugin): một
+  `TransactionManager.StartTransaction` → `Abort()` khi fail (default) / `End()` khi OK hoặc
+  `continue_on_error`; sub-command dispatch qua `ctx.Commands` + re-check `IsReadOnly` per
+  step. Response `{executed, rolled_back, results:[{index,ok,data|error}]}`. Surface
+  **64 default / 65 send_code**.
 
 ### F5. Run kiểm chứng có kiểm soát
 

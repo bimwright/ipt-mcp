@@ -24,6 +24,7 @@ public static class ResponseSizePolicyCatalog
             ["list_features"] = "Retry with a smaller max_items (and include_health=false to shrink rows).",
             ["send_code"] = "Return less: a smaller result DTO or shorter stdout (stdout over 64 KiB auto-spills to a local file).",
             ["run_baked_tool"] = "Narrow the baked tool's params; oversized results auto-spill to a local file.",
+            ["batch_execute"] = "Split the batch or narrow the sub-commands; oversized results auto-spill to a local file.",
         };
 
     public static string GetNarrowingHint(string? commandName)

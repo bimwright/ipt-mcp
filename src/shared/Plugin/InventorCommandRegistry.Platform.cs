@@ -22,6 +22,7 @@ public static partial class InventorCommandRegistry
         if (o.EnableSendCode)
             add(new SendCodeHandler());
 
+        add(new BatchExecuteHandler());
         add(new RunBakedToolHandler());
         add(new ApplyBakeHandler());
     }

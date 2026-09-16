@@ -323,3 +323,37 @@ integration end to end.
 
     **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
     (`inventor-2027-38784`, pipe): all expectations met.
+
+27. **batch_execute** (F4-P1; sequential driver):
+    - The WS2 6-call modeling ring as ONE call — `[create_work_plane fixed,
+      create_sketch, draw_rectangle, close_sketch, extrude new_body, list_bodies]` →
+      `executed:6, rolled_back:false`, `batched_body` 4000 mm³ at z 20–25 (the fixed
+      plane's Z offset flowed through correctly).
+    - Stop-at-error default: batch with a bad `sketch_name` at index 3 →
+      `executed:4, rolled_back:true`; the earlier Sketch2 was rolled back too —
+      proven by the next batch reusing the name "Sketch2" (Inventor hands out the
+      lowest free index).
+    - `continue_on_error:true` → `executed:5, rolled_back:false`; index 4 still ran
+      after index 3's `INVALID_ARGUMENT` (script-side note: the survivor step also
+      failed because the driver hardcoded "Sketch3" while the new sketch was
+      "Sketch2" — continuation itself is verified).
+    - Blocked: `send_code` / nested `batch_execute` → "'X' cannot run inside
+      batch_execute"; unknown command → "unknown command: fly_to_moon";
+      21 commands → "at most 20"; `commands:[]` → "non-empty array".
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-82484`, pipe): all expectations met.
+
+    **Regression pass (review fixes, 2026-09-16)** — Inventor 2027
+    (`inventor-2027-65680`, pipe), add-in rebuilt with the hardened block list:
+    - Case-variant bypass attempts: `Batch_Execute` and `SEND_CODE` both →
+      "'X' cannot run inside batch_execute" (OrdinalIgnoreCase block list).
+    - Document lifecycle inside a batch: `new_part` and `Save_Document` →
+      blocked at index 0, `rolled_back:true` — the transaction's document can
+      no longer be swapped out from under the wrapper.
+    - `params:"not-an-object"` → step failure "'params' must be an object"
+      (was silently treated as {} before).
+    - `commands:"bogus"` → `INVALID_ARGUMENT` at the MCP layer (server-side
+      ValueKind check — never reaches the wire).
+    - Sanity: 2-step batch (`list_bodies`+`get_document_info`) →
+      `executed:2, rolled_back:false`.

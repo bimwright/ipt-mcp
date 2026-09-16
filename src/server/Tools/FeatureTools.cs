@@ -93,6 +93,19 @@ public sealed class FeatureTools
         return Call("combine", p, ct);
     }
 
+    [McpServerTool(Name = "inventor_batch_execute"),
+     Description("Run up to 20 commands in one Inventor transaction (a single undo step). commands=[{command, params}] using WIRE command names — unprefixed snake_case like extrude, create_work_plane, create_sketch, draw_rectangle, close_sketch, list_bodies (the wire names inside each tool's params, not inventor_* names). Stops at the first error and rolls the batch back unless continue_on_error=true. send_code/run_baked_tool/apply_bake/batch_execute and document-lifecycle commands (new_part/new_assembly/open_document/close_document/save_document) are not allowed inside. Per-step ok is wire-level — data payloads with their own ok/health fields (e.g. constraint health) still need checking. Returns per-step {index, ok, data|error}, executed count, rolled_back.")]
+    public Task<string> BatchExecute(System.Text.Json.JsonElement commands, bool continue_on_error = false, CancellationToken ct = default)
+    {
+        if (commands.ValueKind != System.Text.Json.JsonValueKind.Array)
+            return Task.FromResult(Err("commands must be an array of {command, params}"));
+        return Call("batch_execute", new JObject
+        {
+            ["commands"] = JToken.Parse(commands.GetRawText()),
+            ["continue_on_error"] = continue_on_error,
+        }, ct, timeoutMs: 120_000);   // 20 steps share one budget — raise over the 30 s default
+    }
+
     [McpServerTool(Name = "inventor_revolve"),
      Description("Revolve the profile of a named sketch about an axis (axis_id = a sketch line entity id or an origin axis XAxis|YAxis|ZAxis). angle in degrees; operation=join|cut|intersect. Returns the new feature name.")]
     public Task<string> Revolve(string sketchName, string axisId, double angle, string operation = "join", CancellationToken ct = default)
@@ -247,11 +260,11 @@ public sealed class FeatureTools
     private static string Err(string message)
         => ToolResponse.Error("INVALID_ARGUMENT", message);
 
-    private async Task<string> Call(string command, JObject p, CancellationToken ct)
+    private async Task<string> Call(string command, JObject p, CancellationToken ct, int? timeoutMs = null)
     {
         try
         {
-            var data = await _client.SendAsync(command, p, ct);
+            var data = await _client.SendAsync(command, p, ct, timeoutMs);
             return ToolResponse.Serialize(data);
         }
         catch (InventorGatewayException ex)

@@ -97,6 +97,8 @@ public sealed class AssemblyToolWireTests : IDisposable
 
         AssertEnvelope(await CaptureAsync(() => features.Combine("body:1", ["body:2"], "cut", keep_tool_bodies: true)),
             "combine", "base_body", "tool_bodies", "operation", "keep_tool_bodies");
+        AssertEnvelope(await CaptureAsync(() => features.BatchExecute(JsonDocument.Parse("[{\"command\":\"list_bodies\"}]").RootElement)),
+            "batch_execute", "commands", "continue_on_error");
         AssertEnvelope(await CaptureAsync(() => features.CircularPattern(["Hole1"], "Z Axis", 4)),
             "circular_pattern", "feature_names", "axis", "count", "angle_deg");
         AssertEnvelope(await CaptureAsync(() => features.RectangularPattern(

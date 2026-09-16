@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-63%20or%2064%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-64%20or%2065%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **63** MCP ツール、`send_code` 有効時 **64**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **64** MCP ツール、`send_code` 有効時 **65**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **63 ツール**です（inventor_send_code が有効な場合は **64 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **64 ツール**です（inventor_send_code が有効な場合は **65 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -158,13 +158,14 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_add_sketch_constraint` | 幾何拘束を追加（一致、平行、接線、…）。 |
 | `inventor_close_sketch` | スケッチの編集を終了（スケッチ編集モードを終了）。 |
 
-### feature (10) — ソリッドフィーチャと作業フィーチャ（書き込み）
+### feature (11) — ソリッドフィーチャと作業フィーチャ（書き込み）
 
 | ツール | 説明 |
 |---|---|
 | `inventor_extrude` | 名前付きスケッチを押し出し（距離、結合/切断/交差、方向）。 |
 | `inventor_revolve` | 名前付きスケッチを軸周りに回転（角度、操作）。 |
 | `inventor_combine` | ソリッドボディをブール演算（ベース + ツールボディ、結合/切断/交差、keep_tool_bodies）。 |
+| `inventor_batch_execute` | 最大 20 個のワイヤコマンドを 1 トランザクションで実行（1 つの undo、エラー時はロールバック）。 |
 | `inventor_fillet` | モデルエッジに一定半径のフィレットを追加。 |
 | `inventor_chamfer` | モデルエッジに等距離の面取りを追加。 |
 | `inventor_create_work_plane` | 作業平面を作成（オフセット、3 点、接線、または固定原点+軸）。 |
