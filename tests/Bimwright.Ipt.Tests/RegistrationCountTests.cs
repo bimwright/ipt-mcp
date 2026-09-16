@@ -9,11 +9,11 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Phase 3 review-gate guard: locks the public tool count at exactly <b>69</b> MCP tools when
+/// Phase 3 review-gate guard: locks the public tool count at exactly <b>70</b> MCP tools when
 /// every toolset is enabled (<c>--toolsets all --enable-send-code</c>) and pins the read-only subset.
-/// The 69 breaks down by toolset: meta 3 + query 6 (incl. F4 list_bodies/list_features/probe_brep) +
-/// document 7 + parameters 4 + properties 3 + sketch 9 + feature 13 (incl. P2 loft/sweep) + export 9 (incl. P2 derive_envelope) + code 1 +
-/// toolbaker 6 + assembly 3 + assembly_query 5 = 69. The read-only registration keeps only meta + query (QueryTools) +
+/// The 70 breaks down by toolset: meta 3 + query 6 (incl. F4 list_bodies/list_features/probe_brep) +
+/// document 7 + parameters 4 + properties 4 + sketch 9 + feature 13 (incl. P2 loft/sweep) + export 9 (incl. P2 derive_envelope) + code 1 +
+/// toolbaker 6 + assembly 3 + assembly_query 5 = 70. The read-only registration keeps only meta + query (QueryTools) +
 /// assembly_query (AssemblyQueryTools) + read-only ToolBaker, and drops every write/export/code/toolbaker_write type.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -39,7 +39,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_69_tools()
+    public void All_toolsets_with_send_code_register_exactly_70_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -47,11 +47,11 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(69, names.Length);
+        Assert.Equal(70, names.Length);
     }
 
     [Fact]
-    public void The_69_tools_match_the_frozen_surface()
+    public void The_70_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
@@ -66,8 +66,8 @@ public sealed class RegistrationCountTests
             "inventor_save_document", "inventor_close_document", "inventor_set_units", "inventor_set_material",
             // parameters (4)
             "inventor_list_parameters", "inventor_get_parameter", "inventor_set_parameter", "inventor_create_parameter",
-            // properties (3)
-            "inventor_get_iproperty", "inventor_set_iproperty", "inventor_get_mass_properties",
+            // properties (4)
+            "inventor_get_iproperty", "inventor_set_iproperty", "inventor_get_mass_properties", "inventor_list_iproperty_sets",
             // sketch (9)
             "inventor_create_sketch", "inventor_project_geometry", "inventor_draw_line", "inventor_draw_circle",
             "inventor_draw_rectangle", "inventor_draw_arc", "inventor_add_sketch_dimension",
@@ -93,10 +93,10 @@ public sealed class RegistrationCountTests
             "inventor_get_assembly_bom", "inventor_list_constraints",
         };
 
-        Assert.Equal(69, expected.Length);
+        Assert.Equal(70, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
-        // and nothing extra beyond the 69 expected
+        // and nothing extra beyond the 70 expected
         foreach (var n in names)
             Assert.True(expected.Contains(n), $"unexpected extra tool: {n}");
     }
@@ -148,11 +148,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_68_tools_without_send_code()
+    public void Default_config_registers_69_tools_without_send_code()
     {
-        // Default (no --enable-send-code) drops the single `code` tool, leaving 68.
+        // Default (no --enable-send-code) drops the single `code` tool, leaving 69.
         var names = ToolNames(new InventorMcpConfig());
         Assert.False(names.Contains("inventor_send_code"), "send_code must be off by default");
-        Assert.Equal(68, names.Length);
+        Assert.Equal(69, names.Length);
     }
 }

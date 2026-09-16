@@ -16,6 +16,7 @@ public static partial class InventorCommandRegistry
         add(new GetIPropertyHandler());
         add(new SetIPropertyHandler());
         add(new GetMassPropertiesHandler());
+        add(new ListIPropertySetsHandler());
     }
 }
 #endif

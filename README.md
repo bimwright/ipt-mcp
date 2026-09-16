@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-68%20or%2069%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-69%20or%2070%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: verified.** Phases 1-3 are complete and green (68 MCP tools by default, or 69 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
+> **Status: verified.** Phases 1-3 are complete and green (69 MCP tools by default, or 70 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
 
 ---
 
@@ -109,7 +109,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **68 tools** by default when all platform toolsets are enabled, or **69 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **69 tools** by default when all platform toolsets are enabled, or **70 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
 Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
@@ -156,13 +156,14 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_set_parameter` | Set an existing parameter's expression/value, then update the document. |
 | `inventor_create_parameter` | Create a new user parameter (name, expression, unit). |
 
-### properties (3) — iProperties & mass properties (write)
+### properties (4) — iProperties & mass properties (write)
 
 | Tool | Description |
 |---|---|
 | `inventor_get_iproperty` | Get an iProperty value by property-set and property name. |
 | `inventor_set_iproperty` | Set an iProperty value. |
 | `inventor_get_mass_properties` | Mass (g), volume (mm³), surface area (mm²), centre of mass, bounding box. |
+| `inventor_list_iproperty_sets` | List iProperty sets (name, internal_name, property names; optional values) — discovery for get/set_iproperty. |
 
 ### sketch (9) — 2D sketch geometry & constraints (write)
 

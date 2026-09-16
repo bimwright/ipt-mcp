@@ -677,6 +677,16 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   guidance: profile-plane coplanar / self-intersection — lỗi geometry thật phát hiện khi
   bisect, không phải lỗi API). `LoftDefinition.LoftType` read-only — centerline set qua
   `Centerline` property. `inventor_sweep` smoke trên `inventor-2027-72672` sau redeploy.
+- P3-nhỏ `inventor_list_iproperty_sets` + `get_iproperty` fix (properties toolset,
+  read-only): `ListIPropertySetsHandler` liệt kê sets `{name, internal_name, count,
+  properties[]}` kèm `display_name` khi khác `name`; `include_values` trả value string
+  (cap 200 chars). Description của `get_iproperty`/`set_iproperty` sửa ví dụ sai
+  (`"Summary Information"` → `"Inventor Summary Information"` — nguyên nhân fail #9
+  run-1); `PropertyAccess.FindSet` retry với prefix `"Inventor "` nên short form resolve
+  được (alias chung cho get/set). Live smoke `inventor-2027-63280`: 4 sets đầy đủ
+  (Summary 8 props, DocSummary 3, DesignTracking 55, UserDefined 0), alias
+  `"Summary Information"`→`"Inventor Summary Information"` trả `Author:"<user>"`.
+  Surface **69 default / 70 send_code**.
 
 ### F5. Run kiểm chứng có kiểm soát
 

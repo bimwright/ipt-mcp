@@ -89,6 +89,7 @@ public sealed class AssemblyToolWireTests : IDisposable
     {
         var features = new FeatureTools(_client);
         var exports = new ExportTools(_client);
+        var props = new PropertyTools(_client);
 
         var hole = await CaptureAsync(() => features.Hole(
             new HoleFaceDto { Normal = "+Z", Extreme = "max" },
@@ -125,6 +126,8 @@ public sealed class AssemblyToolWireTests : IDisposable
                 Path.Combine(Path.GetTempPath(), "env.ipt"), deriveStyle: "single_no_seams",
                 includeBodies: ["valve_body", "body:2"], activate: false)),
             "derive_envelope", "output_path", "derive_style", "include_bodies", "bounding_box", "activate");
+        AssertEnvelope(await CaptureAsync(() => props.ListIPropertySets(true)),
+            "list_iproperty_sets", "include_values");
     }
 
     private async Task<JObject> CaptureAsync(Func<Task<string>> invoke)

@@ -19,6 +19,7 @@ public sealed class PropertyToolsTests
         "inventor_get_iproperty",
         "inventor_set_iproperty",
         "inventor_get_mass_properties",
+        "inventor_list_iproperty_sets",
     };
 
     private static string[] ToolNamesOf(Type t)
@@ -57,5 +58,6 @@ public sealed class PropertyToolsTests
         var names = types.SelectMany(ToolNamesOf).ToArray();
         Assert.DoesNotContain("inventor_get_iproperty", names);
         Assert.DoesNotContain("inventor_get_mass_properties", names);
+        Assert.DoesNotContain("inventor_list_iproperty_sets", names);
     }
 }
