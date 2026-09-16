@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-16
+
 ### Added
 
 - `inventor_draw_text` (sketch toolset, write): add a fitted text box to a sketch — `text` + `position` [x,y] mm, `sketch_name` optional (defaults to the most recent sketch), `font_size_mm` wraps the text in a `<StyleOverride FontSize='N mm'>` tag, `rotation_deg` is validated client-side to a multiple of 90 because Inventor's `TextBox.Rotation` rejects arbitrary angles (quadrant rotations only — verified live: 0/±π/2/π/3π/2/2π accepted, everything else E_INVALIDARG). Tool surface is now 72 default / 73 with send_code.
