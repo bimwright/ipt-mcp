@@ -78,7 +78,8 @@ public sealed class ResponseSpillTests : IDisposable
     [Fact]
     public void AttachResults_LargeArraySpillsWithPreview()
     {
-        var results = new JArray(Enumerable.Range(0, 3000).Select(i => new JObject { ["n"] = i, ["pad"] = new string('z', 30) }));
+        // pad uses '.' — a run of [A-Za-z0-9+/=]{24,} would trip the pre-spill secret masker.
+        var results = new JArray(Enumerable.Range(0, 3000).Select(i => new JObject { ["n"] = i, ["pad"] = new string('.', 30) }));
         Assert.True(ResponseSpillWriter.ShouldSpill(results.ToString(Newtonsoft.Json.Formatting.None)));
 
         var data = new JObject();
@@ -91,6 +92,36 @@ public sealed class ResponseSpillTests : IDisposable
         Assert.EndsWith(".json", file);
         Assert.Equal(results.ToString(Newtonsoft.Json.Formatting.None), File.ReadAllText(file));
         Assert.True(data["results_preview"]!.Value<string>()!.Length <= ResponseSpillWriter.InlineKeepBytes);
+    }
+
+    [Fact]
+    public void AttachResults_SanitizesErrorFieldsBeforeSpill()
+    {
+        // Review fix: the dispatcher sanitizes error/message fields only AFTER AttachResults
+        // returns, so the spill file and results_preview must be cleaned here — a raw path or
+        // secret in a step error must not persist to disk.
+        var path = @"C:\Users\Somebody\secret-project\part.ipt";
+        var secret = "Z9x8Y7w6V5u4T3s2R1q0P9o8N7m6";   // 28 chars — matches the token heuristic
+        var results = new JArray(
+            new JObject { ["ok"] = false, ["error"] = $"cannot open {path} auth_token \"{secret}\"" },
+            new JObject { ["ok"] = true, ["pad"] = new string('.', ResponseSpillWriter.SpillThresholdBytes + 1000) });
+
+        var data = new JObject();
+        ResponseSpillWriter.AttachResults("batch_execute", data, results, new ResponseSpillWriter(_dir));
+
+        Assert.Equal(true, data["results_truncated"]!.Value<bool>());
+        Assert.Equal(2, data["results_count"]!.Value<int>());
+
+        var spilled = File.ReadAllText(data["results_file"]!.Value<string>()!);
+        var preview = data["results_preview"]!.Value<string>()!;
+        foreach (var content in new[] { spilled, preview })
+        {
+            Assert.DoesNotContain(path, content);
+            Assert.DoesNotContain(secret, content);
+            Assert.Contains("<path>", content);
+        }
+        // The in-place error-field pass mirrors what the dispatcher does to inline data.
+        Assert.Contains("<path>", (string?)results[0]!["error"]);
     }
 
     [Fact]

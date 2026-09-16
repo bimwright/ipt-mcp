@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Bimwright.Ipt.Shared.Security;
 
 namespace Bimwright.Ipt.Shared.Infrastructure;
 
@@ -123,11 +124,20 @@ public sealed class ResponseSpillWriter
         catch { /* keep full stdout inline */ }
     }
 
-    /// <summary>Same policy for <c>run_baked_tool</c>'s <c>results</c> array, spilled as .json.</summary>
+    /// <summary>
+    /// Same policy for <c>run_baked_tool</c>'s / <c>batch_execute</c>'s <c>results</c> array,
+    /// spilled as .json. Sanitization happens HERE, before serialization — the dispatcher's
+    /// error-field pass only runs after this method returns, so un-sanitized results would
+    /// persist raw paths/secrets to the spill file and the inline preview (review fix):
+    /// error/message fields get the dispatcher's sanitizer, and the serialized payload that
+    /// reaches disk or <c>results_preview</c> additionally passes through the secret masker.
+    /// </summary>
     public static void AttachResults(string commandName, Newtonsoft.Json.Linq.JObject data, Newtonsoft.Json.Linq.JArray results,
         ResponseSpillWriter? writer = null)
     {
-        var serialized = results.ToString(Newtonsoft.Json.Formatting.None);
+        foreach (var item in results.OfType<Newtonsoft.Json.Linq.JObject>())
+            ErrorSanitizer.SanitizeErrorFields(item);
+        var serialized = SecretMasker.Mask(results.ToString(Newtonsoft.Json.Formatting.None));
         data["results"] = results;
         if (!ShouldSpill(serialized)) return;
         try

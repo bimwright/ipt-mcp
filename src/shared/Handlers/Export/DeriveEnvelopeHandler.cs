@@ -12,10 +12,14 @@ namespace Bimwright.Ipt.Shared.Handlers.Export;
 /// <summary>
 /// <c>derive_envelope</c> — create a new part document containing a derived-component feature that
 /// references a source part or assembly (spec F4-P2-1: the envelope/interop path that used to take
-/// several send_code scripts). Supports per-solid inclusion (<c>include_bodies</c>) and
-/// bounding-box derivation (<c>bounding_box</c>) for lightweight downstream envelopes. The new
-/// document is saved to <c>output_path</c> (.ipt, under an allowed root); <c>activate=false</c>
-/// keeps it invisible.
+/// several send_code scripts). Part sources derive through <c>DerivedPartComponents</c> and support
+/// per-solid inclusion (<c>include_bodies</c>); <c>.iam</c> sources derive through
+/// <c>DerivedAssemblyComponents</c> (per-occurrence inclusion — <c>include_bodies</c> is rejected
+/// there) and <c>bounding_box</c> maps to each occurrence's bounding box with internal voids
+/// removed — the lightweight-envelope mode. The new document is saved to <c>output_path</c>
+/// (.ipt, under an allowed root); <c>activate=false</c> keeps it invisible. Any failure after the
+/// derived document exists closes it and restores the previously active document, so a bad
+/// <c>include_bodies</c> retry still resolves the real source.
 /// </summary>
 public sealed class DeriveEnvelopeHandler : HandlerBase, IInventorCommand
 {
@@ -71,58 +75,114 @@ public sealed class DeriveEnvelopeHandler : HandlerBase, IInventorCommand
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT,
                 "bounding_box and include_bodies are incompatible (bounding box already covers every solid)");
 
+        var isAssemblySource = sourcePath.EndsWith(".iam", StringComparison.OrdinalIgnoreCase);
+        if (isAssemblySource && includeBodies is { Count: > 0 })
+            return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT,
+                "include_bodies selects source solids — not supported for .iam sources (assembly derive includes occurrences)");
+
+        // Capture the active doc before creating the derived one so a failure can close the
+        // half-built document and put the caller's document back in front.
+        global::Inventor.Document? prevActive = null;
+        try { prevActive = app.ActiveDocument; } catch { }
+
+        PartDocument? doc = null;
         try
         {
             var tpl = app.FileManager.GetTemplateFile(DocumentTypeEnum.kPartDocumentObject);
-            var doc = (PartDocument)app.Documents.Add(DocumentTypeEnum.kPartDocumentObject, tpl, activate);
-            var defs = doc.ComponentDefinition.ReferenceComponents.DerivedPartComponents;
-            var def = (DerivedPartDefinition)defs.CreateDefinition(sourcePath);
-            def.DeriveStyle = style;
-            def.IncludeAllParameters = includeParams;
-            def.UseOrientedMinimumBoundingBox = orientedMin;
+            doc = (PartDocument)app.Documents.Add(DocumentTypeEnum.kPartDocumentObject, tpl, activate);
+            var refComps = doc.ComponentDefinition.ReferenceComponents;
 
-            int solidsTotal = 0, solidsIncluded = 0;
-            if (boundingBox)
+            string componentName;
+            var data = new JObject
             {
-                def.IncludeAllSolids = DerivedComponentOptionEnum.kDerivedBoundingBox;
-            }
-            else if (includeBodies is { Count: > 0 })
+                ["output_path"] = outputPath,
+                ["source_path"] = sourcePath,
+                ["source_type"] = isAssemblySource ? "assembly" : "part",
+                ["derive_style"] = deriveStyle,
+                ["bounding_box"] = boundingBox,
+            };
+
+            if (isAssemblySource)
             {
-                def.IncludeAllSolids = DerivedComponentOptionEnum.kDerivedIndividualDefined;
-                solidsIncluded = ApplyIncludeBodies(def, includeBodies, out solidsTotal);
+                var adefs = refComps.DerivedAssemblyComponents;
+                var adef = adefs.CreateDefinition(sourcePath);
+                adef.DeriveStyle = style;
+                adef.UseOrientedMinimumBoundingBox = orientedMin;
+                adef.IncludeAllTopLevelParameters = includeParams
+                    ? DerivedComponentOptionEnum.kDerivedIncludeAll
+                    : DerivedComponentOptionEnum.kDerivedExcludeAll;
+                adef.InclusionOption = boundingBox
+                    ? DerivedComponentOptionEnum.kDerivedBoundingBox
+                    : DerivedComponentOptionEnum.kDerivedIncludeAll;
+                if (boundingBox) adef.RemoveInternalVoids = true;
+
+                int occurrences = 0;
+                try { occurrences = adef.Occurrences.Count; } catch { }
+                var component = adefs.Add(adef);
+                componentName = component.Name;
+                data["occurrences"] = occurrences;
             }
             else
             {
-                def.IncludeAllSolids = DerivedComponentOptionEnum.kDerivedIncludeAll;
-            }
-            if (solidsTotal == 0) solidsTotal = def.Solids.Count;
-            if (solidsIncluded == 0 && !boundingBox && includeBodies is not { Count: > 0 })
-                solidsIncluded = solidsTotal;
-            if (boundingBox) solidsIncluded = solidsTotal;
+                var defs = refComps.DerivedPartComponents;
+                var def = (DerivedPartDefinition)defs.CreateDefinition(sourcePath);
+                def.DeriveStyle = style;
+                def.IncludeAllParameters = includeParams;
+                def.UseOrientedMinimumBoundingBox = orientedMin;
 
-            var component = defs.Add(def);
+                int solidsTotal = 0, solidsIncluded = 0;
+                if (boundingBox)
+                {
+                    def.IncludeAllSolids = DerivedComponentOptionEnum.kDerivedBoundingBox;
+                }
+                else if (includeBodies is { Count: > 0 })
+                {
+                    def.IncludeAllSolids = DerivedComponentOptionEnum.kDerivedIndividualDefined;
+                    solidsIncluded = ApplyIncludeBodies(def, includeBodies, out solidsTotal);
+                }
+                else
+                {
+                    def.IncludeAllSolids = DerivedComponentOptionEnum.kDerivedIncludeAll;
+                }
+                if (solidsTotal == 0) solidsTotal = def.Solids.Count;
+                if (solidsIncluded == 0 && !boundingBox && includeBodies is not { Count: > 0 })
+                    solidsIncluded = solidsTotal;
+                if (boundingBox) solidsIncluded = solidsTotal;
+
+                var component = defs.Add(def);
+                componentName = component.Name;
+                data["solids_total"] = solidsTotal;
+                data["solids_included"] = solidsIncluded;
+            }
+
             doc.SaveAs(outputPath, false);
 
             int bodyCount = 0;
             try { bodyCount = doc.ComponentDefinition.SurfaceBodies.Count; } catch { }
 
-            return Ok(ctx, new JObject
-            {
-                ["document_title"] = doc.DisplayName,
-                ["output_path"] = outputPath,
-                ["saved"] = System.IO.File.Exists(outputPath),
-                ["source_path"] = sourcePath,
-                ["derive_style"] = deriveStyle,
-                ["bounding_box"] = boundingBox,
-                ["solids_total"] = solidsTotal,
-                ["solids_included"] = solidsIncluded,
-                ["derived_component"] = component.Name,
-                ["body_count"] = bodyCount,
-                ["active"] = activate,
-            });
+            data["document_title"] = doc.DisplayName;
+            data["saved"] = System.IO.File.Exists(outputPath);
+            data["derived_component"] = componentName;
+            data["body_count"] = bodyCount;
+            data["active"] = activate;
+            return Ok(ctx, data);
         }
-        catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
-        catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to derive envelope: " + ex.Message); }
+        catch (Exception ex)
+        {
+            // A failed derive must not leave the half-built document active (or linger when
+            // created invisible) — close it and restore the caller's document.
+            if (doc is not null)
+            {
+                try { doc.Close(true); } catch { }
+                if (activate && prevActive is not null)
+                {
+                    try { prevActive.Activate(); } catch { }
+                }
+            }
+            if (ex is ArgumentException)
+                return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message);
+            return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to derive envelope: " + ex.Message);
+        }
     }
 
     /// <summary>

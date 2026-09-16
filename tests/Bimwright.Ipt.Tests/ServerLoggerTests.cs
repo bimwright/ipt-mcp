@@ -198,9 +198,11 @@ public sealed class ServerLoggerTests : IDisposable
     [Fact]
     public void DataErrorIsTruncatedTo300Chars()
     {
-        var entry = Finish(data: new JObject { ["ok"] = false, ["error"] = new string('e', 1000) });
+        // '!' stays outside the [A-Za-z0-9+/=]{24,} token heuristic — a letter pad would now
+        // be masked as a fake secret before it reaches the journal.
+        var entry = Finish(data: new JObject { ["ok"] = false, ["error"] = new string('!', 1000) });
 
-        Assert.Equal(new string('e', 300), (string?)entry["data_error"]);
+        Assert.Equal(new string('!', 300), (string?)entry["data_error"]);
     }
 
     [Fact]
@@ -212,6 +214,81 @@ public sealed class ServerLoggerTests : IDisposable
         var parsed = DateTime.ParseExact((string)entry["timestamp"]!, "o", CultureInfo.InvariantCulture,
             DateTimeStyles.RoundtripKind);
         Assert.Equal(DateTimeKind.Utc, parsed.Kind);
+    }
+
+    // ---- MaskParams (SECURITY.md: secrets must never reach the journal) -------------------
+
+    [Fact]
+    public void MaskParamsRedactsSecretsButKeepsShape()
+    {
+        var secret = "Z9x8Y7w6V5u4T3s2R1q0P9o8N7m6";   // 28 chars — token heuristic
+        var p = new JObject
+        {
+            ["auth_token"] = "sensitive",
+            ["code"] = $"var h = \"Authorization: Bearer {secret}\"; password=\"hunter2\"; var n = 3;",
+            ["nested"] = new JObject { ["list"] = new JArray(new JObject { ["api_key"] = "k" }) },
+            ["name"] = "sketch1",
+        };
+
+        var masked = (JObject)ServerLogger.MaskParams(p)!;
+
+        Assert.Equal("***", (string?)masked["auth_token"]);
+        Assert.Equal("sketch1", (string?)masked["name"]);
+        Assert.Equal("***", (string?)masked.SelectToken("nested.list[0].api_key"));
+        var code = (string?)masked["code"]!;
+        Assert.Contains("Bearer ***", code);
+        Assert.Contains("password=\"***\"", code);
+        Assert.Contains("var n = 3;", code);                    // non-secret code survives
+        var text = masked.ToString(Formatting.None);
+        Assert.DoesNotContain(secret, text);
+        Assert.DoesNotContain("hunter2", text);
+        // the caller's params object is not mutated — masking works on a clone
+        Assert.Equal("sensitive", (string?)p["auth_token"]);
+    }
+
+    [Fact]
+    public void MaskParamsHandlesNullAndNonJObjectParameters()
+    {
+        Assert.Null(ServerLogger.MaskParams(null));
+        var masked = (JObject)ServerLogger.MaskParams(new { sketch_name = "s1", password = "p" })!;
+        Assert.Equal("s1", (string?)masked["sketch_name"]);
+        Assert.Equal("***", (string?)masked["password"]);
+    }
+
+    [Fact]
+    public void FinishEntryMasksSecretsInErrorAndDataError()
+    {
+        var secret = "Z9x8Y7w6V5u4T3s2R1q0P9o8N7m6";
+        var entry = Finish(
+            success: false,
+            error: $"plugin call failed at C:\\Users\\Somebody\\x.ipt token {secret}",
+            data: new JObject { ["ok"] = false, ["error"] = $"auth_token \"{secret}\" rejected" });
+
+        Assert.DoesNotContain(secret, (string?)entry["error"]);
+        Assert.DoesNotContain(secret, (string?)entry["data_error"]);
+        Assert.DoesNotContain("Somebody", (string?)entry["error"]);
+    }
+
+    [Fact]
+    public void LogStartMasksSecretsInJournalLine()
+    {
+        var secret = "Z9x8Y7w6V5u4T3s2R1q0P9o8N7m6";
+        var reqId = "req-mask-" + Guid.NewGuid().ToString("N");
+        var skip = File.Exists(JournalPath) ? ReadJournalLines().Length : 0;
+
+        ServerLogger.LogStart(reqId, "send_code", new JObject
+        {
+            ["auth_token"] = "sensitive",
+            ["code"] = $"var t = \"{secret}\";",
+        });
+
+        var line = ReadJournalLines().Skip(skip)
+            .Single(l => l.Contains("\"phase\":\"start\"") && l.Contains(reqId));
+        Assert.DoesNotContain(secret, line);
+        Assert.DoesNotContain("sensitive", line);
+        var entry = JObject.Parse(line);
+        Assert.Equal("send_code", (string?)entry["tool"]);
+        Assert.Equal("***", (string?)entry["params"]!["auth_token"]);
     }
 
     // ---- journal integration (F1-R1 / F1-R3) ----------------------------------------------

@@ -86,32 +86,6 @@ public sealed class CommandDispatcher
             result.Error.Message = ErrorSanitizer.Sanitize(result.Error.Message);
 
         if (result.Data is JObject obj)
-            SanitizeKnownErrorFields(obj);
-    }
-
-    private static void SanitizeKnownErrorFields(JObject obj)
-    {
-        foreach (var property in obj.Properties())
-        {
-            if (property.Value is JObject nested)
-            {
-                SanitizeKnownErrorFields(nested);
-                continue;
-            }
-
-            if (property.Value is JArray arr)
-            {
-                foreach (var item in arr.OfType<JObject>())
-                    SanitizeKnownErrorFields(item);
-                continue;
-            }
-
-            if (property.Value.Type == JTokenType.String &&
-                (string.Equals(property.Name, "error", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(property.Name, "message", StringComparison.OrdinalIgnoreCase)))
-            {
-                property.Value = ErrorSanitizer.Sanitize((string?)property.Value);
-            }
-        }
+            ErrorSanitizer.SanitizeErrorFields(obj);
     }
 }

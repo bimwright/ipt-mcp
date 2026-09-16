@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Bimwright.Ipt.Shared.Security;
 
 namespace Bimwright.Ipt.Server;
 
@@ -11,10 +13,13 @@ namespace Bimwright.Ipt.Server;
 /// Append-only JSONL of every add-in round-trip (and server-side meta tools).
 /// Path: %LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl, overridable via the
 /// BIMWRIGHT_INVENTOR_CALL_LOG environment variable (env-only: this class is static and
-/// initializes before config is loaded). Params are stored as-is (including send_code bodies)
-/// so MCP development can replay real calls. The finish line keeps <c>success</c> at envelope
-/// level and adds the script-level outcome (<c>data_ok</c>/<c>data_error</c>/<c>stdout_bytes</c>),
-/// response size, add-in duration and target; those keys are always present (null when n/a).
+/// initializes before config is loaded). Params are masked before storing — keys named like
+/// tokens/passwords/secrets are replaced with "***" and every string value passes through
+/// <see cref="Bimwright.Ipt.Shared.Security.SecretMasker"/> (so send_code bodies keep their
+/// shape for replay but embedded credentials do not persist to disk, per SECURITY.md). The
+/// finish line keeps <c>success</c> at envelope level and adds the script-level outcome
+/// (<c>data_ok</c>/<c>data_error</c>/<c>stdout_bytes</c>), response size, add-in duration and
+/// target; those keys are always present (null when n/a), with error strings masked too.
 /// </summary>
 internal static class ServerLogger
 {
@@ -50,7 +55,7 @@ internal static class ServerLogger
                 request_id = requestId,
                 tool = toolName,
                 phase = "start",
-                @params = parameters
+                @params = MaskParams(parameters)
             });
         }
         catch
@@ -88,6 +93,52 @@ internal static class ServerLogger
         s is null || s.Length <= max ? s : s.Substring(0, max);
 
     /// <summary>
+    /// Deep-masks a params payload for journaling: the structure is preserved (replay/debugging
+    /// still sees the real keys) but secret material never reaches disk. Keys whose name looks
+    /// like a credential get their whole value replaced; every other string value goes through
+    /// <see cref="SecretMasker.Mask"/> so code bodies and ad-hoc fields are still swept.
+    /// </summary>
+    internal static object? MaskParams(object? parameters)
+    {
+        if (parameters is null) return null;
+        var token = parameters as JToken ?? JToken.FromObject(parameters);
+        var masked = token.DeepClone();
+        MaskToken(masked);
+        return masked;
+    }
+
+    // Key names that always carry credentials — matched case-insensitively, value replaced wholesale.
+    private static readonly IReadOnlySet<string> SensitiveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "auth_token", "access_token", "refresh_token", "id_token",
+        "api_key", "apikey", "client_secret",
+        "password", "passwd", "pwd", "secret", "token", "authorization",
+    };
+
+    private static void MaskToken(JToken token)
+    {
+        switch (token)
+        {
+            case JObject obj:
+                foreach (var prop in obj.Properties())
+                {
+                    if (SensitiveKeys.Contains(prop.Name))
+                        prop.Value = new JValue("***");
+                    else
+                        MaskToken(prop.Value);
+                }
+                break;
+            case JArray arr:
+                foreach (var item in arr)
+                    MaskToken(item);
+                break;
+            case JValue { Type: JTokenType.String } jv:
+                jv.Value = SecretMasker.Mask((string?)jv.Value);
+                break;
+        }
+    }
+
+    /// <summary>
     /// Script-level outcome of send_code / run_baked_tool payloads: <c>ok</c> only when it is a JSON
     /// boolean, <c>error</c> (truncated) and <c>stdout</c> byte count only when they are strings.
     /// </summary>
@@ -119,16 +170,19 @@ internal static class ServerLogger
             ["phase"] = "finish",
             ["success"] = success,
             ["duration_ms"] = durationMs,
-            ["error"] = NullableString(error),
+            ["error"] = NullableString(SanitizeOrNull(error)),
             ["error_code"] = NullableString(errorCode),
             ["target_id"] = NullableString(targetId),
             ["response_bytes"] = responseBytes,
             ["plugin_duration_ms"] = pluginDurationMs,
             ["data_ok"] = dataOk,
-            ["data_error"] = NullableString(dataError),
+            ["data_error"] = NullableString(SanitizeOrNull(dataError)),
             ["stdout_bytes"] = stdoutBytes,
         };
     }
+
+    // ErrorSanitizer turns null into "" — keep null as null so the stable-key contract holds.
+    private static string? SanitizeOrNull(string? value) => value is null ? null : ErrorSanitizer.Sanitize(value);
 
     // A null string converts to a JValue typed String; emit a real JSON null token instead.
     private static JToken NullableString(string? value) => value is null ? JValue.CreateNull() : new JValue(value);

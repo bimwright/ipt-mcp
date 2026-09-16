@@ -56,6 +56,7 @@ public sealed class BatchExecutorTests
     [InlineData("open_document")]
     [InlineData("close_document")]
     [InlineData("save_document")]
+    [InlineData("derive_envelope")]     // creates + activates a new document mid-transaction
     public void Blocked_commands_are_rejected_without_invoking(string blocked)
     {
         var cmds = Cmds(new { command = blocked });

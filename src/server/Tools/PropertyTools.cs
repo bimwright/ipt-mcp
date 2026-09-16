@@ -29,9 +29,9 @@ public sealed class PropertyTools
         => Call("set_iproperty", new JObject { ["set_name"] = setName, ["prop_name"] = propName, ["value"] = value }, ct);
 
     [McpServerTool(Name = "inventor_list_iproperty_sets"),
-     Description("List the iProperty sets of the active document: each set's name, internal_name and property names. include_values (default false) also returns each property's current value as a string (truncated at 200 chars). Read-only — use it to discover set_name/prop_name for get/set_iproperty.")]
-    public Task<string> ListIPropertySets(bool include_values = false, CancellationToken ct = default)
-        => Call("list_iproperty_sets", new JObject { ["include_values"] = include_values }, ct);
+     Description("List the iProperty sets of the active document: each set's name, internal_name and property names. include_values (default false) also returns each property's current value as a string (truncated at 200 chars). max_items (default 200) caps the total properties emitted across all sets — truncated responses carry truncated:true and per-set properties_omitted counts. Read-only — use it to discover set_name/prop_name for get/set_iproperty.")]
+    public Task<string> ListIPropertySets(bool include_values = false, int max_items = 200, CancellationToken ct = default)
+        => Call("list_iproperty_sets", new JObject { ["include_values"] = include_values, ["max_items"] = max_items }, ct);
 
     [McpServerTool(Name = "inventor_get_mass_properties"),
      Description("Get mass properties of the active part or assembly document: mass (g), volume (mm^3), surface area (mm^2), centre of mass (mm), and bounding box (mm).")]

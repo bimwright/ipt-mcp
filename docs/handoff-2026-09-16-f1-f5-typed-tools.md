@@ -89,8 +89,8 @@ source nên rủi ro thấp, nhưng reviewer có thể muốn một lượt buil
 
 - loft: guide rails, section conditions, area-graph sections
 - sweep: guide rail/surface, section twist, `affected_bodies`
-- derive_envelope: `DerivedAssembly` path cho .iam nguồn (v1 đã cover part+assembly qua
-  component-derive), `use_oriented_min_bounding_box` đã có
+- derive_envelope: `include_occurrences`-style per-occurrence pick cho .iam (hiện assembly
+  derive include-all hoặc bounding-box toàn occurrence); `use_oriented_min_bounding_box` đã có
 - bim_connector: kind `duct|conduit|cable_tray|electrical`, connector links
 - work_point: ref-driven variants (AddByTwoLines/ThreePlanes/Point/Centroid/…)
 - draw_text: `AddByRectangle` boxed text, justification, styles object
@@ -115,7 +115,56 @@ source nên rủi ro thấp, nhưng reviewer có thể muốn một lượt buil
 
 - `git status` sạch; mọi thứ đã commit trên `feat/f4-typed-tools`.
 - Server Release exe + plugin inv27 DLL đang deployed và chạy được trên máy dev
-  (Inventor 2027, target `inventor-2027-88488`).
+  (Inventor 2027, target `inventor-2027-52228` sau redeploy review-fix).
 - Chưa push / chưa mở PR — chờ review này.
 - `docs/superpowers/` gitignored: 3 mini-spec P2/P3 tồn tại local, cần đính kèm nếu reviewer
   muốn đọc design contract chi tiết.
+
+---
+
+## 9. Review findings vòng 1 → fixes (commit `fix(plugin,server): external review round 1 …` — tip của branch)
+
+External review báo 6 findings (1 spec P1 + 5 P2). Tất cả đã fix + verify live trên
+`inventor-2027-52228` (plugin inv27 DLL rebuild + redeploy):
+
+| # | Finding | Fix | File |
+|---|---|---|---|
+| 1 | `derive_envelope` chạy được trong `batch_execute` — phá scope rollback (tạo+kích hoạt doc mới giữa transaction của doc cũ) | Thêm vào `BatchExecutor.BlockedCommands`; tool description liệt kê | `BatchExecutor.cs`, `FeatureTools.cs` |
+| 2 | Derive fail để lại part rỗng active → retry không `source_path` nhắm nhầm doc | Capture `prevActive` trước `Documents.Add`; catch đóng doc mới (`Close(skipSave:true)`) + `prevActive.Activate()` khi `activate=true`; cleanup nuốt lỗi riêng, không che lỗi gốc | `DeriveEnvelopeHandler.cs` |
+| 3 | Contract nhận `.iam` nhưng luôn `DerivedPartComponents` | Branch `.iam` thật qua `DerivedAssemblyComponents`/`DerivedAssemblyDefinition` (`DeriveStyle`, `UseOrientedMinimumBoundingBox`, `IncludeAllTopLevelParameters`, `InclusionOption`=`kDerivedBoundingBox`+`RemoveInternalVoids` cho envelope); `include_bodies` reject trên `.iam`; response thêm `source_type` + `occurrences` | `DeriveEnvelopeHandler.cs`, `ExportTools.cs` |
+| 4 | `list_iproperty_sets` không giới hạn | `max_items` (default 200, tổng properties across sets), `truncated`, `properties_total`, per-set `properties_omitted`; server param `max_items` | `ListIPropertySetsHandler.cs`, `PropertyTools.cs` |
+| 5 | Journal ghi raw secret (trái SECURITY.md) | `ServerLogger.MaskParams`: clone JToken, key tên credential → `***`, mọi string qua `SecretMasker.Mask`; finish `error`/`data_error` qua `ErrorSanitizer`; `SecretMasker` thêm key-value (`password="…"`, `api_key: '…'`, …) + `Bearer <tok≥8>` | `ServerLogger.cs`, `SecretMasker.cs` |
+| 6 | Spill ghi trước khi dispatcher sanitize | `SanitizeErrorFields` public trên `ErrorSanitizer` (single source, dispatcher gọi lại); `AttachResults` sanitize từng result + `SecretMasker.Mask` serialized trước khi ghi file/preview | `ErrorSanitizer.cs`, `CommandDispatcher.cs`, `ResponseSpillWriter.cs` |
+
+**Regression tests** (410/410 xanh, trước đây 404):
+
+- `BatchExecutorTests`: `derive_envelope` vào blocked theory.
+- `ResponseSpillTests`: `AttachResults_SanitizesErrorFieldsBeforeSpill` — path + fake token
+  trong step error >64 KiB → vắng mặt ở file spill lẫn `results_preview`, `<path>` hiện diện;
+  pad test cũ đổi sang `'.'` để không trip masker.
+- `ServerLoggerTests`: `MaskParams*` (shape giữ nguyên, clone không mutate caller, nested/array),
+  `FinishEntryMasksSecretsInErrorAndDataError`, `LogStartMasksSecretsInJournalLine` (đọc
+  journal thật); `DataErrorIsTruncatedTo300Chars` đổi pad sang `'!'`.
+
+**Live verify** (`revfix_smoke.py`, target `inventor-2027-52228`):
+
+- batch chứa `derive_envelope` → step fail `"cannot run inside batch_execute"`, `rolled_back:true`.
+- `include_bodies:["nope"]` → INVALID_ARGUMENT + doc info sau đó vẫn là source; retry bỏ
+  `source_path` resolve đúng `WS2_reference.ipt` (không còn empty doc nuốt source).
+- `.iam` derive → `source_type:"assembly"`, `occurrences:1`, `body_count:1`, saved;
+  `.iam + include_bodies` reject trước khi tạo doc.
+- `list_iproperty_sets max_items=5` → `truncated:true`, `properties_total`, per-set `properties_omitted`.
+- `set_iproperty` value chứa `Bearer <28-char>` → journal start line mask sạch.
+- batch 19×`probe_brep` + `create_sketch` plane=`C:\nonexistent\…` → spill 300 KB;
+  file chứa `<path>`, không chứa raw path; preview sạch.
+
+**Lưu ý cho reviewer:**
+
+- `AttachStdout` (send_code stdout) cố ý không sanitize — stdout chưa từng qua sanitizer ở bất
+  kỳ đâu (inline hay file đều cùng nội dung); thêm mask vào sẽ đổi nội dung inline nhìn thấy.
+  Nếu muốn stdout spill cũng mask thì đó là quyết định policy riêng.
+- `SecretMasker` key-value pattern giờ bắt `authorization`, `token`-family, `password`, `api_key`
+  … — có thể over-mask một identifier trùng tên trong code string (chỉ ảnh hưởng journal/spill,
+  không ảnh hưởng payload trả về).
+- `ListIPropertySets` `max_items` đếm **properties** (không phải sets) — `count` vẫn là số
+  property thật của set, `properties` là phần đã emit.

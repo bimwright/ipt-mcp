@@ -29,6 +29,7 @@ public static class BatchExecutor
         // would silently move later steps onto a different document than the transaction's
         // (rolled_back would lie) or fail End/Abort by invalidating the current transaction.
         "new_part", "new_assembly", "open_document", "close_document", "save_document",
+        "derive_envelope",  // also creates + activates a new document mid-transaction
     };
 
     public sealed class Outcome
