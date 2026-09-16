@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-65%20or%2066%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-66%20or%2067%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -94,7 +94,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **65 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **66 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **66 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **67 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -179,7 +179,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_circular_pattern` | 绕一个命名轴圆形阵列 part features（在某一角度上 count）。 |
 | `inventor_rectangular_pattern` | 沿一个或两个命名轴矩形阵列 part features。 |
 
-### export (8) —— 视图捕获与几何导出（write）
+### export (9) —— 视图捕获与几何导出（write）
 
 > `output_path` 必须位于允许的根目录下：user profile、`%TEMP%`，或自行添加的根目录 —— 例如在运行 Inventor 的机器上设置 `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports`（设置后需重启 Inventor 和 MCP 客户端/服务器会话）。
 
@@ -190,6 +190,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_export_stl` | 把 active part/assembly 导出为 STL（.stl）。 |
 | `inventor_export_sat` | 把 active part/assembly 导出为 ACIS SAT（.sat）—— 用于 Revit interop 的格式；acis_version 默认 7（唯一支持的值）。 |
 | `inventor_export_dxf` | 导出 2D DXF；必须声明 source（`sketch` 或 `flat_pattern`）。 |
+| `inventor_derive_envelope` | 从源 part/assembly 创建 derived part —— envelope/interop 路径：`derive_style`、`include_bodies` 选择 solid、轻量 `bounding_box` 模式；.ipt 保存到允许的 root 下。 |
 | `inventor_view_fit` | 把 active view 缩放适配到 model extents（捕获前运行）。 |
 | `inventor_set_view_orientation` | 设置一个标准相机方向（iso/front/top 等），用于多角度捕获。 |
 | `inventor_set_camera` | 显式设置相机（eye/target mm、up、perspective、extents_mm、fit）—— 标准方向不合适时在 capture_view 前使用。 |

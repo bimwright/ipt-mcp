@@ -21,6 +21,7 @@ public static partial class InventorCommandRegistry
         add(new ExportStlHandler());
         add(new ExportDxfHandler());
         add(new ExportSatHandler());
+        add(new DeriveEnvelopeHandler());
         add(new ViewFitHandler());
         add(new SetViewOrientationHandler());
         add(new SetCameraHandler());

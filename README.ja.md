@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-65%20or%2066%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-66%20or%2067%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **65 ツール**です（inventor_send_code が有効な場合は **66 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **66 ツール**です（inventor_send_code が有効な場合は **67 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -175,7 +175,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_circular_pattern` | 指定軸周りにパーツフィーチャを円形パターン（角度あたりの数）。 |
 | `inventor_rectangular_pattern` | 1 つまたは 2 つの指定軸に沿ってパーツフィーチャを矩形パターン。 |
 
-### export (8) — ビューキャプチャと形状エクスポート（書き込み）
+### export (9) — ビューキャプチャと形状エクスポート（書き込み）
 
 > `output_path` は許可されたルート配下に置く必要があります：ユーザープロファイル、`%TEMP%`、または追加したルート — 例: Inventor マシンで `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` を設定（設定後に Inventor と MCP クライアント/サーバーセッションを再起動）。
 
@@ -186,6 +186,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_export_stl` | アクティブパーツ/アセンブリを STL（.stl）にエクスポート。 |
 | `inventor_export_sat` | アクティブパーツ/アセンブリを ACIS SAT（.sat）にエクスポート — Revit との interop フォーマット。acis_version は 7 がデフォルト（唯一のサポート値）。 |
 | `inventor_export_dxf` | 2D DXF をエクスポート。ソース（`sketch` または `flat_pattern`）を指定する必要あり。 |
+| `inventor_derive_envelope` | ソースのパーツ/アセンブリから derived part を作成 — envelope/interop パス：`derive_style`、`include_bodies` によるソリッド選択、軽量 `bounding_box` モード。許可ルート下に .ipt を保存。 |
 | `inventor_view_fit` | アクティブビューをモデル範囲にズームフィット（キャプチャ前に実行）。 |
 | `inventor_set_view_orientation` | 標準カメラ方向（iso/front/top/…）を設定し、マルチアングルキャプチャに対応。 |
 | `inventor_set_camera` | カメラを明示的に配置（eye/target mm、up、perspective、extents_mm、fit）— 標準方向が合わない場合に capture_view の前に使用。 |

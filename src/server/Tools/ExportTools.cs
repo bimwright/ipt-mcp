@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -73,6 +74,37 @@ public sealed class ExportTools
             ["output_path"] = outputPath,
             ["acis_version"] = acis_version,
         }, ct);
+    }
+
+    [McpServerTool(Name = "inventor_derive_envelope"),
+     Description("Create a new part document containing a derived-component feature from a source part/assembly — the envelope path for interop (SAT→Revit) and simplified reference geometry. output_path: absolute .ipt under an allowed output root (the derived document is saved there). source_path defaults to the active document (must have been saved). derive_style=multiple|single_seams|single_no_seams. include_bodies: source solid names or 'body:N' indices to keep (incompatible with bounding_box). bounding_box=true derives every solid as its bounding box — the lightweight-envelope mode. include_parameters carries source parameters. activate=false creates the document hidden. Returns document/path/style/solids counts.")]
+    public Task<string> DeriveEnvelope(
+        string outputPath,
+        string? sourcePath = null,
+        string deriveStyle = "multiple",
+        string[]? includeBodies = null,
+        bool boundingBox = false,
+        bool includeParameters = false,
+        bool useOrientedMinBoundingBox = false,
+        bool activate = true,
+        CancellationToken ct = default)
+    {
+        if (ExportPathPolicy.TryRejectPath(outputPath, out var rejection))
+            return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
+        if (!outputPath.EndsWith(".ipt", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(Error("INVALID_ARGUMENT", "output_path must end in .ipt"));
+        var p = new JObject
+        {
+            ["output_path"] = outputPath,
+            ["derive_style"] = deriveStyle,
+            ["bounding_box"] = boundingBox,
+            ["include_parameters"] = includeParameters,
+            ["use_oriented_min_bounding_box"] = useOrientedMinBoundingBox,
+            ["activate"] = activate,
+        };
+        if (!string.IsNullOrWhiteSpace(sourcePath)) p["source_path"] = sourcePath;
+        if (includeBodies is { Length: > 0 }) p["include_bodies"] = new JArray(includeBodies);
+        return Call("derive_envelope", p, ct);
     }
 
     [McpServerTool(Name = "inventor_export_dxf"),

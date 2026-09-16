@@ -117,6 +117,10 @@ public sealed class AssemblyToolWireTests : IDisposable
         // path under %TEMP% (an allowed root) or the request never reaches the plugin.
         AssertEnvelope(await CaptureAsync(() => exports.ExportSat(Path.Combine(Path.GetTempPath(), "out.sat"))),
             "export_sat", "output_path", "acis_version");
+        AssertEnvelope(await CaptureAsync(() => exports.DeriveEnvelope(
+                Path.Combine(Path.GetTempPath(), "env.ipt"), deriveStyle: "single_no_seams",
+                includeBodies: ["valve_body", "body:2"], activate: false)),
+            "derive_envelope", "output_path", "derive_style", "include_bodies", "bounding_box", "activate");
     }
 
     private async Task<JObject> CaptureAsync(Func<Task<string>> invoke)

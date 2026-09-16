@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-65%20or%2066%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-66%20or%2067%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **65 công cụ** khi bật mọi platform toolset mặc định, hoặc **66 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **66 công cụ** khi bật mọi platform toolset mặc định, hoặc **67 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
 Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
@@ -175,7 +175,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_circular_pattern` | Circular-pattern các part feature quanh một trục theo tên (count trên một góc). |
 | `inventor_rectangular_pattern` | Rectangular-pattern các part feature dọc theo một hoặc hai trục theo tên. |
 
-### export (8) — capture view & export geometry (write)
+### export (9) — capture view & export geometry (write)
 
 > `output_path` phải nằm dưới root được phép: user profile, `%TEMP%`, hoặc root bạn thêm — ví dụ đặt `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` trên máy chạy Inventor (rồi khởi động lại Inventor và cả MCP client/server session).
 
@@ -186,6 +186,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_export_stl` | Export part/assembly active sang STL (.stl). |
 | `inventor_export_sat` | Export part/assembly sang ACIS SAT (.sat) — định dạng interop cho Revit; acis_version mặc định 7 (giá trị duy nhất được hỗ trợ). |
 | `inventor_export_dxf` | Export DXF 2D; phải khai báo source (`sketch` hoặc `flat_pattern`). |
+| `inventor_derive_envelope` | Tạo derived part từ part/assembly nguồn — đường envelope/interop: `derive_style`, chọn solid với `include_bodies`, chế độ gọn `bounding_box`; lưu .ipt dưới root được phép. |
 | `inventor_view_fit` | Zoom-fit view active vào model extents (chạy trước khi capture). |
 | `inventor_set_view_orientation` | Đặt một camera orientation chuẩn (iso/front/top/…) cho multi-angle capture. |
 | `inventor_set_camera` | Đặt camera tường minh (eye/target mm, up, perspective, extents_mm, fit) — dùng trước capture_view khi orientation chuẩn không khớp. |

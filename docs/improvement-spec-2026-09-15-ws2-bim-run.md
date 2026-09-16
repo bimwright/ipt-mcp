@@ -641,6 +641,25 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   `continue_on_error`; sub-command dispatch qua `ctx.Commands` + re-check `IsReadOnly` per
   step. Response `{executed, rolled_back, results:[{index,ok,data|error}]}`. Surface
   **64 default / 65 send_code**.
+- **F5 rerun xong (2026-09-16, report `WS2_f5\F5-report.md`):**
+  5/6 chỉ tiêu đạt — send_code **18.8%** (9/48, target <30%), direct COM **0**, TIMEOUT **0**,
+  response ≥64KiB **0**, denylist false-positive **0**; script `data_ok=false` **22%** (2/9,
+  target <10%) — miss nằm gọn ở bước derive (3 script, 2 compile-fail do đoán API) → chính là
+  gap P2 `derive_envelope`. Tổng call 147→48 nhờ batch_execute. 3 bug tìm được đã fix ở
+  `d8c96be`: substring-routing `wp_faceplate` (EntityResolver.IsEntityRef, 3 site),
+  export_sat `exported:true` giả khi parent dir thiếu (SaveCopyAs verify File.Exists),
+  extrude `volume_mm3` tổng-part → per-body.
+- P2-1 `inventor_derive_envelope` (export toolset, write): `DeriveEnvelopeHandler` —
+  `Documents.Add` part mới + `DerivedPartComponents.CreateDefinition(source)` (cast
+  `DerivedPartDefinition`) + `defs.Add` + `SaveAs`. `source_path` default = active doc
+  (phải đã save); `derive_style` multiple|single_seams|single_no_seams; `include_bodies`
+  (name|`body:N`) → `IncludeAllSolids=kDerivedIndividualDefined` + `Solids[i].IncludeEntity`;
+  `bounding_box` → `kDerivedBoundingBox` (envelope gọn); `include_parameters`,
+  `use_oriented_min_bounding_box`, `activate=false` (doc ẩn). Mini-spec:
+  `docs/superpowers/specs/2026-09-16-derive-envelope-mini-spec.md`. Surface
+  **66 default / 67 send_code** — docs×4 + profile + root CLAUDE.md + frozen tests sync.
+  Live smoke `inventor-2027-39104` (sau redeploy): default 9→9, include 2→2, bbox
+  single_no_seams→1 body, unknown name→INVALID_ARGUMENT kèm danh sách tên.
 
 ### F5. Run kiểm chứng có kiểm soát
 
