@@ -8,8 +8,8 @@ using ModelContextProtocol.Server;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 9 sketch
-/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 13 feature tools, that every one
+/// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 10 sketch
+/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 15 feature tools, that every one
 /// is a write tool (so all are dropped under <c>--read-only</c>), and that they register under the
 /// <c>sketch</c>/<c>feature</c> toolsets. Handler bodies are type-checked by the inv25 build, not here.
 /// </summary>
@@ -25,6 +25,7 @@ public sealed class SketchFeatureToolsTests
         "inventor_draw_arc",
         "inventor_add_sketch_dimension",
         "inventor_add_sketch_constraint",
+        "inventor_draw_text",
         "inventor_close_sketch",
     };
 
@@ -39,6 +40,8 @@ public sealed class SketchFeatureToolsTests
         "inventor_fillet",
         "inventor_chamfer",
         "inventor_create_work_plane",
+        "inventor_create_work_point",
+        "inventor_create_bim_connector",
         "inventor_create_work_axis",
         "inventor_hole",
         "inventor_circular_pattern",
@@ -59,18 +62,18 @@ public sealed class SketchFeatureToolsTests
             .ToArray();
 
     [Fact]
-    public void SketchTools_exposes_exactly_the_nine_expected_tools()
+    public void SketchTools_exposes_exactly_the_ten_expected_tools()
     {
         var names = ToolNamesOf(typeof(SketchTools));
-        Assert.Equal(9, names.Length);
+        Assert.Equal(10, names.Length);
         Assert.Equal(ExpectedSketchTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 
     [Fact]
-    public void FeatureTools_exposes_exactly_the_thirteen_expected_tools()
+    public void FeatureTools_exposes_exactly_the_fifteen_expected_tools()
     {
         var names = ToolNamesOf(typeof(FeatureTools));
-        Assert.Equal(13, names.Length);
+        Assert.Equal(15, names.Length);
         Assert.Equal(ExpectedFeatureTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 

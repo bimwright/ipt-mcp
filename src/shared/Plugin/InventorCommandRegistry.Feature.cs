@@ -27,6 +27,8 @@ public static partial class InventorCommandRegistry
         add(new RectangularPatternHandler());
         add(new LoftHandler());
         add(new SweepHandler());
+        add(new CreateWorkPointHandler());
+        add(new CreateBimConnectorHandler());
     }
 }
 #endif

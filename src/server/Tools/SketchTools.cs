@@ -58,6 +58,22 @@ public sealed class SketchTools
     public Task<string> AddSketchConstraint(string type, string[] entityIds, CancellationToken ct = default)
         => Call("add_sketch_constraint", new JObject { ["type"] = type, ["entity_ids"] = new JArray(entityIds) }, ct);
 
+    [McpServerTool(Name = "inventor_draw_text"),
+     Description("Add a fitted text box to the target sketch (sketch_name optional, defaults to the most recent sketch). position [x,y] in mm is the text origin. font_size_mm overrides the size via a style override; rotation_deg must be a multiple of 90 (Inventor's TextBox.Rotation rejects arbitrary angles). Returns the sketch name and position.")]
+    public Task<string> DrawText(string text, double[] position, string? sketch_name = null,
+        double? font_size_mm = null, double rotation_deg = 0, CancellationToken ct = default)
+    {
+        var p = new JObject
+        {
+            ["text"] = text,
+            ["position"] = new JArray(position),
+        };
+        if (!string.IsNullOrWhiteSpace(sketch_name)) p["sketch_name"] = sketch_name;
+        if (font_size_mm is { } fs) p["font_size_mm"] = fs;
+        if (rotation_deg != 0) p["rotation_deg"] = rotation_deg;
+        return Call("draw_text", p, ct);
+    }
+
     [McpServerTool(Name = "inventor_close_sketch"),
      Description("Finish editing a sketch (exit sketch edit mode). sketch_name optional; defaults to the active sketch. Returns the closed sketch name.")]
     public Task<string> CloseSketch(string? sketchName = null, CancellationToken ct = default)

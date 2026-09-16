@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-69%20or%2070%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-72%20or%2073%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **69** MCP ツール、`send_code` 有効時 **70**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **72** MCP ツール、`send_code` 有効時 **73**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **69 ツール**です（inventor_send_code が有効な場合は **70 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **72 ツール**です（inventor_send_code が有効な場合は **73 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -146,7 +146,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_get_mass_properties` | 質量（g）、体積（mm³）、表面積（mm²）、重心、境界ボックス。 |
 | `inventor_list_iproperty_sets` | iProperty セットを列挙（name、internal_name、プロパティ名。オプションで値）— get/set_iproperty 用の discovery。 |
 
-### sketch (9) — 2D スケッチ形状と拘束（書き込み）
+### sketch (10) — 2D スケッチ形状と拘束（書き込み）
 
 | ツール | 説明 |
 |---|---|
@@ -158,9 +158,10 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_draw_arc` | スケッチ円弧を描画（中心、半径、開始/終了角度）。 |
 | `inventor_add_sketch_dimension` | スケッチエンティティに駆動寸法拘束を追加。 |
 | `inventor_add_sketch_constraint` | 幾何拘束を追加（一致、平行、接線、…）。 |
+| `inventor_draw_text` | フィットテキストボックスを追加（position mm、任意の font_size_mm。rotation_deg は 90 の倍数のみ）。 |
 | `inventor_close_sketch` | スケッチの編集を終了（スケッチ編集モードを終了）。 |
 
-### feature (13) — ソリッドフィーチャと作業フィーチャ（書き込み）
+### feature (15) — ソリッドフィーチャと作業フィーチャ（書き込み）
 
 | ツール | 説明 |
 |---|---|
@@ -172,11 +173,13 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_chamfer` | モデルエッジに等距離の面取りを追加。 |
 | `inventor_create_work_plane` | 作業平面を作成（オフセット、3 点、接線、または固定原点+軸）。 |
 | `inventor_create_work_axis` | 作業軸を作成（2 点、エッジ、平面交差、面法線オフセット）。 |
+| `inventor_create_work_point` | {x,y,z}/[x,y,z] mm に固定作業点を作成。コンストラクション点は命名不可（name_applied が報告）。 |
 | `inventor_hole` | 決定論的に選択された平面に対して穴あけ/皿穴/ざぐり穴を作成。タップねじメタデータはオプション。 |
 | `inventor_circular_pattern` | 指定軸周りにパーツフィーチャを円形パターン（角度あたりの数）。 |
 | `inventor_rectangular_pattern` | 1 つまたは 2 つの指定軸に沿ってパーツフィーチャを矩形パターン。 |
 | `inventor_loft` | 順序付きスケッチプロファイル群（'SketchName' または 'SketchName:N'）をロフト。オプションでセンターラインスケッチ、closed/merge-tangent-faces。 |
 | `inventor_sweep` | スケッチプロファイルをスケッチパスに沿ってスイープ（接続セグメントは自動チェーン）。orientation normal_to_path\|parallel。 |
+| `inventor_create_bim_connector` | 円形ポートエッジ上に BIM パイプコネクタを作成（ref は inventor_probe_brep の `circles[].edge`）。kind=pipe、任意で system/flow/connection メタデータ。 |
 
 ### export (9) — ビューキャプチャと形状エクスポート（書き込み）
 

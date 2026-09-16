@@ -90,6 +90,7 @@ public sealed class AssemblyToolWireTests : IDisposable
         var features = new FeatureTools(_client);
         var exports = new ExportTools(_client);
         var props = new PropertyTools(_client);
+        var sketches = new SketchTools(_client);
 
         var hole = await CaptureAsync(() => features.Hole(
             new HoleFaceDto { Normal = "+Z", Extreme = "max" },
@@ -111,6 +112,17 @@ public sealed class AssemblyToolWireTests : IDisposable
             "loft", "profiles", "operation", "merge_tangent_faces", "closed", "name");
         AssertEnvelope(await CaptureAsync(() => features.Sweep("Prof", "Path1", orientation: "parallel")),
             "sweep", "profile", "path", "operation", "orientation");
+        AssertEnvelope(await CaptureAsync(() => features.CreateWorkPoint(
+                JsonDocument.Parse("[10,20,30]").RootElement, construction: true, name: "wp_pt", visible: false)),
+            "create_work_point", "position", "construction", "name", "visible");
+        AssertEnvelope(await CaptureAsync(() => features.CreateBimConnector(
+                "body:1/edge:3", nominal_diameter_mm: 50, system_type: "domestic_cold",
+                flow_direction: "in", connection_type: "threaded", description: "inlet")),
+            "create_bim_connector", "geometry", "kind", "nominal_diameter_mm", "system_type",
+            "flow_direction", "connection_type", "description");
+        AssertEnvelope(await CaptureAsync(() => sketches.DrawText(
+                "PORT A", [5.0, 10.0], sketch_name: "S1", font_size_mm: 3.5, rotation_deg: 90)),
+            "draw_text", "text", "position", "sketch_name", "font_size_mm", "rotation_deg");
         AssertEnvelope(await CaptureAsync(() => exports.ViewFit()), "view_fit");
         AssertEnvelope(await CaptureAsync(() => exports.SetViewOrientation("iso_top_right", false)),
             "set_view_orientation", "orientation", "fit");

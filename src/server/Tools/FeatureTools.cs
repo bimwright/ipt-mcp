@@ -191,6 +191,41 @@ public sealed class FeatureTools
         return Call("create_work_plane", p, ct);
     }
 
+    [McpServerTool(Name = "inventor_create_work_point"),
+     Description("Create a fixed work point at position ({x,y,z} or [x,y,z], mm). construction (default false) marks it a construction point — note Inventor does not allow naming construction points (name_applied=false reports that). name/visible optional. Returns the work-point name.")]
+    public Task<string> CreateWorkPoint(System.Text.Json.JsonElement position, bool construction = false,
+        string? name = null, bool? visible = null, CancellationToken ct = default)
+    {
+        var p = new JObject
+        {
+            ["position"] = JToken.Parse(position.GetRawText()),
+            ["construction"] = construction,
+        };
+        if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
+        if (visible is { } v) p["visible"] = v;
+        return Call("create_work_point", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_create_bim_connector"),
+     Description("Author a BIM pipe connector on a circular port edge. geometry is an edge ref ('body:1/edge:3' — e.g. from inventor_probe_brep). kind='pipe' only for now. Optional: name, nominal_diameter_mm, system_type (domestic_cold|domestic_hot|sanitary|hydronic_supply|hydronic_return|fire_protection|other), flow_direction (in|out|bidirectional), connection_type (threaded|flanged|welded|glued|compression|other), description. Returns the connector name.")]
+    public Task<string> CreateBimConnector(string geometry, string kind = "pipe", string? name = null,
+        double? nominal_diameter_mm = null, string? system_type = null, string? flow_direction = null,
+        string? connection_type = null, string? description = null, CancellationToken ct = default)
+    {
+        var p = new JObject
+        {
+            ["geometry"] = geometry,
+            ["kind"] = kind,
+        };
+        if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
+        if (nominal_diameter_mm is { } nd) p["nominal_diameter_mm"] = nd;
+        if (!string.IsNullOrWhiteSpace(system_type)) p["system_type"] = system_type;
+        if (!string.IsNullOrWhiteSpace(flow_direction)) p["flow_direction"] = flow_direction;
+        if (!string.IsNullOrWhiteSpace(connection_type)) p["connection_type"] = connection_type;
+        if (!string.IsNullOrWhiteSpace(description)) p["description"] = description;
+        return Call("create_bim_connector", p, ct);
+    }
+
     [McpServerTool(Name = "inventor_create_work_axis"),
      Description("Create a work axis. type=two_points (refs=[2 point ids]) | edge (refs=[edge_id]) | plane_intersection (refs=[2 plane ids]) | normal_to_face_through_point (refs=[face_id, point_id]). Returns the new work-axis name.")]
     public Task<string> CreateWorkAxis(string type, string[] refs, CancellationToken ct = default)

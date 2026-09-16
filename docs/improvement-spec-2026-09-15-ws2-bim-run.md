@@ -687,6 +687,22 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   (Summary 8 props, DocSummary 3, DesignTracking 55, UserDefined 0), alias
   `"Summary Information"`→`"Inventor Summary Information"` trả `Author:"<user>"`.
   Surface **69 default / 70 send_code**.
+- P3-lớn `inventor_draw_text` (sketch) + `inventor_create_work_point` + `inventor_create_bim_connector`
+  (feature, cả hai write): `DrawTextHandler` dùng `TextBoxes.AddFitted` (+ `<StyleOverride
+  FontSize='N mm'>` cho `font_size_mm`); `CreateWorkPointHandler` dùng `WorkPoints.AddFixed`
+  (fixed-coordinate only — ref-driven variants deferred); `CreateBimConnectorHandler` resolve
+  edge ref qua `EntityResolver` → `BIMComponent.Connectors.CreatePipeConnectorDefinition` +
+  `Connectors.Add` (kind=pipe only). `probe_brep` bổ sung `circles[].edge` ref
+  (`body:B/edge:N`) để output feed thẳng vào `geometry`. Mini-spec:
+  `docs/superpowers/specs/2026-09-16-p3-tools-mini-spec.md`. Surface **72 default / 73 send_code**.
+  Live smoke `inventor-2027-88488` (send_code bisect trên `inventor-2027-86244` trước): draw_text default-sketch + named-sketch
+  + font size OK; work point {x,y,z} + [x,y,z] OK; annulus tube → probe → `body:1/edge:2` →
+  connector `conn_in` thật; mọi error path INVALID_ARGUMENT. **Hai API quirk thật phát hiện khi
+  bisect:** `TextBox.Rotation` chỉ chấp nhận bội số π/2 (0/±90°/180°/270°/360° — scan 13 giá trị
+  xác nhận; còn lại E_INVALIDARG) nên `rotation_deg` validate multiple-of-90 phía client và snap
+  về đúng π/2; `WorkPoint.Name` setter **silently no-op trên construction points**
+  (`Construction` read-only, cast PartFeature E_NOINTERFACE) nên response report `name_applied`
+  thay vì nuốt mất intent của caller.
 
 ### F5. Run kiểm chứng có kiểm soát
 

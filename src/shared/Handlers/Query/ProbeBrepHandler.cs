@@ -1,5 +1,7 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using Inventor;
 using Bimwright.Ipt.Shared.Contracts;
@@ -66,6 +68,18 @@ public sealed class ProbeBrepHandler : HandlerBase, IInventorCommand
                 if (onlyBody is not null && !ReferenceEquals(body, onlyBody)) continue;
                 bodiesScanned++;
 
+                // Body edge list for emitting resolvable edge refs (body:B/edge:N) per circle —
+                // feeds create_bim_connector/fillet edge_ids. COM RCW identity holds for the
+                // same underlying edge, so ReferenceEquals matching is reliable.
+                List<Edge>? bodyEdges = null;
+                int EdgeIndexOf(Edge e)
+                {
+                    bodyEdges ??= body.Edges.Cast<Edge>().ToList();
+                    for (var i = 0; i < bodyEdges.Count; i++)
+                        if (ReferenceEquals(bodyEdges[i], e)) return i + 1;
+                    return 0;
+                }
+
                 Faces faces;
                 try { faces = body.Faces; } catch { continue; }
                 for (var f = 1; f <= faces.Count; f++)
@@ -91,6 +105,7 @@ public sealed class ProbeBrepHandler : HandlerBase, IInventorCommand
                                 if (e.CurveType != CurveTypeEnum.kCircleCurve || e.Geometry is not Circle c) continue;
                                 circles.Add(new JObject
                                 {
+                                    ["edge"] = $"body:{b}/edge:{EdgeIndexOf(e)}",
                                     ["radius_mm"] = Round(UnitConvert.CmToMm(c.Radius), 4),
                                     ["center_mm"] = Pt(c.Center),
                                     ["inner_loop"] = inner,
