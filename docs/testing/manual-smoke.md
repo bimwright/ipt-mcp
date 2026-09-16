@@ -289,3 +289,16 @@ integration end to end.
 
     **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
     (`inventor-2027-35216`, pipe): all expectations met.
+
+25. **export_sat** (F4-P0-5; run via `scripts\mcp-smoke.ps1`):
+    - `export_sat {output_path:%TEMP%\ipt-f4p5-part.sat}` on the 50×30×10 box →
+      `{format:"SAT", acis_version:7, exported:true}`; file exists (7159 B) with ACIS header
+      `700 0 1 0` — leading 700 = ACIS 7.0, so the translator `Version` option took effect.
+    - `acis_version:4` → INVALID_ARGUMENT ("ACIS 7.0 only"), rejected server-side before the
+      wire call; `acis_version:7.0` explicit → exported.
+    - `output_path:"D:\models\out.sat"` → INVALID_ARGUMENT allowed-root (the C4
+      scenario — README export section now points at `BIMWRIGHT_INVENTOR_EXPORT_ROOT`).
+    - `output_path` ending `.step` → INVALID_ARGUMENT "must end in .sat".
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-78896`, pipe): all expectations met.

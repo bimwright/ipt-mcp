@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-61%20or%2062%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-62%20or%2063%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -54,7 +54,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 - Inventor 从 2025 起把桌面 add-in 开发从 .NET Framework 上移开：**2025/2026 用 .NET 8，2027 用 .NET 10**。 （.NET 8 add-in 在 2027 上仍二进制兼容，但 net10 是原生目标。）
 - 全程使用**4-digit calendar years**（2022..2027）—— 永远不要使用 legacy 版本号。
 
-> **状态：已验证。** Phase 1-3 已完成且全绿（默认 61 个 MCP tools，启用 send_code 时为 62 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
+> **状态：已验证。** Phase 1-3 已完成且全绿（默认 62 个 MCP tools，启用 send_code 时为 63 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
 
 ---
 
@@ -94,7 +94,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **61 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **62 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **62 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **63 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -176,13 +176,16 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_circular_pattern` | 绕一个命名轴圆形阵列 part features（在某一角度上 count）。 |
 | `inventor_rectangular_pattern` | 沿一个或两个命名轴矩形阵列 part features。 |
 
-### export (7) —— 视图捕获与几何导出（write）
+### export (8) —— 视图捕获与几何导出（write）
+
+> `output_path` 必须位于允许的根目录下：user profile、`%TEMP%`，或自行添加的根目录 —— 例如在运行 Inventor 的机器上设置 `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports`（设置后需重启 Inventor 和 MCP 客户端/服务器会话）。
 
 | Tool | 描述 |
 |---|---|
 | `inventor_capture_view` | 把 active view 捕获为 PNG 文件（写入 `<export-root>\captures\` 或输出路径）；`inline=true` 返回受限 base64 PNG。 |
 | `inventor_export_step` | 把 active part/assembly 导出为 STEP（.stp/.step）。 |
 | `inventor_export_stl` | 把 active part/assembly 导出为 STL（.stl）。 |
+| `inventor_export_sat` | 把 active part/assembly 导出为 ACIS SAT（.sat）—— 用于 Revit interop 的格式；acis_version 默认 7（唯一支持的值）。 |
 | `inventor_export_dxf` | 导出 2D DXF；必须声明 source（`sketch` 或 `flat_pattern`）。 |
 | `inventor_view_fit` | 把 active view 缩放适配到 model extents（捕获前运行）。 |
 | `inventor_set_view_orientation` | 设置一个标准相机方向（iso/front/top 等），用于多角度捕获。 |

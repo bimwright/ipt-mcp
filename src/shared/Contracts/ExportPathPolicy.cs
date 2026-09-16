@@ -33,7 +33,7 @@ public static class ExportPathPolicy
         var dir = Path.GetDirectoryName(full);
         if (string.IsNullOrEmpty(dir) || !IsUnderAllowedRoot(full))
         {
-            rejection = "output_path must be under an allowed output root (user profile or temp directory).";
+            rejection = "output_path must be under an allowed output root (user profile, temp directory, or BIMWRIGHT_INVENTOR_EXPORT_ROOT — set it on the Inventor machine and restart Inventor + the MCP client).";
             return true;
         }
 

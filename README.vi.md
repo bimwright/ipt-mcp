@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-61%20or%2062%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-62%20or%2063%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (61 MCP tools mặc định, hoặc 62 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
+> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (62 MCP tools mặc định, hoặc 63 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **61 công cụ** khi bật mọi platform toolset mặc định, hoặc **62 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **62 công cụ** khi bật mọi platform toolset mặc định, hoặc **63 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
 Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
@@ -172,13 +172,16 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_circular_pattern` | Circular-pattern các part feature quanh một trục theo tên (count trên một góc). |
 | `inventor_rectangular_pattern` | Rectangular-pattern các part feature dọc theo một hoặc hai trục theo tên. |
 
-### export (7) — capture view & export geometry (write)
+### export (8) — capture view & export geometry (write)
+
+> `output_path` phải nằm dưới root được phép: user profile, `%TEMP%`, hoặc root bạn thêm — ví dụ đặt `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` trên máy chạy Inventor (rồi khởi động lại Inventor và cả MCP client/server session).
 
 | Tool | Mô tả |
 |---|---|
 | `inventor_capture_view` | Capture view active ra file PNG (dưới `<export-root>\captures\` hoặc `output_path`); `inline=true` trả PNG base64 có giới hạn. |
 | `inventor_export_step` | Export part/assembly active sang STEP (.stp/.step). |
 | `inventor_export_stl` | Export part/assembly active sang STL (.stl). |
+| `inventor_export_sat` | Export part/assembly sang ACIS SAT (.sat) — định dạng interop cho Revit; acis_version mặc định 7 (giá trị duy nhất được hỗ trợ). |
 | `inventor_export_dxf` | Export DXF 2D; phải khai báo source (`sketch` hoặc `flat_pattern`). |
 | `inventor_view_fit` | Zoom-fit view active vào model extents (chạy trước khi capture). |
 | `inventor_set_view_orientation` | Đặt một camera orientation chuẩn (iso/front/top/…) cho multi-angle capture. |

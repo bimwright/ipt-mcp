@@ -59,6 +59,22 @@ public sealed class ExportTools
         return Call("export_stl", new JObject { ["output_path"] = outputPath }, ct);
     }
 
+    [McpServerTool(Name = "inventor_export_sat"),
+     Description("Export the active part or assembly to an ACIS SAT (.sat) file at output_path — the format Revit consumes for geometry interop. acis_version defaults to 7 (ACIS 7.0); the Inventor SAT translator supports ACIS 7 only, so other values are rejected. The path must be an absolute .sat file path under an allowed output root (user profile, temp, or BIMWRIGHT_INVENTOR_EXPORT_ROOT).")]
+    public Task<string> ExportSat(string outputPath, double acis_version = 7.0, CancellationToken ct = default)
+    {
+        if (ExportPathPolicy.TryRejectPath(outputPath, out var rejection))
+            return Task.FromResult(Error("INVALID_ARGUMENT", rejection));
+        if (acis_version != 7.0)
+            return Task.FromResult(Error("INVALID_ARGUMENT",
+                "acis_version must be 7 — the Inventor SAT translator's Version option supports ACIS 7.0 only."));
+        return Call("export_sat", new JObject
+        {
+            ["output_path"] = outputPath,
+            ["acis_version"] = acis_version,
+        }, ct);
+    }
+
     [McpServerTool(Name = "inventor_export_dxf"),
      Description("Export a 2D DXF (.dxf) at output_path. Because Phase 1 ships no drawing tools, you MUST declare the DXF source: source=sketch with sketch_name, or source=flat_pattern for a sheet-metal part. If the source is unavailable on the active document the add-in returns WRONG_DOCUMENT_TYPE or INVALID_ARGUMENT.")]
     public Task<string> ExportDxf(

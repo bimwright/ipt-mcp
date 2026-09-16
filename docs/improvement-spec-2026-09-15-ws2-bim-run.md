@@ -621,6 +621,12 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   minh). `fit` default **false** (giữ explicit framing). Surface **61 default / 62 send_code**.
   Smoke `inventor-2027-35216`: full spec + ortho/fit + 5 negative đều đúng; capture_view ngay sau
   chụp đúng góc. Bằng chứng: manual-smoke bước 24.
+- P0-5 `export_sat` + docs export root: translator `{89162634-02B6-11D5-8E80-0010B541CD80}`;
+  `acis_version` (default 7) → options `Version`; translator SAT chỉ hỗ trợ ACIS 7 nên giá trị khác
+  bị reject (tránh ghi file version Revit không đọc được). `ExportSupport.SaveCopyAs` có overload
+  nhận `configure` — gọi `HasSaveCopyAsOptions[…]` (indexed property) populate defaults trước khi
+  override. Export-section README×4 có dòng hướng dẫn `BIMWRIGHT_INVENTOR_EXPORT_ROOT` (C4).
+  Surface **62 default / 63 send_code**.
 
 ### F5. Run kiểm chứng có kiểm soát
 

@@ -107,6 +107,10 @@ public sealed class AssemblyToolWireTests : IDisposable
                 eye: JsonDocument.Parse("[10,20,30]").RootElement,
                 perspective: true, extents_mm: [100, 80], fit: true)),
             "set_camera", "eye", "perspective", "extents_mm", "fit");
+        // output_path is validated against ExportPathPolicy before the wire call, so use a
+        // path under %TEMP% (an allowed root) or the request never reaches the plugin.
+        AssertEnvelope(await CaptureAsync(() => exports.ExportSat(Path.Combine(Path.GetTempPath(), "out.sat"))),
+            "export_sat", "output_path", "acis_version");
     }
 
     private async Task<JObject> CaptureAsync(Func<Task<string>> invoke)

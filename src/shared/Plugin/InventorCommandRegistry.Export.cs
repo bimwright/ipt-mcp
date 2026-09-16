@@ -8,8 +8,8 @@ using Bimwright.Ipt.Shared.Handlers.Export;
 
 /// <summary>
 /// Phase-3 WS3-C Export registrar: <c>capture_view</c>, <c>export_step</c>, <c>export_stl</c>,
-/// <c>export_dxf</c>, plus the view-state tools <c>view_fit</c>, <c>set_view_orientation</c>,
-/// <c>set_camera</c> (F4-P0-4). Implemented only under an Inventor compile symbol (the handlers touch the API);
+/// <c>export_dxf</c>, <c>export_sat</c> (F4-P0-5), plus the view-state tools <c>view_fit</c>,
+/// <c>set_view_orientation</c>, <c>set_camera</c> (F4-P0-4). Implemented only under an Inventor compile symbol (the handlers touch the API);
 /// without a symbol the <c>partial void AddExport</c> stays a no-op.
 /// </summary>
 public static partial class InventorCommandRegistry
@@ -20,6 +20,7 @@ public static partial class InventorCommandRegistry
         add(new ExportStepHandler());
         add(new ExportStlHandler());
         add(new ExportDxfHandler());
+        add(new ExportSatHandler());
         add(new ViewFitHandler());
         add(new SetViewOrientationHandler());
         add(new SetCameraHandler());
