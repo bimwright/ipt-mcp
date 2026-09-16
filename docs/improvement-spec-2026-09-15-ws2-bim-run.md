@@ -613,6 +613,14 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   `RegistrationCountTests` đúng toolset thật; thêm wire-envelope test + authorizer rows.
   Deferred: generated `mcps/ipt-mcp/tools/*.json` (publishing artifact, regen khi release).
 - Commit: `f2bad45` (P0-1+P0-2), `c3c5244` (P0-3 + review fixes). **335/335 tests** xanh.
+- P0-4 `set_camera` (export toolset, `IsReadOnly` ở handler — view state không phải model state):
+  `CameraParams` mới (API-agnostic: eye/target/up qua Vec3Params, `extents_mm` [w,h]|{width,height},
+  `perspective`/`fit`; ≥1 param bắt buộc; reject eye==target, up zero, up ∥ view-dir khi đủ data).
+  Apply order: perspective→eye→target→up→SetExtents→fit→`ApplyWithoutTransition`→Update; response
+  là **readback** resolved camera (Inventor trượt eye dọc view-dir để khớp extents — smoke chứng
+  minh). `fit` default **false** (giữ explicit framing). Surface **61 default / 62 send_code**.
+  Smoke `inventor-2027-35216`: full spec + ortho/fit + 5 negative đều đúng; capture_view ngay sau
+  chụp đúng góc. Bằng chứng: manual-smoke bước 24.
 
 ### F5. Run kiểm chứng có kiểm soát
 

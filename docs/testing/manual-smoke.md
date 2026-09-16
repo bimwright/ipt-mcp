@@ -275,3 +275,17 @@ integration end to end.
 
     **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
     (`inventor-2027-80176`, pipe): all expectations met.
+
+24. **set_camera** (F4-P0-4; run via `scripts\mcp-smoke.ps1`):
+    - Full spec `{eye:[150,-120,100], target:[25,15,5], up:[0,0,1], perspective:true,
+      extents_mm:[120,90]}` on a 50×30×10 box → applied; readback `perspective:true`,
+      `extents_mm:[120,90]`, `eye_mm:[138.2,-107.2,91.0]` — Inventor slides the eye along the
+      view direction to satisfy extents, which is exactly why the response is a readback.
+    - `capture_view {640×480}` immediately after → file-mode PNG (125 KB) at the framed angle.
+    - `{perspective:false, fit:true}` → ortho, reframed (`extents_mm`→~61).
+    - Negatives all `INVALID_ARGUMENT`: empty call ("at least one of …"), `eye==target`
+      ("zero-length view direction"), `up=[0,0,0]` ("non-zero direction vector"),
+      up ∥ view dir ("parallel"), `extents_mm:[100,-5]` ("positive numeric").
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-35216`, pipe): all expectations met.

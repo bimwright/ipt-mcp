@@ -99,6 +99,27 @@ public sealed class ExportTools
     public Task<string> SetViewOrientation(string orientation, bool fit = true, CancellationToken ct = default)
         => Call("set_view_orientation", new JObject { ["orientation"] = orientation, ["fit"] = fit }, ct);
 
+    [McpServerTool(Name = "inventor_set_camera"),
+     Description("Position the active view's camera explicitly — use before capture_view when the 10 standard orientations don't fit. eye/target take {x,y,z} or [x,y,z] in mm; up is a direction vector; perspective toggles projection; extents_mm [width,height] sets the view volume; fit=true reframes to model extents (default false — explicit framing is kept). At least one parameter is required; degenerate views (eye==target, zero/parallel up) are rejected. Returns the resolved camera state. Does not modify the document.")]
+    public Task<string> SetCamera(
+        System.Text.Json.JsonElement? eye = null,
+        System.Text.Json.JsonElement? target = null,
+        System.Text.Json.JsonElement? up = null,
+        bool? perspective = null,
+        double[]? extents_mm = null,
+        bool fit = false,
+        CancellationToken ct = default)
+    {
+        var p = new JObject();
+        if (eye is { } e) p["eye"] = JToken.Parse(e.GetRawText());
+        if (target is { } t) p["target"] = JToken.Parse(t.GetRawText());
+        if (up is { } u) p["up"] = JToken.Parse(u.GetRawText());
+        if (perspective.HasValue) p["perspective"] = perspective.Value;
+        if (extents_mm is not null) p["extents_mm"] = new JArray(extents_mm);
+        if (fit) p["fit"] = true;
+        return Call("set_camera", p, ct);
+    }
+
     // ---- helpers ----
 
     private static int ClampPixels(int px) => px < 16 ? 16 : (px > 4096 ? 4096 : px);

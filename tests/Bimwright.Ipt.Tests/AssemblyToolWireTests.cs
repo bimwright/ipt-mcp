@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Text.Json;
 using Bimwright.Ipt.Server;
 using Bimwright.Ipt.Server.Tools;
 using Bimwright.Ipt.Shared.Contracts;
@@ -102,6 +103,10 @@ public sealed class AssemblyToolWireTests : IDisposable
         AssertEnvelope(await CaptureAsync(() => exports.ViewFit()), "view_fit");
         AssertEnvelope(await CaptureAsync(() => exports.SetViewOrientation("iso_top_right", false)),
             "set_view_orientation", "orientation", "fit");
+        AssertEnvelope(await CaptureAsync(() => exports.SetCamera(
+                eye: JsonDocument.Parse("[10,20,30]").RootElement,
+                perspective: true, extents_mm: [100, 80], fit: true)),
+            "set_camera", "eye", "perspective", "extents_mm", "fit");
     }
 
     private async Task<JObject> CaptureAsync(Func<Task<string>> invoke)

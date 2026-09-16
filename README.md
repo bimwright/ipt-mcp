@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-60%20or%2061%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-61%20or%2062%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: verified.** Phases 1-3 are complete and green (60 MCP tools by default, or 61 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
+> **Status: verified.** Phases 1-3 are complete and green (61 MCP tools by default, or 62 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
 
 ---
 
@@ -109,7 +109,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **60 tools** by default when all platform toolsets are enabled, or **61 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **61 tools** by default when all platform toolsets are enabled, or **62 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
 Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
@@ -191,7 +191,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_circular_pattern` | Circular-pattern part features around a named axis (count over an angle). |
 | `inventor_rectangular_pattern` | Rectangular-pattern part features along one or two named axes. |
 
-### export (6) — view capture & geometry export (write)
+### export (7) — view capture & geometry export (write)
 
 | Tool | Description |
 |---|---|
@@ -201,6 +201,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_export_dxf` | Export a 2D DXF; must declare source (`sketch` or `flat_pattern`). |
 | `inventor_view_fit` | Zoom-fit the active view to the model extents (run before capture). |
 | `inventor_set_view_orientation` | Set a standard camera orientation (iso/front/top/…) for multi-angle captures. |
+| `inventor_set_camera` | Position the camera explicitly (eye/target in mm, up, perspective, extents_mm, fit) — use before capture_view when standard orientations don't fit. |
 
 > Export paths must be absolute and under an allowed output root (user profile or temp).
 

@@ -12,7 +12,7 @@ public static class ServerInstructions
         "create work geometry such as a work plane and work axis; " +
         "place components (IPT/IAM) in assembly, constrain them (mate/flush/insert/angle) using named refs/proxies, create iMates on parts; " +
         "query assembly relationships, BOM, degrees of freedom, interference (clash analysis), and min distance; " +
-        "zoom-fit and orient camera views; " +
+        "zoom-fit, orient, and position camera views (eye/target/up/extents) and capture view images; " +
         "read and write model parameters and user parameters; " +
         "read and write iProperties (iproperty: title, author, part number, description, custom properties); " +
         "compute mass properties (mass, volume, surface area, center of gravity, bounding box) and material; " +
