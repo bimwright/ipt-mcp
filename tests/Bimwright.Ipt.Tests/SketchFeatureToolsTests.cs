@@ -9,7 +9,7 @@ namespace Bimwright.Ipt.Tests;
 
 /// <summary>
 /// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 9 sketch
-/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 6 feature tools, that every one
+/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 10 feature tools, that every one
 /// is a write tool (so all are dropped under <c>--read-only</c>), and that they register under the
 /// <c>sketch</c>/<c>feature</c> toolsets. Handler bodies are type-checked by the inv25 build, not here.
 /// </summary>
@@ -31,6 +31,7 @@ public sealed class SketchFeatureToolsTests
     private static readonly string[] ExpectedFeatureTools =
     {
         "inventor_extrude",
+        "inventor_combine",
         "inventor_revolve",
         "inventor_fillet",
         "inventor_chamfer",
@@ -63,10 +64,10 @@ public sealed class SketchFeatureToolsTests
     }
 
     [Fact]
-    public void FeatureTools_exposes_exactly_the_nine_expected_tools()
+    public void FeatureTools_exposes_exactly_the_ten_expected_tools()
     {
         var names = ToolNamesOf(typeof(FeatureTools));
-        Assert.Equal(9, names.Length);
+        Assert.Equal(10, names.Length);
         Assert.Equal(ExpectedFeatureTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 
@@ -83,7 +84,7 @@ public sealed class SketchFeatureToolsTests
     [Fact]
     public void All_sketch_and_feature_tools_are_write_and_dropped_under_read_only()
     {
-        // With everything enabled but read-only on, none of the 15 write tools should be exposed.
+        // With everything enabled but read-only on, none of the 19 write tools should be exposed.
         var cfg = new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true };
         var names = ToolNames(cfg);
 
@@ -92,7 +93,7 @@ public sealed class SketchFeatureToolsTests
     }
 
     [Fact]
-    public void Default_registration_includes_all_fifteen_write_tools()
+    public void Default_registration_includes_all_nineteen_write_tools()
     {
         var names = ToolNames(new InventorMcpConfig());
         foreach (var t in ExpectedSketchTools.Concat(ExpectedFeatureTools))

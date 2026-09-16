@@ -580,7 +580,7 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
 | P3 | sketch text, `inventor_create_bim_connector`, work point | gap doc | |
 | P3 (nhỏ) | `get_iproperty`: sửa ví dụ sai trong Description (`PropertyTools.cs:23`), nhận alias `Summary Information` → `Inventor Summary Information`; `list_iproperty_sets` | #9 (lỗi do Description của tool) | |
 
-**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0-1 + P0-2 + P0-3 xong (code + test + live smoke + review).**
+**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0 đủ 5/5; P1 `combine` xong (code + test + live smoke + review).**
 
 - P0-1 `extrude`: `ExtrudeParams` mới (API-agnostic: distance số\|expression, `affected_bodies`+`new_body`
   reject); `EntityResolver.ResolveBody` mới; `affected_bodies` → `ExtrudeDefinition`/`AffectedBodies`
@@ -627,6 +627,13 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
   nhận `configure` — gọi `HasSaveCopyAsOptions[…]` (indexed property) populate defaults trước khi
   override. Export-section README×4 có dòng hướng dẫn `BIMWRIGHT_INVENTOR_EXPORT_ROOT` (C4).
   Surface **62 default / 63 send_code**.
+- P1 `combine` (feature toolset, write): `CombineHandler` mới — `base_body` + `tool_bodies[]`
+  resolve qua `EntityResolver.ResolveBody`; `operation` join|cut|intersect qua
+  `FeatureSupport.Operation` rồi **reject `new_body`** (vô nghĩa cho combine — new body đến từ
+  extrude); reject base∈tools (so theo tên — Inventor share browser namespace) và `tool_bodies`
+  rỗng. `CombineFeatures.Add(BaseBody, ObjectCollection, Operation, KeepToolBodies)`. Response:
+  `feature_name`, `operation`, `keep_tool_bodies`, `tool_bodies` (tên đã resolve), `body_names`
+  (kết quả — tên đổi sau combine), `volume_mm3`. Surface **63 default / 64 send_code**.
 
 ### F5. Run kiểm chứng có kiểm soát
 

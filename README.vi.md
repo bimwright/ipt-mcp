@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-62%20or%2063%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-63%20or%2064%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (62 MCP tools mặc định, hoặc 63 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
+> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (63 MCP tools mặc định, hoặc 64 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **62 công cụ** khi bật mọi platform toolset mặc định, hoặc **63 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **63 công cụ** khi bật mọi platform toolset mặc định, hoặc **64 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
 Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
@@ -158,12 +158,13 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_add_sketch_constraint` | Thêm geometric constraint (coincident, parallel, tangent, …). |
 | `inventor_close_sketch` | Kết thúc chỉnh sketch (thoát chế độ edit sketch). |
 
-### feature (9) — solid & work feature (write)
+### feature (10) — solid & work feature (write)
 
 | Tool | Mô tả |
 |---|---|
 | `inventor_extrude` | Extrude một sketch theo tên (distance, join/cut/intersect, direction). |
 | `inventor_revolve` | Revolve một sketch quanh trục (góc, operation). |
+| `inventor_combine` | Boolean các solid body (base + tool bodies, join/cut/intersect, keep_tool_bodies). |
 | `inventor_fillet` | Thêm fillet cạnh bán kính cố định trên các edge model. |
 | `inventor_chamfer` | Thêm chamfer cạnh khoảng cách đều trên các edge model. |
 | `inventor_create_work_plane` | Tạo work plane (offset, three_points, tangent hoặc fixed origin+axes). |

@@ -78,6 +78,21 @@ public sealed class FeatureTools
         return Call("extrude", p, ct);
     }
 
+    [McpServerTool(Name = "inventor_combine"),
+     Description("Boolean solid bodies in the active part: base_body + tool_bodies (['1','body:2','BodyName']) with operation=join|cut|intersect. keep_tool_bodies (default false) retains tool bodies. name renames the feature. Returns the result body_names — names can change across a combine, so use the response, don't assume pre-combine names survive. Requires ≥2 solid bodies.")]
+    public Task<string> Combine(string base_body, string[] tool_bodies, string operation = "join", bool keep_tool_bodies = false, string? name = null, CancellationToken ct = default)
+    {
+        var p = new JObject
+        {
+            ["base_body"] = base_body,
+            ["tool_bodies"] = new JArray(tool_bodies),
+            ["operation"] = operation,
+        };
+        if (keep_tool_bodies) p["keep_tool_bodies"] = true;
+        if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
+        return Call("combine", p, ct);
+    }
+
     [McpServerTool(Name = "inventor_revolve"),
      Description("Revolve the profile of a named sketch about an axis (axis_id = a sketch line entity id or an origin axis XAxis|YAxis|ZAxis). angle in degrees; operation=join|cut|intersect. Returns the new feature name.")]
     public Task<string> Revolve(string sketchName, string axisId, double angle, string operation = "join", CancellationToken ct = default)

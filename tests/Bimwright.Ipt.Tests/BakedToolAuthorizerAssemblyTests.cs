@@ -23,6 +23,7 @@ public sealed class BakedToolAuthorizerAssemblyTests
     [InlineData("hole")]
     [InlineData("circular_pattern")]
     [InlineData("rectangular_pattern")]
+    [InlineData("combine")]
     public void Write_commands_stay_denied(string cmd)
         => Assert.False(BakedToolDispatchAuthorizer.IsAllowed(cmd));
 }

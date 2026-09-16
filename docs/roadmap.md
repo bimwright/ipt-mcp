@@ -37,7 +37,7 @@ Inventor roadmap — not a replacement for it. Everything below is deferred.
 ### Advanced features
 - Hole, shell, sweep, loft, thread.
 - Feature patterns (rectangular/circular/mirror).
-- Sketch modify; body split / combine / mirror.
+- Sketch modify; body split / mirror.
 - Work point (work plane and work axis are already in Phase 1).
 
 ### Diagnostics

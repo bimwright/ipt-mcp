@@ -302,3 +302,24 @@ integration end to end.
 
     **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
     (`inventor-2027-78896`, pipe): all expectations met.
+
+26. **combine** (F4-P1; sequential-driver smoke — the MCP SDK can dispatch piped
+    `tools/call` concurrently, so each call was sent only after the previous
+    response id arrived; PowerShell hashtable note: `ConvertFrom-Json` ids are
+    `Int64`, key lookups must cast `[int]`):
+    - `base` box 50×30×10 (15000 mm³) + `post` box 20×20×15 overlapping →
+      `combine {base_body:"base_body", tool_bodies:["post_body"], operation:"join",
+      name:"joined"}` → `{feature_name:"joined", body_names:["base_body"],
+      volume_mm3:17000}` — exact union math (15000+6000−4000 overlap); subsequent
+      `list_bodies` shows total:1.
+    - `combine {base_body:"body:1", tool_bodies:["slot_tool_body"], operation:"cut"}`
+      (slot 40×10×8 fully inside base) → `volume_mm3:13800` (17000−3200) ✓.
+    - `combine {base_body:"1", tool_bodies:["clip_body"], operation:"intersect",
+      keep_tool_bodies:true}` → `volume_mm3:2900` (3000 slab − 600 slot void + 500
+      post region) ✓; `list_bodies` → total:2 (result + kept `clip_body`).
+    - Negatives all `INVALID_ARGUMENT`: `tool_bodies:[]` ("non-empty array"),
+      base∈tools ("base and tools must differ"), unknown ref ("unknown body
+      'nosuch'"), `operation:"new_body"` ("not valid for combine").
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-38784`, pipe): all expectations met.

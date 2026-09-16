@@ -95,6 +95,8 @@ public sealed class AssemblyToolWireTests : IDisposable
             tapped: new HoleTappedDto { Designation = "M6x1" }));
         AssertEnvelope(hole, "hole", "face", "points_mm", "diameter_mm", "tapped_designation");
 
+        AssertEnvelope(await CaptureAsync(() => features.Combine("body:1", ["body:2"], "cut", keep_tool_bodies: true)),
+            "combine", "base_body", "tool_bodies", "operation", "keep_tool_bodies");
         AssertEnvelope(await CaptureAsync(() => features.CircularPattern(["Hole1"], "Z Axis", 4)),
             "circular_pattern", "feature_names", "axis", "count", "angle_deg");
         AssertEnvelope(await CaptureAsync(() => features.RectangularPattern(
