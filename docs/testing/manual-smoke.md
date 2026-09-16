@@ -357,3 +357,25 @@ integration end to end.
       ValueKind check — never reaches the wire).
     - Sanity: 2-step batch (`list_bodies`+`get_document_info`) →
       `executed:2, rolled_back:false`.
+  27. `inventor_fillet` edge selector (F4-P1) — Inventor 2027 (`inventor-2027-57748`,
+      pipe). Two bosses r=8 at (50,0,0..10) and (-50,0,0..10) + cylinder r=15:
+      - `edges:{kind:"circular"}` on the r15 cylinder → Fillet1 over 2 edges
+        (top+bottom), `matched_edges` reporting `radius_mm:15`,
+        `center_mm` z=30/z=0, `adjacent:["cylinder","plane"]`.
+      - `radius_mm:8` → only the boss edges matched (r15 edges skipped).
+      - `on_body:"bossB_body"` → only body:2 edges (centers x=-50).
+      - `center_mm:[50,0,10], center_tol_mm:2` → exactly ONE edge: bossA top.
+      - `adjacent_surface_types:["plane"]` → 0 matches → INVALID_ARGUMENT
+        (rim edges are cylinder+plane; BOTH faces must be in the set).
+      - Negatives: kind:"planar" → "edges.kind must be 'circular'";
+        edges:"bogus" → "array of edge ids or a selector object";
+        radius<=0 / missing edges → INVALID_ARGUMENT.
+      - Caveat observed: re-filleting an already-filleted edge → API_ERROR
+        E_FAIL from AddSimple (geometry conflict, not a selector miss).
+      - `close_sketch` now forces `Profiles.AddForSolid()` when UpdateProfiles
+        leaves 0 profiles — verified: circle sketch profile_count 0→1, extrude
+        succeeded (previously draw_circle could not produce an extrudable
+        profile at all).
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`.
+

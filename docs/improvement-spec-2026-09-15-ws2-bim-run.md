@@ -580,7 +580,7 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
 | P3 | sketch text, `inventor_create_bim_connector`, work point | gap doc | |
 | P3 (nhỏ) | `get_iproperty`: sửa ví dụ sai trong Description (`PropertyTools.cs:23`), nhận alias `Summary Information` → `Inventor Summary Information`; `list_iproperty_sets` | #9 (lỗi do Description của tool) | |
 
-**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0 đủ 5/5; P1 `combine` xong + commit `deed410`; P1 `batch_execute` xong (code + test + live smoke + review-fix round 2 — block-list OrdinalIgnoreCase + doc-lifecycle commands + spill parity + 120 s budget).**
+**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0 đủ 5/5; P1 `combine` xong + commit `deed410`; P1 `batch_execute` xong + commit `a866472` (review APPROVE); P1 `fillet` edge selector xong (code + test + live smoke; review tiếp) — kèm fix `close_sketch` AddForSolid cho circle profile.**
 
 - P0-1 `extrude`: `ExtrudeParams` mới (API-agnostic: distance số\|expression, `affected_bodies`+`new_body`
   reject); `EntityResolver.ResolveBody` mới; `affected_bodies` → `ExtrudeDefinition`/`AffectedBodies`

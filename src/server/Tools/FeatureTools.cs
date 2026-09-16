@@ -118,9 +118,19 @@ public sealed class FeatureTools
         }, ct);
 
     [McpServerTool(Name = "inventor_fillet"),
-     Description("Add a constant-radius edge fillet over the given model edge_ids. radius in mm. Returns the new fillet feature name.")]
-    public Task<string> Fillet(string[] edgeIds, double radius, CancellationToken ct = default)
-        => Call("fillet", new JObject { ["edge_ids"] = new JArray(edgeIds), ["radius_mm"] = radius }, ct);
+     Description("Add a constant-radius edge fillet. radius in mm. Pick edges either with edgeIds ([\"1\",\"body:2/edge:3\"]) or an edges value — a plain id array or a selector object {kind:'circular', radius_mm?, radius_tol_mm?, center_mm?, center_tol_mm?, on_body?, adjacent_surface_types?}; edges wins when both are given. Circular edges are filtered by radius, circle center, body, and the surface types of BOTH adjacent faces (plane|cylinder|cone|torus|sphere|bspline|elliptical_cylinder|elliptical_cone). Returns feature_name and matched_edges so you can verify what was filleted.")]
+    public Task<string> Fillet(double radius, string[]? edgeIds = null, System.Text.Json.JsonElement? edges = null, CancellationToken ct = default)
+    {
+        var p = new JObject { ["radius_mm"] = radius };
+        if (edgeIds is { Length: > 0 }) p["edge_ids"] = new JArray(edgeIds);
+        if (edges is { } el)
+        {
+            if (el.ValueKind != System.Text.Json.JsonValueKind.Array && el.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return Task.FromResult(Err("edges must be an array of edge ids or a selector object"));
+            p["edges"] = JToken.Parse(el.GetRawText());
+        }
+        return Call("fillet", p, ct);
+    }
 
     [McpServerTool(Name = "inventor_chamfer"),
      Description("Add an equal-distance edge chamfer over the given model edge_ids. distance in mm. Returns the new chamfer feature name.")]

@@ -166,7 +166,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_revolve` | Revolve một sketch quanh trục (góc, operation). |
 | `inventor_combine` | Boolean các solid body (base + tool bodies, join/cut/intersect, keep_tool_bodies). |
 | `inventor_batch_execute` | Chạy tới 20 wire command trong một transaction (một undo, rollback khi lỗi). |
-| `inventor_fillet` | Thêm fillet cạnh bán kính cố định trên các edge model. |
+| `inventor_fillet` | Thêm fillet cạnh bán kính cố định — `edgeIds` hoặc selector `edges` `{kind:circular, radius_mm?, center_mm?, on_body?, adjacent_surface_types?}`; trả `matched_edges`. |
 | `inventor_chamfer` | Thêm chamfer cạnh khoảng cách đều trên các edge model. |
 | `inventor_create_work_plane` | Tạo work plane (offset, three_points, tangent hoặc fixed origin+axes). |
 | `inventor_create_work_axis` | Tạo work axis (two_points, edge, plane_intersection, normal_to_face_through_point). |

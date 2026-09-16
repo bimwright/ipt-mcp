@@ -25,6 +25,7 @@ public static class ResponseSizePolicyCatalog
             ["send_code"] = "Return less: a smaller result DTO or shorter stdout (stdout over 64 KiB auto-spills to a local file).",
             ["run_baked_tool"] = "Narrow the baked tool's params; oversized results auto-spill to a local file.",
             ["batch_execute"] = "Split the batch or narrow the sub-commands; oversized results auto-spill to a local file.",
+            ["fillet"] = "Narrow the edge selector (radius_mm, center_mm, on_body, adjacent_surface_types) or pass explicit edge ids.",
         };
 
     public static string GetNarrowingHint(string? commandName)

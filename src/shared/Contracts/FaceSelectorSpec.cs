@@ -32,18 +32,23 @@ public sealed class FaceSelectorSpec
         { error = "selector.kind must be 'planar' or 'cylindrical'"; return false; }
         spec.Kind = kind;
 
-        if (o["tolerance_deg"] is not null) spec.ToleranceDeg = o.Value<double>("tolerance_deg");
+        if (o["tolerance_deg"] is not null)
+        {
+            if (!IsFiniteNumber(o["tolerance_deg"]))
+            { error = "selector.tolerance_deg must be a finite number"; return false; }
+            spec.ToleranceDeg = (double)o["tolerance_deg"]!;
+        }
         if (spec.ToleranceDeg <= 0 || spec.ToleranceDeg >= 90)
         { error = "selector.tolerance_deg must be in (0, 90)"; return false; }
 
         if (o["near_mm"] is JArray near)
         {
-            if (near.Count != 3 || near.Any(t => t.Type != JTokenType.Float && t.Type != JTokenType.Integer))
-            { error = "selector.near_mm must be [x,y,z] (3 numbers)"; return false; }
+            if (near.Count != 3 || near.Any(t => !IsFiniteNumber(t)))
+            { error = "selector.near_mm must be [x,y,z] (3 finite numbers)"; return false; }
             spec.NearMm = near.Select(t => (double)t).ToArray();
         }
         else if (o["near_mm"] is not null)
-        { error = "selector.near_mm must be [x,y,z] (3 numbers)"; return false; }
+        { error = "selector.near_mm must be [x,y,z] (3 finite numbers)"; return false; }
 
         if (kind == "planar")
         {
@@ -60,11 +65,16 @@ public sealed class FaceSelectorSpec
         else // cylindrical
         {
             if (o["radius_mm"] is null) { error = "selector.radius_mm is required for cylindrical"; return false; }
-            var r = o.Value<double>("radius_mm");
-            if (r <= 0) { error = "selector.radius_mm must be > 0"; return false; }
-            spec.RadiusMm = r;
+            if (!IsFiniteNumber(o["radius_mm"]) || (double)o["radius_mm"]! <= 0)
+            { error = "selector.radius_mm must be a finite number > 0"; return false; }
+            spec.RadiusMm = (double)o["radius_mm"]!;
 
-            if (o["radius_tol_mm"] is not null) spec.RadiusTolMm = o.Value<double>("radius_tol_mm");
+            if (o["radius_tol_mm"] is not null)
+            {
+                if (!IsFiniteNumber(o["radius_tol_mm"]))
+                { error = "selector.radius_tol_mm must be a finite number"; return false; }
+                spec.RadiusTolMm = (double)o["radius_tol_mm"]!;
+            }
             if (spec.RadiusTolMm <= 0) { error = "selector.radius_tol_mm must be > 0"; return false; }
 
             var axis = ((string?)o["axis"])?.Trim();
@@ -77,4 +87,10 @@ public sealed class FaceSelectorSpec
         }
         return true;
     }
+
+    // net48: no double.IsFinite — NaN/Infinity must not pass (an infinite tolerance/radius
+    // would silently disable the filter or match the wrong face).
+    private static bool IsFiniteNumber(JToken? t) =>
+        t is not null && (t.Type == JTokenType.Integer || t.Type == JTokenType.Float) &&
+        !double.IsNaN((double)t) && !double.IsInfinity((double)t);
 }

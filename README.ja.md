@@ -166,7 +166,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_revolve` | 名前付きスケッチを軸周りに回転（角度、操作）。 |
 | `inventor_combine` | ソリッドボディをブール演算（ベース + ツールボディ、結合/切断/交差、keep_tool_bodies）。 |
 | `inventor_batch_execute` | 最大 20 個のワイヤコマンドを 1 トランザクションで実行（1 つの undo、エラー時はロールバック）。 |
-| `inventor_fillet` | モデルエッジに一定半径のフィレットを追加。 |
+| `inventor_fillet` | 一定半径のエッジフィレット — `edgeIds` または `edges` セレクタ `{kind:circular, radius_mm?, center_mm?, on_body?, adjacent_surface_types?}`;`matched_edges` を返す。 |
 | `inventor_chamfer` | モデルエッジに等距離の面取りを追加。 |
 | `inventor_create_work_plane` | 作業平面を作成（オフセット、3 点、接線、または固定原点+軸）。 |
 | `inventor_create_work_axis` | 作業軸を作成（2 点、エッジ、平面交差、面法線オフセット）。 |

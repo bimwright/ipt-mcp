@@ -170,7 +170,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_revolve` | 把一个命名草图绕一个轴旋转（角度、operation）。 |
 | `inventor_combine` | 对实体做布尔运算（base + tool bodies，join/cut/intersect，keep_tool_bodies）。 |
 | `inventor_batch_execute` | 在一个事务中运行最多 20 条 wire commands（单次 undo，出错回滚）。 |
-| `inventor_fillet` | 给 model edges 添加等半径倒圆。 |
+| `inventor_fillet` | 添加等半径边倒圆 — `edgeIds` 或 `edges` 选择器 `{kind:circular, radius_mm?, center_mm?, on_body?, adjacent_surface_types?}`；返回 `matched_edges`。 |
 | `inventor_chamfer` | 给 model edges 添加等距倒角。 |
 | `inventor_create_work_plane` | 创建一个工作平面（offset、three_points、tangent 或 fixed 原点+轴）。 |
 | `inventor_create_work_axis` | 创建一个工作轴（two_points、edge、plane_intersection、normal_to_face_through_point）。 |

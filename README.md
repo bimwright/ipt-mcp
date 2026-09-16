@@ -185,7 +185,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_revolve` | Revolve a named sketch about an axis (angle, operation). |
 | `inventor_combine` | Boolean solid bodies (base + tool bodies, join/cut/intersect, keep_tool_bodies). |
 | `inventor_batch_execute` | Run up to 20 wire commands in one transaction (single undo, rollback on error). |
-| `inventor_fillet` | Add a constant-radius edge fillet over model edges. |
+| `inventor_fillet` | Add a constant-radius edge fillet — `edgeIds` or an `edges` selector `{kind:circular, radius_mm?, center_mm?, on_body?, adjacent_surface_types?}`; returns `matched_edges`. |
 | `inventor_chamfer` | Add an equal-distance edge chamfer over model edges. |
 | `inventor_create_work_plane` | Create a work plane (offset, three_points, tangent, or fixed origin+axes). |
 | `inventor_create_work_axis` | Create a work axis (two_points, edge, plane_intersection, normal_to_face_through_point). |
