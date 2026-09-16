@@ -546,9 +546,11 @@ Thứ tự implement gợi ý trong F3: **F3-d trước** (nhỏ, tạo điểm 
 - F3-c: `capture_view` file-mode mặc định + `inline=true` (≤256 KiB); `CaptureImagePolicy` thêm
   `ResolveCaptureRoot`/`DefaultCapturePath`/`TryRejectInline`. BREAKING → CHANGELOG § Changed + version 0.2.0.
   Review sub-agent: APPROVE-with-issues → đã fix env root không rooted (fallback LocalAppData), collision filename
-  giữa 2 Inventor instance (step-over khi file tồn tại), summary/Description/README×4 cũ, thêm test
-  `TryRejectPath(generatedPath)=false`.
-- Verified: `dotnet test` **293/293**; `plugin-inv27` build 0 lỗi; `plugin-inv24` compat (net48, interop 2027) 0 lỗi;
+  giữa 2 Inventor instance, summary/Description/README×4 cũ, thêm test `TryRejectPath(generatedPath)=false`.
+  Owner review pass 2 (P2): `IsPathRooted` lọt `C:exports`/`\exports` → `IsFullyQualifiedAbsolute` (net48-safe, kèm
+  test negative ×3); `File.Exists` check vẫn TOCTOU → `TryReserveCapturePath` giữ chỗ nguyên tử bằng
+  `FileMode.CreateNew`, step-over seq, bounded 1000 lần.
+- Verified: `dotnet test` **296/296**; `plugin-inv27` build 0 lỗi; `plugin-inv24` compat (net48, interop 2027) 0 lỗi;
   server build 0 lỗi; `Formatting.Indented` trong `src/server/Tools/` = 0.
 - Live smoke **2026-09-16** (Inventor 2027, `inventor-2027-29540`, add-in F3 đã deploy): send_code 100 KiB stdout →
   `stdout_bytes:8192` + spill file 102400 B; `capture_view` default → `captures\capture-…-001.png` (356233 B, không

@@ -90,19 +90,45 @@ public class CaptureImagePolicyTests
         }
     }
 
-    [Fact]
-    public void ResolveCaptureRoot_RelativeEnvFallsBackToLocalAppData()
+    [Theory]
+    [InlineData("exports")]      // plain relative — would resolve against Inventor's CWD
+    [InlineData("C:exports")]    // drive-relative — IsPathRooted accepts it, still CWD-dependent
+    [InlineData("\\exports")]    // root-relative — lands on the current drive's root
+    public void ResolveCaptureRoot_NonAbsoluteEnvFallsBackToLocalAppData(string envValue)
     {
-        // A non-rooted env root would resolve against Inventor.exe's unpredictable CWD — refuse it.
         var prev = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_EXPORT_ROOT");
         try
         {
-            Environment.SetEnvironmentVariable("BIMWRIGHT_INVENTOR_EXPORT_ROOT", "exports");
+            Environment.SetEnvironmentVariable("BIMWRIGHT_INVENTOR_EXPORT_ROOT", envValue);
             Assert.EndsWith(@"Bimwright\ipt-mcp", CaptureImagePolicy.ResolveCaptureRoot());
         }
         finally
         {
             Environment.SetEnvironmentVariable("BIMWRIGHT_INVENTOR_EXPORT_ROOT", prev);
+        }
+    }
+
+    [Fact]
+    public void TryReserveCapturePath_SkipsNamesAlreadyReservedByAPeer()
+    {
+        // Atomic reservation (FileMode.CreateNew): a second caller with the same timestamp +
+        // start sequence must get the next free name — two Inventor instances share the dir.
+        var root = Path.Combine(Path.GetTempPath(), "ipt-cap-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var stamp = new DateTime(2026, 9, 16, 1, 2, 3, DateTimeKind.Utc);
+
+            var first = CaptureImagePolicy.TryReserveCapturePath(root, stamp, 1);
+            Assert.Equal(Path.Combine(root, "captures", "capture-20260916-010203-001.png"), first);
+            Assert.True(File.Exists(first));   // placeholder created = name is ours
+
+            var second = CaptureImagePolicy.TryReserveCapturePath(root, stamp, 1);
+            Assert.Equal(Path.Combine(root, "captures", "capture-20260916-010203-002.png"), second);
+            Assert.NotEqual(first, second);
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
         }
     }
 

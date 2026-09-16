@@ -75,16 +75,16 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
         if (!inline)
         {
             var root = CaptureImagePolicy.ResolveCaptureRoot();
-            var stamp = DateTime.UtcNow;
-            var seq = System.Threading.Interlocked.Increment(ref _captureSeq);
-            var capturePath = CaptureImagePolicy.DefaultCapturePath(root, stamp, seq);
-            // Multiple Inventor instances share the captures dir — step over a same-second
-            // name already taken by a peer process.
-            while (IoFile.Exists(capturePath))
-                capturePath = CaptureImagePolicy.DefaultCapturePath(root, stamp, ++seq);
+            // Reserve the name atomically (FileMode.CreateNew) — multiple Inventor instances
+            // share the captures dir, so a plain File.Exists check could race.
+            var capturePath = CaptureImagePolicy.TryReserveCapturePath(
+                root, DateTime.UtcNow,
+                System.Threading.Interlocked.Increment(ref _captureSeq));
+            if (capturePath is null)
+                return Fail(ctx, InventorErrorCodes.API_ERROR,
+                    "could not allocate a unique capture filename under " + root);
             try
             {
-                System.IO.Directory.CreateDirectory(IoPath.GetDirectoryName(capturePath)!);
                 view.Camera.SaveAsBitmap(capturePath, width, height, Type.Missing, Type.Missing);
             }
             catch (Exception ex)
