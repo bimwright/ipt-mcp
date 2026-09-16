@@ -237,3 +237,29 @@ integration end to end.
     {"tool":"capture_view","phase":"finish","success":true,"response_bytes":44272,...}  # inline=true → compact base64 response
     {"tool":"list_parameters","phase":"finish","success":true,"response_bytes":211,...} # indented small response
     ```
+
+21. **Extrude v2** (improvement spec F4-P0-1; run via `scripts\mcp-smoke.ps1` like step 20):
+    - `extrude {distance:"10 mm", operation:"new_body", name:"base"}` on a 50×30 sketch →
+      `feature_name:"base"`, `volume_mm3:15000`.
+    - `extrude {distance:5, operation:"cut", affected_bodies:["body:1"]}` on a 10×10 sketch →
+      `volume_mm3:14500` (cut scoped to body 1).
+    - `extrude {operation:"new_body", affected_bodies:[...]}` → `INVALID_ARGUMENT`
+      ("affected_bodies has no meaning with operation=new_body…").
+    - `send_code` verify: `SurfaceBodies.Count=1`, `get_Volume(0.01)`≈14.5 cm³.
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-23888`, pipe): all expectations met. `volume_mm3` fix verified
+    (`get_Volume(0.0)` → E_INVALIDARG; 0.01 works).
+
+22. **Fixed work plane** (F4-P0-2):
+    - `create_work_plane {type:"fixed", origin:{x:0,y:0,z:25}, x_axis:[1,0,0], y_axis:{x:0,y:1,z:0},
+      name:"wp_z25", visible:true}` → `work_plane_name:"wp_z25"`, `type:"fixed"`, `visible:true`.
+      `send_code` verify: `WorkPlanes.Count=4`, `[4].Name="wp_z25"`, `Plane.RootPoint.Z=2.5` cm,
+      `Visible=true`.
+    - Negatives: missing `origin` → INVALID_ARGUMENT ("origin must be {x,y,z} or [x,y,z]");
+      parallel `x_axis=[1,0,0]`/`y_axis=[2,0,0]` → INVALID_ARGUMENT ("non-zero and non-parallel");
+      `type:"offset"` without `refs` → INVALID_ARGUMENT ("refs[] is required").
+    - Regression: `{type:"offset", refs:["XY"], offset:15}` → `Work Plane2`, count=5.
+
+    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
+    (`inventor-2027-45036`, pipe): all expectations met.

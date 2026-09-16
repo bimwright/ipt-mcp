@@ -88,5 +88,39 @@ internal static class EntityResolver
                 return s;
         return null;
     }
+
+    /// <summary>
+    /// Resolve a solid body by the same id scheme the query tools report: <c>"1"</c>/
+    /// <c>"body:1"</c> (1-based index) or the body's name. Used by <c>affected_bodies</c>
+    /// params (extrude join/cut, combine).
+    /// </summary>
+    public static SurfaceBody ResolveBody(PartComponentDefinition def, string bodyRef)
+    {
+        var bodies = def.SurfaceBodies;
+        if (bodies.Count < 1)
+            throw new ArgumentException("the part has no solid bodies");
+        var s = (bodyRef ?? "").Trim();
+        if (s.Length == 0)
+            throw new ArgumentException("empty body reference");
+
+        var head = s;
+        var colon = s.IndexOf(':');
+        if (colon >= 0)
+        {
+            if (!s.Substring(0, colon).Equals("body", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"expected 'body:' id or a body name, got '{bodyRef}'");
+            head = s.Substring(colon + 1);
+        }
+        if (int.TryParse(head, out var idx))
+        {
+            if (idx < 1 || idx > bodies.Count)
+                throw new ArgumentException($"body index {idx} out of range (1..{bodies.Count})");
+            return bodies[idx];
+        }
+        foreach (SurfaceBody b in bodies)
+            if (string.Equals(b.Name, s, StringComparison.OrdinalIgnoreCase))
+                return b;
+        throw new ArgumentException($"unknown body '{bodyRef}' (use a 1-based index, body:N, or the body name)");
+    }
 }
 #endif

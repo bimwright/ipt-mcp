@@ -164,7 +164,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_revolve` | Revolve một sketch quanh trục (góc, operation). |
 | `inventor_fillet` | Thêm fillet cạnh bán kính cố định trên các edge model. |
 | `inventor_chamfer` | Thêm chamfer cạnh khoảng cách đều trên các edge model. |
-| `inventor_create_work_plane` | Tạo work plane (offset, three_points hoặc tangent). |
+| `inventor_create_work_plane` | Tạo work plane (offset, three_points, tangent hoặc fixed origin+axes). |
 | `inventor_create_work_axis` | Tạo work axis (two_points, edge, plane_intersection, normal_to_face_through_point). |
 | `inventor_hole` | Lỗ drilled/counterbore/countersink trên một planar face được chọn xác định; tùy chọn metadata luồng tapped-thread. |
 | `inventor_circular_pattern` | Circular-pattern các part feature quanh một trục theo tên (count trên một góc). |

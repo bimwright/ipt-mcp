@@ -32,7 +32,7 @@ internal static class FeatureSupport
         "cut" => PartFeatureOperationEnum.kCutOperation,
         "intersect" => PartFeatureOperationEnum.kIntersectOperation,
         "newbody" or "new_body" => PartFeatureOperationEnum.kNewBodyOperation,
-        _ => throw new ArgumentException($"unknown operation '{op}' (join|cut|intersect)"),
+        _ => throw new ArgumentException($"unknown operation '{op}' (join|cut|intersect|new_body)"),
     };
 
     public static PartFeatureExtentDirectionEnum Direction(string? dir) => (dir ?? "positive").Trim().ToLowerInvariant() switch

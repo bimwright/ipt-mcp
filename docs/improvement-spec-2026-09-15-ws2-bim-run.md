@@ -580,6 +580,24 @@ mọi tool `list_*` có `max_items` + `truncated` + dùng guard F3.
 | P3 | sketch text, `inventor_create_bim_connector`, work point | gap doc | |
 | P3 (nhỏ) | `get_iproperty`: sửa ví dụ sai trong Description (`PropertyTools.cs:23`), nhận alias `Summary Information` → `Inventor Summary Information`; `list_iproperty_sets` | #9 (lỗi do Description của tool) | |
 
+**Status F4 (2026-09-16, implement bởi Devin, branch `feat/f4-typed-tools`): P0-1 + P0-2 xong (code + test + live smoke + 2 review).**
+
+- P0-1 `extrude`: `ExtrudeParams` mới (API-agnostic: distance số\|expression, `affected_bodies`+`new_body`
+  reject); `EntityResolver.ResolveBody` mới; `affected_bodies` → `ExtrudeDefinition`/`AffectedBodies`
+  (interop không có overload `AddByDistanceExtent` nào nhận bodies). `volume_mm3` fix `get_Volume(0.0)` →
+  0.01 (0.0 bị E_INVALIDARG). MCP params snake_case (`affected_bodies`) khớp Description.
+- P0-2 `create_work_plane` `type=fixed`: `Vec3Params` mới ({x,y,z}/[x,y,z], non-finite reject,
+  `AxesDegenerate` sin<1e-6) → `WorkPlanes.AddFixed`; `refs` chỉ bắt buộc ở 3 type cũ; `name`/`visible`
+  áp cho mọi type. Review pass: rename `xAxis`→`x_axis` (schema khớp Description/spec), error ordering
+  `type=bogus` không refs → "unknown type".
+- Phát hiện live: `name` không gán được cho SurfaceBody khi feature cùng tên (Inventor share 1 browser
+  namespace — set trùng lặp silently no-op; `feature.SurfaceBodies` là proxy non-persistent) → body
+  `new_body` được đặt `<name>_body`, echo `body_name` trong response.
+- Verified: `dotnet test` **319/319**; `plugin-inv27`/`plugin-inv24` (net48) build 0 lỗi.
+- Live smoke **2026-09-16** (Inventor 2027, `inventor-2027-23888`/`45036`/`87144`): P0-1 đủ bộ
+  (15000→14500 mm³, reject combo); P0-2 `wp_z25` z=2.5 cm + 3 negative + regression offset;
+  `affected_bodies:["base_body"]` resolve theo tên. Bằng chứng: manual-smoke bước 21–22.
+
 ### F5. Run kiểm chứng có kiểm soát
 
 Sau F1–F3 và các tool P0: chạy lại **cùng bài WS2** (cùng PDF, cùng agent prompt) với log v2. Chỉ tiêu:

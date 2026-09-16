@@ -183,7 +183,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_revolve` | Revolve a named sketch about an axis (angle, operation). |
 | `inventor_fillet` | Add a constant-radius edge fillet over model edges. |
 | `inventor_chamfer` | Add an equal-distance edge chamfer over model edges. |
-| `inventor_create_work_plane` | Create a work plane (offset, three_points, or tangent). |
+| `inventor_create_work_plane` | Create a work plane (offset, three_points, tangent, or fixed origin+axes). |
 | `inventor_create_work_axis` | Create a work axis (two_points, edge, plane_intersection, normal_to_face_through_point). |
 | `inventor_hole` | Drilled/counterbore/countersink holes on a deterministically-selected planar face; optional tapped-thread metadata. |
 | `inventor_circular_pattern` | Circular-pattern part features around a named axis (count over an angle). |

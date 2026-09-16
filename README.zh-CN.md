@@ -168,7 +168,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_revolve` | 把一个命名草图绕一个轴旋转（角度、operation）。 |
 | `inventor_fillet` | 给 model edges 添加等半径倒圆。 |
 | `inventor_chamfer` | 给 model edges 添加等距倒角。 |
-| `inventor_create_work_plane` | 创建一个工作平面（offset、three_points 或 tangent）。 |
+| `inventor_create_work_plane` | 创建一个工作平面（offset、three_points、tangent 或 fixed 原点+轴）。 |
 | `inventor_create_work_axis` | 创建一个工作轴（two_points、edge、plane_intersection、normal_to_face_through_point）。 |
 | `inventor_hole` | 在确定性选择的平面面上钻通孔/沉孔/埋头孔；可选 tapped-thread 元数据。 |
 | `inventor_circular_pattern` | 绕一个命名轴圆形阵列 part features（在某一角度上 count）。 |
