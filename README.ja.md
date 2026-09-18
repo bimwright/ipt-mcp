@@ -264,7 +264,9 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## bimwright ファミリー
 
-AEC ツールチェーンのための手作りの MCP ゲートウェイ — 単一のアーキテクチャ、予測可能/監査可能/可逆的:
+AI アシスタントと BIM・CAD アプリケーションをつなぐオープンソースのツール。
+
+**bimwright** は **BIM** と **wright** を組み合わせた名前です。wright は、ものを作る人や建てる人を表す古い英語で、*shipwright*（船大工）などに使われます。
 
 - [**rvt-mcp**](https://github.com/bimwright/rvt-mcp) — Autodesk® Revit®
 - [**dwg-mcp**](https://github.com/bimwright/dwg-mcp) — Autodesk® AutoCAD®

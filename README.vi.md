@@ -264,7 +264,9 @@ Dự án này **không** phân phối lại binaries của Autodesk Inventor hay
 
 ## Họ bimwright
 
-Các MCP gateway hand-forged cho toolchain AEC — cùng một kiến trúc, predictable / auditable / reversible:
+Các công cụ mã nguồn mở kết nối trợ lý AI với ứng dụng BIM và CAD.
+
+Tên **bimwright** ghép **BIM** với **wright**, một từ tiếng Anh cổ chỉ người thợ chế tạo hoặc xây dựng — như trong *shipwright* (thợ đóng tàu).
 
 - [**rvt-mcp**](https://github.com/bimwright/rvt-mcp) — Autodesk® Revit®
 - [**dwg-mcp**](https://github.com/bimwright/dwg-mcp) — Autodesk® AutoCAD®

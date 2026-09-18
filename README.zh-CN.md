@@ -268,7 +268,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## bimwright 家族
 
-为 AEC 工具链亲手打造的 MCP gateway —— 同一套架构，predictable / auditable / reversible：
+连接 AI 助手与 BIM、CAD 应用的开源工具。
+
+**bimwright** 这个名字由 **BIM** 和 **wright** 组成。wright 是英语中表示制作者或建造者的旧词，如 *shipwright*（造船工）。
 
 - [**rvt-mcp**](https://github.com/bimwright/rvt-mcp) —— Autodesk® Revit®
 - [**dwg-mcp**](https://github.com/bimwright/dwg-mcp) —— Autodesk® AutoCAD®
@@ -287,5 +289,5 @@ Inventor 和 Autodesk 是 Autodesk, Inc. 的注册商标。bimwright 是一个�
 ---
 
 <p align="center">
-  一个 <a href="https://github.com/bimwright">bimwright</a> 项目 - 给那些想把工作自动化，而不是贩卖神秘感的人。
+  一个 <a href="https://github.com/bimwright">bimwright</a> 项目。
 </p>
