@@ -1,0 +1,202 @@
+# PROTOTYPE — throwaway toast compatibility spike driver (roadmap Phase 1a).
+# Builds + deploys the spike add-in, restarts Inventor 2027, runs every probe, closes Inventor,
+# removes the spike add-in. Evidence: %LOCALAPPDATA%\Bimwright\ipt-mcp\toast-spike\
+param(
+    [int]$Alc = 0,              # UseInventorAssemblyContext value written into the .addin
+    [switch]$Quick,             # env + one toast + ribbon only (used for the ALC=1 pass)
+    [string]$Tag = "pass1"
+)
+$ErrorActionPreference = 'Stop'
+$here    = $PSScriptRoot
+$root    = Join-Path $env:LOCALAPPDATA 'Bimwright\ipt-mcp\toast-spike'
+$inbox   = Join-Path $root 'inbox'
+$outbox  = Join-Path $root 'outbox'
+$addins  = Join-Path $env:APPDATA 'Autodesk\Inventor 2027\Addins'
+$deploy  = Join-Path $addins 'Bimwright.Ipt.ToastSpike'
+$manifest = Join-Path $addins 'Bimwright.Ipt.ToastSpike.addin'
+$invExe  = 'C:\Program Files\Autodesk\Inventor 2027\Bin\Inventor.exe'
+$script:seq = 0
+
+function Say($m) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $m) }
+
+function Close-Inventor {
+    $p = Get-Process Inventor -ErrorAction SilentlyContinue
+    if (-not $p) { Say 'Inventor not running'; return }
+    Say "closing Inventor pid $($p.Id) (SilentOperation + Quit)"
+    $r = powershell.exe -NoProfile -Command "try { `$a=[Runtime.InteropServices.Marshal]::GetActiveObject('Inventor.Application'); `$a.SilentOperation=`$true; `$a.Quit(); 'quit-sent' } catch { 'com-failed: ' + `$_ }"
+    Say "  $r"
+    if (-not $p.WaitForExit(120000)) { Say '  still running after 120 s -> Stop-Process'; Stop-Process -Id $p.Id -Force; $p.WaitForExit(30000) | Out-Null }
+    Say '  Inventor exited'
+}
+
+function Deploy {
+    $bin = Join-Path $here 'bin\Release\net10.0-windows7.0'
+    if (Test-Path $deploy) { Remove-Item $deploy -Recurse -Force }
+    New-Item -ItemType Directory $deploy | Out-Null
+    Copy-Item "$bin\*" $deploy -Recurse
+    @"
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PROTOTYPE — throwaway toast spike add-in (roadmap Phase 1a). Safe to delete. -->
+<Addin Type="Standard">
+  <ClassId>{5B1D7A0E-3C2F-4E8A-9D61-7A2C0F1E5B11}</ClassId>
+  <ClientId>{5B1D7A0E-3C2F-4E8A-9D61-7A2C0F1E5B11}</ClientId>
+  <DisplayName>Bimwright Toast Spike (PROTOTYPE)</DisplayName>
+  <Description>Throwaway toast compatibility spike.</Description>
+  <Assembly>$deploy\Bimwright.Ipt.ToastSpike.dll</Assembly>
+  <LoadOnStartUp>1</LoadOnStartUp>
+  <LoadAutomatically>1</LoadAutomatically>
+  <UserUnloadable>1</UserUnloadable>
+  <Hidden>0</Hidden>
+  <SupportedSoftwareVersionGreaterThan>30..</SupportedSoftwareVersionGreaterThan>
+  <SupportedSoftwareVersionLessThan>32..</SupportedSoftwareVersionLessThan>
+  <UseInventorAssemblyContext>$Alc</UseInventorAssemblyContext>
+</Addin>
+"@ | Set-Content $manifest -Encoding utf8
+    Say "deployed spike add-in (UseInventorAssemblyContext=$Alc)"
+}
+
+function Undeploy {
+    Remove-Item $manifest -Force -ErrorAction SilentlyContinue
+    Remove-Item $deploy -Recurse -Force -ErrorAction SilentlyContinue
+    Say 'spike add-in removed from Addins'
+}
+
+function Start-Inventor {
+    Remove-Item (Join-Path $root 'ready.json') -ErrorAction SilentlyContinue
+    Say 'starting Inventor 2027'
+    Start-Process -FilePath $invExe | Out-Null
+    $deadline = (Get-Date).AddSeconds(420)
+    while (-not (Test-Path (Join-Path $root 'ready.json'))) {
+        if ((Get-Date) -gt $deadline) { throw 'spike add-in never reported ready (7 min)' }
+        Start-Sleep -Seconds 2
+    }
+    Say "spike ready: $(Get-Content (Join-Path $root 'ready.json'))"
+    Start-Sleep -Seconds 15   # let the UI settle (My Home, ribbon)
+}
+
+function Wait-Out([string]$id, [int]$timeout = 90) {
+    $f = Join-Path $outbox "$id.json"
+    $deadline = (Get-Date).AddSeconds($timeout)
+    while (-not (Test-Path $f)) {
+        if ((Get-Date) -gt $deadline) { Say "  !! timeout waiting for $id"; return $null }
+        Start-Sleep -Milliseconds 200
+    }
+    Start-Sleep -Milliseconds 50
+    return Get-Content $f -Raw | ConvertFrom-Json
+}
+
+function P([string]$probe, [hashtable]$a = @{}, [int]$timeout = 90) {
+    $id = '{0}-{1:D3}-{2}' -f $Tag, $script:seq++, $probe
+    $json = @{ id = $id; probe = $probe; args = $a } | ConvertTo-Json -Depth 6 -Compress
+    Set-Content (Join-Path $inbox "$id.tmp") $json -Encoding utf8
+    Move-Item (Join-Path $inbox "$id.tmp") (Join-Path $inbox "$id.json")
+    $r = Wait-Out $id $timeout
+    $short = if ($r) { ($r.result | ConvertTo-Json -Depth 3 -Compress) } else { 'NO RESULT' }
+    if ($short.Length -gt 220) { $short = $short.Substring(0, 220) + '…' }
+    Say "$id ($($r.ms) ms): $short"
+    return @{ id = $id; r = $r }
+}
+
+# ---------------------------------------------------------------- run
+Close-Inventor
+Deploy
+foreach ($d in @($inbox, $outbox)) { if (Test-Path $d) { Get-ChildItem $d | Remove-Item -Force } }
+Start-Inventor
+
+P env | Out-Null
+P ribbon_state @{ exercise = $true } | Out-Null
+P ribbon_activate @{ ribbon = 'ZeroDoc' } | Out-Null
+Start-Sleep 2
+P snap @{ what = 'main_top'; name = "$Tag-ribbon-zerodoc" } | Out-Null
+
+if ($Quick) {
+    P host @{ mode = 'B' } | Out-Null
+    P show @{ mode = 'B'; owned = $true; anchor = 'main'; body = "ALC=$Alc" } | Out-Null
+    Start-Sleep 2
+    P snap @{ name = "$Tag-toast" } | Out-Null
+    P env | Out-Null
+    P close | Out-Null
+} else {
+    # Q1 — hosts (B first so env for A is measured after a dedicated thread exists)
+    P host @{ mode = 'B' } | Out-Null
+    P host @{ mode = 'A' } | Out-Null
+    P env | Out-Null
+
+    # Q2/Q3 — baseline STA latency, then each rendering mode under load
+    $b = P sta_ping @{ n = 40; every = 100; label = 'baseline-no-toasts' }; Wait-Out "$($b.id)-ping" | Out-Null
+    foreach ($cfg in @(@{m='A';o=$true;tag='A'}, @{m='B';o=$true;tag='B-owned'}, @{m='B';o=$false;tag='B-unowned'})) {
+        1..4 | ForEach-Object { P show @{ mode = $cfg.m; owned = $cfg.o; anchor = 'main'; animate = $true; title = "$($cfg.tag) #$_" } | Out-Null }
+        Start-Sleep 2
+        P snap @{ name = "$Tag-$($cfg.tag)-4toasts" } | Out-Null
+        $p = P sta_ping @{ n = 40; every = 100; label = "$($cfg.tag)-4-animated" }; Wait-Out "$($p.id)-ping" | Out-Null
+        $blk = P block @{ ms = 8000; mode = $cfg.m; newToastAtMs = 3000; newOwned = $cfg.o; snapAtMs = 5000 } 60
+        Wait-Out "$($blk.id)-watch" 60 | Out-Null
+        P state | Out-Null
+        P close | Out-Null
+    }
+
+    # Q3 — owner semantics: minimize / restore
+    foreach ($o in @($true, $false)) {
+        P show @{ mode = 'B'; owned = $o; anchor = 'main'; title = "owned=$o" } | Out-Null
+        Start-Sleep 1
+        P minimize | Out-Null; Start-Sleep 2; P state | Out-Null
+        P restore | Out-Null;  Start-Sleep 2; P state | Out-Null
+        P close | Out-Null
+    }
+
+    # Q4 — DPI / monitors, both modes
+    foreach ($m in @('B', 'A')) {
+        P dpi_toasts @{ mode = $m; owned = $false } | Out-Null
+        Start-Sleep 2
+        P state | Out-Null
+        P snap @{ what = 'virtual'; name = "$Tag-dpi-$m-virtual" } | Out-Null
+        P close | Out-Null
+    }
+
+    # Q6 — focus: active sketch, in-canvas command, modal dialog
+    P try_foreground | Out-Null
+    P part_sketch | Out-Null
+    Start-Sleep 2
+    P fg | Out-Null
+    P ribbon_activate @{ ribbon = 'Part' } | Out-Null
+    Start-Sleep 1
+    P snap @{ what = 'main_top'; name = "$Tag-ribbon-part" } | Out-Null
+    foreach ($s in @(@{m='B';n=$true}, @{m='B';n=$false}, @{m='A';n=$true}, @{m='A';n=$false})) {
+        P show @{ mode = $s.m; owned = $true; noActivate = $s.n; anchor = 'main'; title = "sketch $($s.m) noAct=$($s.n)" } | Out-Null
+        Start-Sleep 1
+        P fg | Out-Null
+    }
+    P close | Out-Null
+    P exit_sketch | Out-Null
+    P cmd_start @{ name = 'PartExtrudeCmd' } | Out-Null
+    Start-Sleep 3
+    P fg | Out-Null
+    foreach ($n in @($true, $false)) {
+        P show @{ mode = 'B'; owned = $true; noActivate = $n; anchor = 'main'; title = "extrude noAct=$n" } | Out-Null
+        Start-Sleep 1
+        P fg | Out-Null
+    }
+    P snap @{ what = 'main'; name = "$Tag-extrude-with-toasts" } | Out-Null
+    P close | Out-Null
+    P cmd_stop | Out-Null
+    P cmd_start @{ name = 'AppApplicationOptionsCmd' } | Out-Null
+    Start-Sleep 4
+    P sta_windows | Out-Null
+    foreach ($n in @($true, $false)) {
+        P show @{ mode = 'B'; owned = $true; noActivate = $n; anchor = 'main'; title = "modal noAct=$n" } | Out-Null
+        Start-Sleep 1
+        P fg | Out-Null
+    }
+    P snap @{ what = 'virtual'; name = "$Tag-modal-with-toasts" } | Out-Null
+    P close | Out-Null
+    P modal_close | Out-Null
+    Start-Sleep 2
+    P fg | Out-Null
+    P close_doc | Out-Null
+    P ribbon_state @{ exercise = $false } | Out-Null
+    P env | Out-Null
+}
+
+Close-Inventor
+Undeploy
+Say "done — evidence in $root"
