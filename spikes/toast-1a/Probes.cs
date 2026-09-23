@@ -48,6 +48,10 @@ namespace ToastSpike
                 case "ribbon_state": return S.Ribbon?.State((bool?)a["exercise"] ?? false);
                 case "dpi_toasts": return DpiToasts(a, id);
                 case "ribbon_activate": return S.Ribbon?.ActivateTab((string)a["ribbon"]);
+                case "quit":
+                    // after this probe's result is written: exercise Deactivate via a clean, prompt-free quit
+                    S.Marshaller.BeginInvoke(new Action(() => { App.SilentOperation = true; App.Quit(); }));
+                    return new { quitting = true };
                 default: throw new ArgumentException("unknown probe " + probe);
             }
         }

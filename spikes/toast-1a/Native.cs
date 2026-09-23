@@ -83,6 +83,7 @@ namespace ToastSpike
                 rect = new[] { r.L, r.T, r.W, r.H }, dpi = GetDpiForWindow(h),
                 dpi_awareness = GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(h)),
                 visible = IsWindowVisible(h), iconic = IsIconic(h), owner = GetWindow(h, GW_OWNER).ToInt64(),
+                owner_cls = ClassOf(GetWindow(h, GW_OWNER)), owner_tid = GetWindowThreadProcessId(GetWindow(h, GW_OWNER), out _),
                 exstyle = "0x" + ExStyle(h).ToString("X"),
             };
         }

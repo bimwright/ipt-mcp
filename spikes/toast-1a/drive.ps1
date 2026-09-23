@@ -4,7 +4,8 @@
 param(
     [int]$Alc = 0,              # UseInventorAssemblyContext value written into the .addin
     [switch]$Quick,             # env + one toast + ribbon only (used for the ALC=1 pass)
-    [string]$Tag = "pass1"
+    [string]$Tag = "pass1",
+    [switch]$KeepTrust          # keep the spike's AddInLoadRules entry (for a follow-up pass)
 )
 $ErrorActionPreference = 'Stop'
 $here    = $PSScriptRoot
@@ -22,11 +23,53 @@ function Say($m) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $m) }
 function Close-Inventor {
     $p = Get-Process Inventor -ErrorAction SilentlyContinue
     if (-not $p) { Say 'Inventor not running'; return }
-    Say "closing Inventor pid $($p.Id) (SilentOperation + Quit)"
-    $r = powershell.exe -NoProfile -Command "try { `$a=[Runtime.InteropServices.Marshal]::GetActiveObject('Inventor.Application'); `$a.SilentOperation=`$true; `$a.Quit(); 'quit-sent' } catch { 'com-failed: ' + `$_ }"
-    Say "  $r"
+    $ready = Join-Path $root 'ready.json'
+    if ((Test-Path $ready) -and ((Get-Content $ready -Raw | ConvertFrom-Json).pid -eq $p.Id)) {
+        Say "closing Inventor pid $($p.Id) via spike 'quit' probe (SilentOperation + Quit, runs Deactivate)"
+        P quit | Out-Null
+    } else {
+        Say "closing Inventor pid $($p.Id): spike not loaded -> Stop-Process"
+        Stop-Process -Id $p.Id -Force
+    }
     if (-not $p.WaitForExit(120000)) { Say '  still running after 120 s -> Stop-Process'; Stop-Process -Id $p.Id -Force; $p.WaitForExit(30000) | Out-Null }
     Say '  Inventor exited'
+}
+
+# Inventor blocks unsigned add-ins ("Add-in Manager Security Alert") and records the decision in
+# %APPDATA%\Autodesk\Inventor 2027\Addins\AddInLoadRules as {zId&<GUID>} + 4-byte flag (0 = allowed,
+# 1 = blocked). Unblock ONLY the spike GUID for the run (same as the Add-in Manager "unblock"), and remove
+# the entry afterwards so the machine's trust state returns to what it was.
+$rules = Join-Path $addins 'AddInLoadRules'
+$spikeGuidBytes = [Text.Encoding]::Unicode.GetBytes('{5B1D7A0E-3C2F-4E8A-9D61-7A2C0F1E5B11}')
+function Find-Bytes([byte[]]$hay, [byte[]]$needle) {
+    for ($i = 0; $i -le $hay.Length - $needle.Length; $i++) {
+        $ok = $true
+        for ($j = 0; $j -lt $needle.Length; $j++) { if ($hay[$i + $j] -ne $needle[$j]) { $ok = $false; break } }
+        if ($ok) { return $i }
+    }
+    return -1
+}
+function Set-SpikeTrust([bool]$allowed) {
+    $b = [IO.File]::ReadAllBytes($rules)
+    $i = Find-Bytes $b $spikeGuidBytes
+    if ($i -lt 0) { Say 'AddInLoadRules: spike entry not present yet'; return }
+    $flag = $i + $spikeGuidBytes.Length
+    $b[$flag] = if ($allowed) { 0 } else { 1 }
+    [IO.File]::WriteAllBytes($rules, $b)
+    Say "AddInLoadRules: spike entry flag -> $($b[$flag])"
+}
+function Remove-SpikeTrustEntry {
+    $b = [IO.File]::ReadAllBytes($rules)
+    $i = Find-Bytes $b $spikeGuidBytes
+    if ($i -lt 0) { return }
+    # entry = '{z' + 8-byte len + 'Id' ... GUID + 4-byte flag + '}|'; find the '{z' that starts it
+    $start = $i; while ($start -gt 0 -and -not ($b[$start] -eq 0x7B -and $b[$start + 1] -eq 0x7A)) { $start-- }
+    $end = $i + $spikeGuidBytes.Length + 4 + 2
+    $out = New-Object byte[] ($b.Length - ($end - $start))
+    [Array]::Copy($b, 0, $out, 0, $start)
+    [Array]::Copy($b, $end, $out, $start, $b.Length - $end)
+    [IO.File]::WriteAllBytes($rules, $out)
+    Say "AddInLoadRules: spike entry removed ($($b.Length) -> $($out.Length) bytes)"
 }
 
 function Deploy {
@@ -100,6 +143,7 @@ function P([string]$probe, [hashtable]$a = @{}, [int]$timeout = 90) {
 # ---------------------------------------------------------------- run
 Close-Inventor
 Deploy
+Set-SpikeTrust $true
 foreach ($d in @($inbox, $outbox)) { if (Test-Path $d) { Get-ChildItem $d | Remove-Item -Force } }
 Start-Inventor
 
@@ -111,8 +155,12 @@ P snap @{ what = 'main_top'; name = "$Tag-ribbon-zerodoc" } | Out-Null
 
 if ($Quick) {
     P host @{ mode = 'B' } | Out-Null
-    P show @{ mode = 'B'; owned = $true; anchor = 'main'; body = "ALC=$Alc" } | Out-Null
+    P show @{ mode = 'B'; owned = $true; anchor = 'main'; body = "ALC=$Alc owned" } | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'main'; body = "ALC=$Alc unowned" } | Out-Null
+    P host @{ mode = 'A' } | Out-Null
+    P show @{ mode = 'A'; owned = $false; anchor = 'main'; body = "ALC=$Alc A unowned" } | Out-Null
     Start-Sleep 2
+    P state | Out-Null
     P snap @{ name = "$Tag-toast" } | Out-Null
     P env | Out-Null
     P close | Out-Null
@@ -199,4 +247,5 @@ if ($Quick) {
 
 Close-Inventor
 Undeploy
+if (-not $KeepTrust) { Remove-SpikeTrustEntry }
 Say "done — evidence in $root"
