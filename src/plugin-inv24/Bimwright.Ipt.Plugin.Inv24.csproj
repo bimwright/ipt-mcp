@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <RootNamespace>Bimwright.Ipt.Plugin</RootNamespace>
     <AssemblyName>Bimwright.Ipt.Plugin.Inv24</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
