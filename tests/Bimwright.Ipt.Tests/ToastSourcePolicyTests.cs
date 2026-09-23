@@ -83,7 +83,7 @@ public sealed class ToastSourcePolicyTests
         Assert.True(notify > set, "the toast must be posted after tcs.TrySetResult");
     }
 
-    [Fact(Skip = "enabled in Task 10")]
+    [Fact]
     public void Deactivate_stops_transport_then_toasts_then_ribbon()
     {
         var text = ReadBase();
@@ -93,6 +93,15 @@ public sealed class ToastSourcePolicyTests
         var toasts = text.IndexOf("_toasts?.Dispose()", start, StringComparison.Ordinal);
         var ribbon = text.IndexOf("_ribbon?.Remove()", start, StringComparison.Ordinal);
         Assert.True(server >= 0 && toasts > server && ribbon > toasts);
+    }
+
+    [Fact]
+    public void Ribbon_icons_use_OleCreatePictureIndirect_not_AxHost()
+    {
+        var ribbon = File.ReadAllText(Path.Combine(RepoRoot(), "src", "shared", "Plugin", "BimwrightRibbon.cs"));
+        Assert.Contains("OleCreatePictureIndirect", ribbon);
+        Assert.DoesNotContain("AxHost", ribbon);
+        Assert.Contains("OnResetRibbonInterface", ribbon);
     }
 
     [Fact]

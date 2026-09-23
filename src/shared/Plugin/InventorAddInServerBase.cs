@@ -37,6 +37,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private PluginOptions? _options;
     private ToastSettings? _toastSettings;
     private ToastNotifier? _toasts;
+    private BimwrightRibbon? _ribbon;
     private InvApi.ApplicationEvents? _appEvents;
     private BackdropHint? _hint;
     private string _configPath = "";
@@ -78,9 +79,23 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         StartToastUi();
     }
 
-    /// <summary>Inventor events for toasts (ribbon in Task 10). Failures here never stop the MCP transport.</summary>
+    /// <summary>Ribbon + Inventor events for toasts. Failures here never stop the MCP transport.</summary>
     private void StartToastUi()
     {
+        try
+        {
+            _ribbon = new BimwrightRibbon(
+                _app,
+                GetType().GUID.ToString("B").ToUpperInvariant(),   // the per-year add-in ClientId
+                () => _toasts?.Enabled ?? false,
+                SetToastsOn,
+                BuildStatusText);
+            _ribbon.Build();
+        }
+        catch
+        {
+            _ribbon = null;
+        }
         try
         {
             _appEvents = _app.ApplicationEvents;
@@ -92,6 +107,26 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             _appEvents = null;
         }
     }
+
+    /// <summary>Ribbon toggle (STA): takes effect now and persists. Env still wins at the next start.</summary>
+    private void SetToastsOn(bool on)
+    {
+        if (_toasts != null) _toasts.Enabled = on;
+        ToastConfigStore.SaveEnableToast(_configPath, on);
+    }
+
+    private string BuildStatusText() => StatusText.Build(new StatusInfo(
+        _descriptor?.TargetId ?? "",
+        _year,
+        _descriptor?.Transport ?? "",
+        _descriptor?.PipeName,
+        _descriptor?.Port ?? 0,
+        _options?.EnableSendCode ?? false,
+        _options?.ReadOnly ?? false,
+        _toastSettings ?? new ToastSettings(false, ToastTheme.Auto, "default", "default"),
+        _toasts?.Enabled ?? false,
+        _toasts?.LastPaletteDecision,
+        _configPath));
 
     private void HandleLine(
         string line,
@@ -294,6 +329,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         }
         catch { }
         try { _toasts?.Dispose(); } catch { }            // 2. close toast windows on their thread, stop it
+        try { _ribbon?.Remove(); } catch { }             // 3. ribbon (STA)
         try { _descriptorWriter?.Dispose(); } catch { }
         try { _sta?.Dispose(); } catch { }
         _server = null;
@@ -301,6 +337,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _sta = null;
         _descriptor = null;
         _toasts = null;
+        _ribbon = null;
         _appEvents = null;
         _hint = null;
         _app = null!;
