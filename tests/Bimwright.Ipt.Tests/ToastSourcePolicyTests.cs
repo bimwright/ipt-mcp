@@ -22,6 +22,7 @@ public sealed class ToastSourcePolicyTests
 
     private static string ToastDir => Path.Combine(RepoRoot(), "src", "shared", "Views", "Toast");
     private static string ReadToast(string name) => File.ReadAllText(Path.Combine(ToastDir, name));
+    private static string ReadBase() => File.ReadAllText(Path.Combine(RepoRoot(), "src", "shared", "Plugin", "InventorAddInServerBase.cs"));
 
     [Theory]
     [InlineData(2022)]
@@ -70,6 +71,28 @@ public sealed class ToastSourcePolicyTests
         Assert.Contains("UnhandledException += (_, e) => e.Handled = true", host);
         Assert.Contains("SetApartmentState(ApartmentState.STA)", host);
         Assert.Contains("IsBackground = true", host);
+    }
+
+    [Fact]
+    public void Toast_is_notified_only_after_the_response_is_handed_back()
+    {
+        var text = ReadBase();
+        var set = text.IndexOf("tcs.TrySetResult(JsonConvert.SerializeObject(result));", StringComparison.Ordinal);
+        var notify = text.IndexOf("NotifyToast(env, dispatcher, result.Ok", StringComparison.Ordinal);
+        Assert.True(set >= 0, "success path must serialize the result it hands back");
+        Assert.True(notify > set, "the toast must be posted after tcs.TrySetResult");
+    }
+
+    [Fact(Skip = "enabled in Task 10")]
+    public void Deactivate_stops_transport_then_toasts_then_ribbon()
+    {
+        var text = ReadBase();
+        var start = text.IndexOf("public void Deactivate()", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var server = text.IndexOf("_server?.Dispose()", start, StringComparison.Ordinal);
+        var toasts = text.IndexOf("_toasts?.Dispose()", start, StringComparison.Ordinal);
+        var ribbon = text.IndexOf("_ribbon?.Remove()", start, StringComparison.Ordinal);
+        Assert.True(server >= 0 && toasts > server && ribbon > toasts);
     }
 
     [Fact]

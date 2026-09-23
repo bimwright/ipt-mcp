@@ -7,6 +7,8 @@ using Newtonsoft.Json;
 using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Transport;
+using Bimwright.Ipt.Shared.Views.Toast;
+using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Shared.Plugin;
 
@@ -32,6 +34,12 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private const int HealthFastPathMs = 2000;
     private int _year;
     private string _descriptorDir = "";
+    private PluginOptions? _options;
+    private ToastSettings? _toastSettings;
+    private ToastNotifier? _toasts;
+    private InvApi.ApplicationEvents? _appEvents;
+    private BackdropHint? _hint;
+    private string _configPath = "";
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
@@ -46,8 +54,14 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             "Bimwright", "ipt-mcp");
 
         var options = new PluginOptions(_year, enableSendCode, readOnly, 0);
+        _options = options;
         var handlers = InventorCommandRegistry.Build(options);
         var dispatcher = new CommandDispatcher(handlers, maxResponseBytes: 5_000_000);
+
+        // Toasts (Phase 1b): settings before the transport starts, so the first command already sees them.
+        _configPath = ToastConfigStore.DefaultPath(_descriptorDir);
+        _toastSettings = ToastConfigStore.Load(_configPath, Environment.GetEnvironmentVariable);
+        _toasts = new ToastNotifier(_toastSettings);
 
         // Start the transport and read back its bound endpoint into the descriptor.
         _server = TransportFactory.CreateStarted(
@@ -60,6 +74,23 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         ReadActiveDocument(out var docTitle, out var docPath);
         _descriptorWriter = new TargetDescriptorWriter(_descriptorDir, _descriptor);
         _descriptorWriter.Start(docTitle, docPath);
+
+        StartToastUi();
+    }
+
+    /// <summary>Inventor events for toasts (ribbon in Task 10). Failures here never stop the MCP transport.</summary>
+    private void StartToastUi()
+    {
+        try
+        {
+            _appEvents = _app.ApplicationEvents;
+            _appEvents.OnApplicationOptionChange += OnApplicationOptionChange;
+            _appEvents.OnActivateView += OnActivateView;
+        }
+        catch
+        {
+            _appEvents = null;
+        }
     }
 
     private void HandleLine(
@@ -73,6 +104,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         // journal can attribute the call to this target (F1 hand-off note, spec F2).
         var meta = new InventorResponseMeta { TargetId = descriptor.TargetId, InventorYear = o.Year };
         var envId = Guid.Empty;
+        InventorCommandEnvelope? authorized = null;              // new: for the toast on the catch path
+        var clock = System.Diagnostics.Stopwatch.StartNew();     // new: toast duration (includes STA queue time)
         try
         {
             var env = JsonConvert.DeserializeObject<InventorCommandEnvelope>(line)!;
@@ -80,8 +113,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             if (!AuthToken.Verify(descriptor.AuthToken, env.AuthToken))
             {
                 tcs.TrySetResult(Err(env.Id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token.", meta));
-                return;
+                return;   // not agent activity: no toast
             }
+            authorized = env;
 
             var ctx = new InventorCommandContext
             {
@@ -96,7 +130,12 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
             // Marshal the actual API work onto the STA thread. task.Wait is the single owner of
             // the timeout (spec F2-b): nothing else can interrupt work running on the STA thread.
-            var task = _sta!.InvokeAsync(() => dispatcher.Dispatch(ctx, env));
+            var task = _sta!.InvokeAsync(() =>
+            {
+                var r = dispatcher.Dispatch(ctx, env);
+                RefreshToastSnapshot();   // still on the STA: cheap HWND/visibility read for toast placement
+                return r;
+            });
 
             // A liveness probe must still answer when the STA thread is jammed, so `health`
             // gets a short fast-path wait and then a synthesized busy response built purely
@@ -104,7 +143,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             var waitMs = env.Command == "health" ? Math.Min(env.TimeoutMs, HealthFastPathMs) : env.TimeoutMs;
             if (task.Wait(waitMs))
             {
-                tcs.TrySetResult(JsonConvert.SerializeObject(task.Result));
+                var result = task.Result;
+                tcs.TrySetResult(JsonConvert.SerializeObject(result));
+                NotifyToast(env, dispatcher, result.Ok, result.Data, result.Error?.Code, result.Error?.Message, clock.ElapsedMilliseconds);
             }
             else if (env.Command == "health")
             {
@@ -117,10 +158,14 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                     $"send_code exceeded {env.TimeoutMs} ms. The script MAY STILL BE RUNNING on Inventor's STA thread " +
                     "and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; " +
                     "do not resend the same script.", meta));
+                NotifyToast(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
+                    $"Script still running after {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
             else
             {
                 tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT, "STA dispatch timed out", meta));
+                NotifyToast(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
+                    $"Inventor did not answer within {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
         }
         catch (Exception ex)
@@ -128,7 +173,74 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             // task.Wait surfaces STA-side failures as AggregateException — unwrap for a useful message.
             var inner = ex is AggregateException agg ? agg.GetBaseException() : ex;
             tcs.TrySetResult(Err(envId, InventorErrorCodes.API_ERROR, inner.Message, meta));
+            if (authorized != null)
+                NotifyToast(authorized, dispatcher, false, null, InventorErrorCodes.API_ERROR, inner.Message, clock.ElapsedMilliseconds);
         }
+    }
+
+    /// <summary>
+    /// Listener thread, after the response was handed back. A toast must never change a command's outcome.
+    /// <c>health</c> is a liveness probe, not agent work, so it gets no toast.
+    /// </summary>
+    private void NotifyToast(
+        InventorCommandEnvelope env, CommandDispatcher dispatcher, bool ok, JToken? data, string? code, string? message, long ms)
+    {
+        var toasts = _toasts;
+        if (toasts is null || env.Command == "health") return;
+        try
+        {
+            bool? isReadOnly = dispatcher.Commands.TryGetValue(env.Command ?? "", out var handler) ? handler.IsReadOnly : null;
+            toasts.Notify(new ToastEvent(env.Command ?? "", ok, data, code, message, ms, isReadOnly));
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+
+    /// <summary>STA only. Refreshes what the toast thread needs; skipped entirely while toasts are off.</summary>
+    private void RefreshToastSnapshot()
+    {
+        var toasts = _toasts;
+        if (toasts is null || !toasts.Enabled) return;
+        try
+        {
+            _hint ??= InventorUiSnapshotReader.ReadHint(_app);
+            toasts.UpdateSnapshot(InventorUiSnapshotReader.Read(_app, _hint));
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+
+    /// <summary>Theme/colour-scheme may have changed (kAfter: the new theme is already active, spike pass4).</summary>
+    private void OnApplicationOptionChange(
+        InvApi.EventTimingEnum timing, InvApi.NameValueMap context, out InvApi.HandlingCodeEnum handling)
+    {
+        handling = InvApi.HandlingCodeEnum.kEventNotHandled;
+        if (timing != InvApi.EventTimingEnum.kAfter) return;
+        try
+        {
+            _hint = null;
+            RefreshToastSnapshot();
+            _toasts?.Retheme();
+        }
+        catch { }
+    }
+
+    /// <summary>A different view means a different anchor and possibly a different backdrop (spec theme item 5).</summary>
+    private void OnActivateView(
+        InvApi.View view, InvApi.EventTimingEnum timing, InvApi.NameValueMap context, out InvApi.HandlingCodeEnum handling)
+    {
+        handling = InvApi.HandlingCodeEnum.kEventNotHandled;
+        if (timing != InvApi.EventTimingEnum.kAfter) return;
+        try
+        {
+            RefreshToastSnapshot();
+            _toasts?.Retheme();
+        }
+        catch { }
     }
 
     /// <summary>
@@ -171,13 +283,26 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
     public void Deactivate()
     {
-        try { _server?.Dispose(); } catch { }
+        try { _server?.Dispose(); } catch { }            // 1. no new commands, so no new toasts
+        try
+        {
+            if (_appEvents != null)
+            {
+                _appEvents.OnApplicationOptionChange -= OnApplicationOptionChange;
+                _appEvents.OnActivateView -= OnActivateView;
+            }
+        }
+        catch { }
+        try { _toasts?.Dispose(); } catch { }            // 2. close toast windows on their thread, stop it
         try { _descriptorWriter?.Dispose(); } catch { }
         try { _sta?.Dispose(); } catch { }
         _server = null;
         _descriptorWriter = null;
         _sta = null;
         _descriptor = null;
+        _toasts = null;
+        _appEvents = null;
+        _hint = null;
         _app = null!;
         GC.Collect();
     }
