@@ -28,6 +28,7 @@ internal sealed class ToastWindow : Window
     private readonly TextBlock _summary;
     private readonly TextBlock _detail;
     private readonly TextBlock _duration;
+    private readonly TextBlock _brand;
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
     private readonly ToastCountdown _count;
@@ -80,6 +81,12 @@ internal sealed class ToastWindow : Window
             Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible,
         };
         _thumb = new Image { MaxHeight = 120, Margin = new Thickness(0, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
+        _brand = new TextBlock
+        {
+            Text = "bimwright", FontSize = 10, FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0),
+            ToolTip = "bimwright ipt-mcp",
+        };
 
         var header = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(_icon, Dock.Left);
@@ -96,6 +103,7 @@ internal sealed class ToastWindow : Window
         body.Children.Add(_summary);
         body.Children.Add(_detail);
         body.Children.Add(_thumb);
+        body.Children.Add(_brand);
 
         _stripe = new Border { CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(5, 0, 0, 0), Child = body };
         _card = new Border
@@ -139,6 +147,7 @@ internal sealed class ToastWindow : Window
         _category.Foreground = body;
         _detail.Foreground = body;
         _duration.Foreground = body;
+        _brand.Foreground = body;
     }
 
     public void SetThumbnail(byte[]? bytes)
