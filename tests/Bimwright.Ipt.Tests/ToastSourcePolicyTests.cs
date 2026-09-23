@@ -63,6 +63,16 @@ public sealed class ToastSourcePolicyTests
     }
 
     [Fact]
+    public void Toast_thread_swallows_its_own_exceptions()
+    {
+        // An unhandled exception on the toast dispatcher would terminate Inventor.exe.
+        var host = ReadToast("ToastHost.cs");
+        Assert.Contains("UnhandledException += (_, e) => e.Handled = true", host);
+        Assert.Contains("SetApartmentState(ApartmentState.STA)", host);
+        Assert.Contains("IsBackground = true", host);
+    }
+
+    [Fact]
     public void Toast_code_never_touches_Inventor_or_messages_its_windows()
     {
         foreach (var file in Directory.EnumerateFiles(ToastDir, "*.cs", SearchOption.AllDirectories))
