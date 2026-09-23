@@ -12,15 +12,39 @@ using System.Windows.Threading;
 namespace ToastSpike
 {
     /// Code-built toast window (no XAML / pack URIs). Mirrors rvt-mcp's look only roughly.
+    /// Toast colour set. "auto-inverse" is resolved against Inventor's active theme (Dark -> light toast).
+    internal sealed class Palette
+    {
+        public string Name; public Color Bg, Title, Body, Outline, Accent; public bool Shadow;
+
+        private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);
+        public static Palette Get(string name)
+        {
+            switch (name)
+            {
+                case "light": return new Palette { Name = name, Bg = C("#F5F5F5"), Title = C("#1E293B"), Body = C("#475569"), Outline = C("#F5F5F5"), Accent = C("#007ACC") };
+                case "light-elevated": return new Palette { Name = name, Bg = C("#FFFFFF"), Title = C("#0F172A"), Body = C("#334155"), Outline = C("#94A3B8"), Accent = C("#007ACC"), Shadow = true };
+                case "dark-elevated": return new Palette { Name = name, Bg = C("#111827"), Title = C("#F9FAFB"), Body = C("#D1D5DB"), Outline = C("#9CA3AF"), Accent = C("#3B82F6"), Shadow = true };
+                default: return new Palette { Name = "dark", Bg = C("#2B2F36"), Title = C("#FFFFFF"), Body = C("#DCDCDC"), Outline = C("#2B2F36"), Accent = C("#3B82F6") };
+            }
+        }
+        /// Inverse of Inventor's theme: dark UI -> elevated light toast, light UI -> elevated dark toast.
+        public static Palette Inverse(string inventorTheme) =>
+            (inventorTheme ?? "").IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0 ? Get("light-elevated") : Get("dark-elevated");
+    }
+
     internal sealed class ToastWin : Window
     {
         public const double CardWidth = 320;
-        private readonly TextBlock _body;
+        private readonly TextBlock _title, _body;
+        private readonly Border _outer, _card;
         public IntPtr Hwnd;
         public readonly bool NoActivate;
         public string Id;
+        public bool AutoTheme;          // follows Inventor theme changes (inverse)
+        public string PaletteName;
 
-        public ToastWin(string id, string title, string body, bool noActivate, bool animate)
+        public ToastWin(string id, string title, string body, bool noActivate, bool animate, Palette palette = null)
         {
             Id = id; NoActivate = noActivate;
             WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
@@ -29,17 +53,19 @@ namespace ToastSpike
             ShowActivated = !noActivate;
             WindowStartupLocation = WindowStartupLocation.Manual; Left = -32000; Top = -32000;
 
-            _body = new TextBlock { Text = body, Foreground = Brushes.Gainsboro, TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+            _body = new TextBlock { Text = body, TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+            _title = new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, FontSize = 13 };
             var stack = new StackPanel { Margin = new Thickness(12, 10, 12, 10) };
-            stack.Children.Add(new TextBlock { Text = title, Foreground = Brushes.White, FontWeight = FontWeights.SemiBold, FontSize = 13 });
+            stack.Children.Add(_title);
             stack.Children.Add(_body);
-            var card = new Border
+            _card = new Border { CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(6, 0, 0, 0), Child = stack };
+            _outer = new Border
             {
                 Width = CardWidth - 16, Margin = new Thickness(8), CornerRadius = new CornerRadius(8),
-                Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x2F, 0x36)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6)), BorderThickness = new Thickness(6, 0, 0, 0),
-                Child = stack,
+                BorderThickness = new Thickness(1), Child = _card,
             };
+            var card = _outer;
+            ApplyPalette(palette ?? Palette.Get("dark"));
             Content = card;
             if (animate)
             {
@@ -58,6 +84,18 @@ namespace ToastSpike
         }
 
         public void SetBody(string s) => _body.Text = s;
+
+        /// Must run on this window's dispatcher.
+        public void ApplyPalette(Palette p)
+        {
+            PaletteName = p.Name;
+            _outer.Background = new SolidColorBrush(p.Bg);
+            _outer.BorderBrush = new SolidColorBrush(p.Outline);
+            _card.BorderBrush = new SolidColorBrush(p.Accent);
+            _title.Foreground = new SolidColorBrush(p.Title);
+            _body.Foreground = new SolidColorBrush(p.Body);
+            _outer.Effect = p.Shadow ? new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Opacity = 0.45, Color = Colors.Black } : null;
+        }
     }
 
     /// A toast host = the dispatcher that owns the toast windows.
@@ -96,9 +134,9 @@ namespace ToastSpike
         }
 
         /// Must run on this host's dispatcher thread.
-        public ToastWin ShowOnThisThread(string id, string title, string body, bool noActivate, bool animate, IntPtr owner, int? x, int? y)
+        public ToastWin ShowOnThisThread(string id, string title, string body, bool noActivate, bool animate, IntPtr owner, int? x, int? y, Palette palette = null, bool autoTheme = false)
         {
-            var w = new ToastWin(id, title, body, noActivate, animate);
+            var w = new ToastWin(id, title, body, noActivate, animate, palette) { AutoTheme = autoTheme };
             if (owner != IntPtr.Zero) new WindowInteropHelper(w).Owner = owner;
             w.Closed += (s, e) => Toasts.TryRemove(id, out _);
             w.Show();

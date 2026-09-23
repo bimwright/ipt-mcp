@@ -5,7 +5,8 @@ param(
     [int]$Alc = 0,              # UseInventorAssemblyContext value written into the .addin
     [switch]$Quick,             # env + one toast + ribbon only (used for the ALC=1 pass)
     [string]$Tag = "pass1",
-    [switch]$KeepTrust          # keep the spike's AddInLoadRules entry (for a follow-up pass)
+    [switch]$KeepTrust,         # keep the spike's AddInLoadRules entry (for a follow-up pass)
+    [switch]$ThemeSurvey        # toast palettes vs Inventor Light/Dark theme (switches theme, restores it)
 )
 $ErrorActionPreference = 'Stop'
 $here    = $PSScriptRoot
@@ -153,7 +154,30 @@ P ribbon_activate @{ ribbon = 'ZeroDoc' } | Out-Null
 Start-Sleep 2
 P snap @{ what = 'main_top'; name = "$Tag-ribbon-zerodoc" } | Out-Null
 
-if ($Quick) {
+if ($ThemeSurvey) {
+    $palettes = @('dark', 'dark-elevated', 'light', 'light-elevated', 'auto-inverse')
+    P theme_info | Out-Null
+    P part_sketch | Out-Null
+    P exit_sketch | Out-Null
+    P host @{ mode = 'B' } | Out-Null
+    foreach ($p in $palettes) { P show @{ mode = 'B'; owned = $false; anchor = 'main'; palette = $p; title = "palette: $p"; body = 'inventor_extrude · 124 ms · Part1.ipt' } | Out-Null }
+    Start-Sleep 2
+    P snap @{ what = 'main'; name = "$Tag-theme1-5palettes" } | Out-Null
+    P theme_set @{ name = 'other' } 120 | Out-Null
+    Start-Sleep 6
+    P theme_info | Out-Null
+    P snap @{ what = 'main'; name = "$Tag-theme2-after-switch" } | Out-Null
+    P close | Out-Null
+    foreach ($p in $palettes) { P show @{ mode = 'B'; owned = $false; anchor = 'main'; palette = $p; title = "palette: $p"; body = 'inventor_extrude · 124 ms · Part1.ipt' } | Out-Null }
+    Start-Sleep 2
+    P snap @{ what = 'main'; name = "$Tag-theme2-5palettes" } | Out-Null
+    P theme_set @{ name = 'original' } 120 | Out-Null
+    Start-Sleep 6
+    P theme_info | Out-Null
+    P snap @{ what = 'main'; name = "$Tag-theme-restored" } | Out-Null
+    P close | Out-Null
+    P close_doc | Out-Null
+} elseif ($Quick) {
     P host @{ mode = 'B' } | Out-Null
     P show @{ mode = 'B'; owned = $true; anchor = 'main'; body = "ALC=$Alc owned" } | Out-Null
     P show @{ mode = 'B'; owned = $false; anchor = 'main'; body = "ALC=$Alc unowned" } | Out-Null

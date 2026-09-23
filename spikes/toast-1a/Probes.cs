@@ -48,10 +48,16 @@ namespace ToastSpike
                 case "ribbon_state": return S.Ribbon?.State((bool?)a["exercise"] ?? false);
                 case "dpi_toasts": return DpiToasts(a, id);
                 case "ribbon_activate": return S.Ribbon?.ActivateTab((string)a["ribbon"]);
+                case "theme_info": return ThemeInfo();
+                case "theme_set": return ThemeSet((string)a["name"]);
+                case "retheme": return RethemeAuto(ActiveThemeName());
                 case "quit":
+                    // never leave the user's theme changed by the survey
+                    object restored = null;
+                    if (OriginalTheme != null && ActiveThemeName() != OriginalTheme) restored = ThemeSet("original");
                     // after this probe's result is written: exercise Deactivate via a clean, prompt-free quit
                     S.Marshaller.BeginInvoke(new Action(() => { App.SilentOperation = true; App.Quit(); }));
-                    return new { quitting = true };
+                    return new { quitting = true, theme_restored = restored };
                 default: throw new ArgumentException("unknown probe " + probe);
             }
         }
@@ -119,13 +125,77 @@ namespace ToastSpike
             };
         }
 
-        private static ToastWin ShowVia(ToastHost h, string id, string title, string body, bool noActivate, bool animate, IntPtr owner, int? x, int? y)
+        private static ToastWin ShowVia(ToastHost h, string id, string title, string body, bool noActivate, bool animate, IntPtr owner, int? x, int? y, Palette palette = null, bool autoTheme = false)
         {
-            if (h.Mode == "A") return h.ShowOnThisThread(id, title, body, noActivate, animate, owner, x, y);
+            if (h.Mode == "A") return h.ShowOnThisThread(id, title, body, noActivate, animate, owner, x, y, palette, autoTheme);
             ToastWin w = null;
-            h.D.Invoke(() => { w = h.ShowOnThisThread(id, title, body, noActivate, animate, owner, x, y); }, TimeSpan.FromSeconds(5));
+            h.D.Invoke(() => { w = h.ShowOnThisThread(id, title, body, noActivate, animate, owner, x, y, palette, autoTheme); }, TimeSpan.FromSeconds(5));
             return w;
         }
+
+        // ---------- theme survey ----------
+        internal static string OriginalTheme;
+        internal static int OptionChangeEvents;
+        internal static readonly List<object> OptionChangeLog = new List<object>();
+        private static readonly string[] CompNames =
+        {
+            "Background", "ApplicationBackground", "Ribbon", "RibbonBackground", "Browser", "BrowserBackground", "Panel",
+            "PanelBackground", "Frame", "ApplicationFrame", "Window", "WindowBackground", "Text", "Foreground", "Accent",
+            "Highlight", "StatusBar", "Toolbar", "Tab", "Dialog", "DialogBackground", "Canvas", "ViewBackground", "Border",
+        };
+
+        internal static string ActiveThemeName() { try { return App.ThemeManager.ActiveTheme.Name; } catch { return null; } }
+
+        private static object ThemeInfo()
+        {
+            var tm = App.ThemeManager;
+            var active = tm.ActiveTheme.Name;
+            if (OriginalTheme == null) OriginalTheme = active;
+            var names = new List<string>();
+            foreach (Inv.Theme t in tm.Themes) names.Add(t.Name);
+            string frame;
+            try { frame = App.ColorSchemes.ApplicationFrameColor.ToString(); } catch (Exception ex) { frame = "ERR " + ex.Message; }
+            var comps = new Dictionary<string, string>();
+            foreach (var n in CompNames)
+            {
+                try { var c = tm.GetComponentThemeColor(n); comps[n] = "#" + c.Red.ToString("X2") + c.Green.ToString("X2") + c.Blue.ToString("X2"); }
+                catch (Exception ex) { comps[n] = "ERR " + ex.Message.Split('\n')[0]; }
+            }
+            lock (OptionChangeLog)
+                return new { active, original = OriginalTheme, themes = names, application_frame_color = frame, option_change_events = OptionChangeEvents, option_change_log = OptionChangeLog.ToList(), component_colors = comps };
+        }
+
+        internal static object ThemeSet(string want)
+        {
+            var tm = App.ThemeManager;
+            var before = tm.ActiveTheme.Name;
+            if (OriginalTheme == null) OriginalTheme = before;
+            if (want == "original") want = OriginalTheme;
+            else if (want == "other") foreach (Inv.Theme t in tm.Themes) if (t.Name != before) { want = t.Name; break; }
+            Inv.Theme target = null;
+            foreach (Inv.Theme t in tm.Themes) if (t.Name == want) target = t;
+            if (target == null) return new { ok = false, error = "theme not found: " + want };
+            var ev0 = OptionChangeEvents;
+            var sw = Stopwatch.StartNew();
+            target.Activate();
+            return new { ok = true, before, requested = want, after = tm.ActiveTheme.Name, activate_ms = sw.ElapsedMilliseconds, option_change_events_during = OptionChangeEvents - ev0 };
+        }
+
+        /// Re-apply the inverse palette to every auto-themed toast (non-blocking).
+        internal static object RethemeAuto(string theme)
+        {
+            var p = Palette.Inverse(theme);
+            var n = 0;
+            foreach (var h in Hosts())
+                foreach (var t in h.Toasts.Values.Where(t => t.AutoTheme).ToList())
+                {
+                    n++;
+                    h.D.BeginInvoke(new Action(() => t.ApplyPalette(p)));
+                }
+            return new { theme, palette = p.Name, toasts = n };
+        }
+
+        private static Palette PaletteFor(string name) => name == "auto-inverse" ? Palette.Inverse(ActiveThemeName()) : Palette.Get(name);
 
         private static object Show(JObject a, string id)
         {
@@ -145,7 +215,9 @@ namespace ToastSpike
                 y = mr.T + (int)((150 + n * 90) * dpi / 96.0);
             }
             var fgBefore = Native.GetForegroundWindow();
-            var w = ShowVia(h, (string)a["tid"] ?? id, (string)a["title"] ?? ("Toast " + mode), (string)a["body"] ?? id, noAct, animate, owned ? Main : IntPtr.Zero, x, y);
+            var paletteName = (string)a["palette"] ?? "dark";
+            var w = ShowVia(h, (string)a["tid"] ?? id, (string)a["title"] ?? ("Toast " + mode), (string)a["body"] ?? id, noAct, animate, owned ? Main : IntPtr.Zero, x, y,
+                PaletteFor(paletteName), paletteName == "auto-inverse");
             var fgAfter = Native.GetForegroundWindow();
             return new
             {

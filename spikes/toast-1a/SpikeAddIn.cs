@@ -40,6 +40,14 @@ namespace ToastSpike
             try { Ribbon = new SpikeRibbon(); Log.Event("ribbon-build", Ribbon.Build(firstTime)); }
             catch (Exception ex) { Log.Event("ribbon-build", new { ok = false, error = ex.ToString() }); }
 
+            try
+            {
+                _appEvents = App.ApplicationEvents;
+                _appEvents.OnApplicationOptionChange += OnOptionChange;
+                Log.Event("option-change-subscribe", new { ok = true, theme = Probes.ActiveThemeName() });
+            }
+            catch (Exception ex) { Log.Event("option-change-subscribe", new { ok = false, error = ex.ToString() }); }
+
             _timer = new System.Windows.Forms.Timer { Interval = 250 };
             _timer.Tick += Poll;
             _timer.Start();
@@ -56,6 +64,21 @@ namespace ToastSpike
             try { Marshaller?.Dispose(); } catch { }
             try { File.Delete(Path.Combine(Log.Root, "ready.json")); } catch { }
             App = null;
+        }
+
+        private Inv.ApplicationEvents _appEvents;
+
+        private void OnOptionChange(Inv.EventTimingEnum timing, Inv.NameValueMap context, out Inv.HandlingCodeEnum handling)
+        {
+            handling = Inv.HandlingCodeEnum.kEventNotHandled;
+            Probes.OptionChangeEvents++;
+            var theme = Probes.ActiveThemeName();
+            var keys = new List<string>();
+            try { for (var i = 1; i <= context.Count; i++) keys.Add(context.Name[i]); } catch (Exception ex) { keys.Add("ERR " + ex.Message); }
+            object rethemed = null;
+            if (timing == Inv.EventTimingEnum.kAfter) rethemed = Probes.RethemeAuto(theme);
+            lock (Probes.OptionChangeLog)
+                Probes.OptionChangeLog.Add(new { at = DateTime.UtcNow.ToString("o"), timing = timing.ToString(), theme, keys, rethemed });
         }
 
         public void ExecuteCommand(int commandID) { }
