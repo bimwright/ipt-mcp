@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Toast notifications in Inventor.** Every command that completes while Inventor is visible shows a small toast over the graphics view — blue for reads (`MCP · Query`), green for writes (`MCP · Modified`), red for failures (`MCP · Failed`, including soft failures such as `send_code` returning `ok:false` or a rolled-back `batch_execute`). `inventor_capture_view` toasts carry a clickable thumbnail; up to four cards stack newest-first and age out in a few seconds (hover pauses). `inventor_health` never toasts. Toasts run on a dedicated UI thread, are posted only after the command response is handed back, never steal focus, hide while Inventor is minimized or blocked by a modal dialog, and stay topmost over other applications. Card colours follow an auto palette sampled from pixels behind the toast (in-memory only — nothing is written or logged). Ribbon control: **Bimwright ▸ MCP → Toasts** toggle (persisted to `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` as `enableToast`, default on; `toastTheme` = `auto`/`light`/`dark`; env `BIMWRIGHT_INVENTOR_ENABLE_TOAST` / `BIMWRIGHT_INVENTOR_TOAST_THEME` override) and **Status** diagnostic dialog.
+
 ## [0.2.0] - 2026-09-16
 
 ### Added

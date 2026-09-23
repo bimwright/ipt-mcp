@@ -245,6 +245,16 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ---
 
+## Toast 通知
+
+当 Inventor 可见时，每个完成的命令都会在图形视图上弹出一个小 toast，让你看到 agent 仍在运行——读操作蓝色（`MCP · Query`），写操作绿色（`MCP · Modified`），失败红色（`MCP · Failed`，包括 `send_code` 脚本返回错误或 `batch_execute` 回滚等软失败）。`inventor_capture_view` 的 toast 带可点击缩略图；最多叠放四张卡片，最新在最上，数秒后自动消失（悬停可保留）。`inventor_health` 是存活探针，不产生 toast。
+
+Toast 运行在专用 UI 线程上，从不抢占焦点，也从不阻塞命令——它们在响应返回后才投递。Inventor 最小化或有模态对话框打开时 toast 会隐藏；即使其他应用拥有焦点，toast 仍保持置顶（这正是目的：证明 agent 仍在运行）。卡片颜色使用自动调色板，对 toast 背后的像素采样；采样仅存在于内存中——不写盘、不记日志。
+
+通过功能区开关 toast：**Bimwright ▸ MCP → Toasts**（Status 打开诊断对话框）。该选择持久化到 `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` 的 `enableToast`；`toastTheme` 接受 `auto`（默认）、`light` 或 `dark`。环境变量 `BIMWRIGHT_INVENTOR_ENABLE_TOAST` 和 `BIMWRIGHT_INVENTOR_TOAST_THEME` 会覆盖 JSON 值。格式错误的配置文件不会被改动——开关拒绝覆盖它。
+
+---
+
 ## 安全
 
 简短版：你的模型留在你的机器上，write/dangerous tools 都被 gate 住。

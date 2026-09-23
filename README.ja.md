@@ -241,6 +241,16 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ---
 
+## Toast 通知
+
+Inventor が表示されている間、完了した各コマンドがグラフィックスビュー上に小さな toast を表示し、agent がまだ動作中であることを示します — 読み取りは青（`MCP · Query`）、書き込みは緑（`MCP · Modified`）、失敗は赤（`MCP · Failed`。`send_code` スクリプトがエラーを返した場合や `batch_execute` がロールバックされた場合などのソフト失敗を含む）。`inventor_capture_view` の toast にはクリック可能なサムネイルが付き、最大 4 枚のカードが新しい順に積み重なり、数秒で消えます（ホバーで保持）。`inventor_health` は liveness probe のため toast を生成しません。
+
+Toast は専用 UI スレッドで動作し、フォーカスを奪わず、コマンドをブロックしません — レスポンスが返された後にのみ投稿されます。Inventor が最小化されている間やモーダルダイアログが開いている間は toast は非表示になり、他のアプリケーションがフォーカスを持っていても常に最前面に表示されます（これが目的です：agent がまだ動いている証拠）。カードの色は toast の背後のピクセルをサンプリングする自動パレットに従います。サンプルはメモリ内のみ — ディスクにもログにも書き込まれません。
+
+リボンから toast を切り替え：**Bimwright ▸ MCP → Toasts**（Status で診断ダイアログを開きます）。選択は `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` の `enableToast` に永続化されます。`toastTheme` は `auto`（デフォルト）、`light`、`dark` を受け付けます。環境変数 `BIMWRIGHT_INVENTOR_ENABLE_TOAST` と `BIMWRIGHT_INVENTOR_TOAST_THEME` は JSON 値を上書きします。不正な形式の設定ファイルはそのまま残されます — トグルは上書きを拒否します。
+
+---
+
 ## 安全性
 
 簡潔に言えば、モデルはユーザーのマシン上に留まり、書き込み/危険なツールは制限されます。

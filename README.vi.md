@@ -241,6 +241,16 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 
 ---
 
+## Thông báo toast
+
+Khi Inventor đang hiển thị, mỗi command hoàn thành sẽ pop một toast nhỏ trên khung đồ họa để bạn thấy agent vẫn đang chạy — xanh dương cho read (`MCP · Query`), xanh lá cho write (`MCP · Modified`), đỏ cho lỗi (`MCP · Failed`, kể cả soft-fail như script `send_code` trả về lỗi hay `batch_execute` bị rollback). Toast của `inventor_capture_view` kèm thumbnail có thể click; tối đa bốn thẻ xếp chồng, mới nhất trên cùng, tự mất sau vài giây (rê chuột để giữ lại). `inventor_health` là liveness probe nên không tạo toast.
+
+Toast chạy trên một UI thread riêng, không bao giờ giật focus, và không bao giờ chặn command — chúng chỉ được post sau khi response đã trả về. Toast ẩn khi Inventor bị minimize hoặc có modal dialog mở, và luôn topmost ngay cả khi ứng dụng khác đang focus (đúng mục đích: bằng chứng agent vẫn đang chạy). Màu thẻ theo palette auto lấy mẫu từ pixel phía sau toast; mẫu màu chỉ nằm trong bộ nhớ — không ghi đĩa, không log.
+
+Bật/tắt toast từ ribbon: **Bimwright ▸ MCP → Toasts** (Status mở dialog chẩn đoán). Lựa chọn lưu vào `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` dưới key `enableToast`; `toastTheme` nhận `auto` (mặc định), `light` hoặc `dark`. Biến môi trường `BIMWRIGHT_INVENTOR_ENABLE_TOAST` và `BIMWRIGHT_INVENTOR_TOAST_THEME` override giá trị JSON. File config malformed sẽ được giữ nguyên — toggle từ chối ghi đè nó.
+
+---
+
 ## An toàn
 
 Ngắn gọn: model của bạn ở lại trên máy bạn, và các tool write/nguy hiểm đều có gate.

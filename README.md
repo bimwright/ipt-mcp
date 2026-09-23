@@ -260,6 +260,16 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 ---
 
+## Toast Notifications
+
+When Inventor is visible, every completed command pops a small toast over the graphics view so you can see the agent is still working — blue for reads (`MCP · Query`), green for writes (`MCP · Modified`), red for failures (`MCP · Failed`, including soft failures such as a `send_code` script that returned an error or a rolled-back `batch_execute`). `inventor_capture_view` toasts carry a clickable thumbnail; up to four cards stack, newest on top, and age out after a few seconds (hover to keep one). `inventor_health` is a liveness probe and never toasts.
+
+Toasts run on a dedicated UI thread, never steal focus, and never block a command — they are posted only after the response is handed back. They hide while Inventor is minimized or a modal dialog is open, and stay topmost even when another application has focus (that is the point: proof the agent is still running). The card colour follows an auto palette sampled from the pixels behind the toast; the sample lives in memory only — nothing is written to disk or logged.
+
+Toggle toasts from the ribbon: **Bimwright ▸ MCP → Toasts** (Status opens a diagnostic dialog). The choice persists in `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` under `enableToast`; `toastTheme` accepts `auto` (default), `light`, or `dark`. Environment variables `BIMWRIGHT_INVENTOR_ENABLE_TOAST` and `BIMWRIGHT_INVENTOR_TOAST_THEME` override the JSON values. A malformed config file is left untouched — the toggle refuses to overwrite it.
+
+---
+
 ## Safety
 
 Short version: your model stays on your machine, and write/dangerous tools are gated.
