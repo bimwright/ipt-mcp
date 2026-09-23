@@ -30,14 +30,19 @@ internal sealed class ToastWindow : Window
     private readonly TextBlock _duration;
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
+    private readonly ToastCountdown _count;
+    private readonly Stopwatch _clock = new();
     private PxPoint? _pos;
     private bool _hidden;
     private bool _closing;
     private bool _done;
+    private bool _lifeRunning;
 
     public ToastModel Model { get; }
     public IntPtr Hwnd { get; private set; }
     public bool IsShown { get; private set; }
+    /// <summary>Painted right now. A hidden card is not covering the backdrop the sampler reads.</summary>
+    public bool IsOnScreen => IsShown && !_hidden;
     public int HeightPx => ToastNative.Rect(Hwnd)?.Height ?? 0;
 
     public ToastWindow(ToastModel model, ToastPalette palette, Action<ToastWindow> closed)
@@ -101,10 +106,13 @@ internal sealed class ToastWindow : Window
         Content = _card;
         ApplyPalette(palette);
 
-        _life = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(model.LifetimeMs) };
+        // The timer restarts its whole interval on Start, so remaining visible time lives in _count.
+        _count = new ToastCountdown(model.LifetimeMs);
+        _clock.Start();
+        _life = new DispatcherTimer();
         _life.Tick += (_, _) => BeginClose();
-        MouseEnter += (_, _) => _life.Stop();
-        MouseLeave += (_, _) => { if (!_closing && IsShown) _life.Start(); };
+        MouseEnter += (_, _) => PauseLife();
+        MouseLeave += (_, _) => ResumeLife();
         MouseLeftButtonUp += (_, _) =>
         {
             if (Model.ThumbnailPath != null) OpenImage(Model.ThumbnailPath);
@@ -164,7 +172,7 @@ internal sealed class ToastWindow : Window
         Show();
         IsShown = true;
         BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
-        _life.Start();
+        if (!IsMouseOver) ResumeLife();
     }
 
     /// <summary>
@@ -183,14 +191,38 @@ internal sealed class ToastWindow : Window
         _hidden = suppressed;
         if (suppressed)
         {
-            _life.Stop();
+            PauseLife();
             Hide();
         }
         else
         {
             Show();   // ShowActivated=false: shown without activation
-            if (!_closing) _life.Start();
+            if (!IsMouseOver) ResumeLife();
         }
+    }
+
+    /// <summary>Freeze the visible-time slice. Idempotent while the timer is already stopped.</summary>
+    private void PauseLife()
+    {
+        if (!_lifeRunning) return;
+        _life.Stop();
+        _lifeRunning = false;
+        _count.Pause(_clock.ElapsedMilliseconds);
+    }
+
+    /// <summary>Continue with whatever visible time is left. A full interval restart would add 3–9 s.</summary>
+    private void ResumeLife()
+    {
+        if (_lifeRunning || _closing || _done || _hidden || !IsShown) return;
+        if (_count.RemainingMs <= 0)
+        {
+            BeginClose();
+            return;
+        }
+        _count.Start(_clock.ElapsedMilliseconds);
+        _life.Interval = TimeSpan.FromMilliseconds(_count.RemainingMs);
+        _lifeRunning = true;
+        _life.Start();
     }
 
     public void MoveTo(PxPoint p)
@@ -204,7 +236,7 @@ internal sealed class ToastWindow : Window
     {
         if (_closing || _done) return;
         _closing = true;
-        _life.Stop();
+        PauseLife();
         if (!IsShown)
         {
             CloseNow();
@@ -220,7 +252,7 @@ internal sealed class ToastWindow : Window
         if (_done) return;
         _done = true;
         _closing = true;
-        _life.Stop();
+        PauseLife();
         try { Close(); } catch { }
         _closed(this);
     }

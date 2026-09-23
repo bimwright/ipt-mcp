@@ -22,6 +22,7 @@ internal sealed class ToastHost
     private readonly List<ToastWindow> _stack = new();   // newest first
     private DispatcherTimer? _track;
     private ToastPalette? _stackPalette;                  // one decision per visible stack (spec theme item 4)
+    private bool _rethemeDue;
     private volatile InventorUiSnapshot _ui;
     private volatile string? _lastDecision;
 
@@ -88,8 +89,9 @@ internal sealed class ToastHost
         var anchor = Anchor(ui, dpi);
         if (anchor == null) return;
 
-        if (_stackPalette == null)
-            Decide(ToastLayout.SampleRect(anchor.Value, dpi));
+        var suppressed = !ToastVisibility.ShouldShow(ToastNative.MainState(main));
+        // A modal covers the anchor. Sampling now would lock the stack to the dialog colour.
+        ApplySample(suppressed);
 
         while (_stack.Count >= ToastLayout.MaxToasts)
         {
@@ -98,15 +100,16 @@ internal sealed class ToastHost
             oldest.CloseNow();
         }
 
-        var window = new ToastWindow(model, _stackPalette!, OnClosed);
+        var palette = _stackPalette ?? ToastPaletteChooser.Choose(_theme, null, ui.Hint).Palette;
+        var window = new ToastWindow(model, palette, OnClosed);
         if (model.ThumbnailPath != null)
             window.SetThumbnail(ToastThumbnail.TryLoadBytes(model.ThumbnailPath));
         _stack.Insert(0, window);
 
         // Created while a modal dialog is up: stays unshown and appears when the dialog closes (D1).
         // Applied to the whole stack so older hidden toasts come back together with the new one.
-        ApplySuppression(!ToastVisibility.ShouldShow(ToastNative.MainState(main)));
-        Reflow();
+        ApplySuppression(suppressed);
+        if (!suppressed) Reflow();
         StartTracking();
     }
 
@@ -173,6 +176,7 @@ internal sealed class ToastHost
             return;
         }
         var suppressed = !ToastVisibility.ShouldShow(ToastNative.MainState(new IntPtr(_ui.MainHwnd)));
+        ApplySample(suppressed);
         ApplySuppression(suppressed);
         if (!suppressed) Reflow();
     }
@@ -183,6 +187,7 @@ internal sealed class ToastHost
         if (_stack.Count == 0)
         {
             _stackPalette = null;   // next stack decides afresh
+            _rethemeDue = false;
             _track?.Stop();
         }
         else
@@ -192,23 +197,59 @@ internal sealed class ToastHost
     }
 
     /// <summary>
-    /// After an option change or a view switch: re-sample a strip beside the stack (the toasts cover their
-    /// own backdrop) and repaint the toasts without recreating them.
+    /// After an option change or a view switch. Repaint without recreating the cards. While a modal
+    /// covers the frame the sample waits, because the pixels under the anchor belong to the dialog.
     /// </summary>
     private void RethemeNow()
     {
-        var shown = _stack.FindAll(w => w.IsShown);
-        if (shown.Count == 0)
+        if (_stack.Count == 0)
         {
-            if (_stack.Count == 0) _stackPalette = null;
+            _stackPalette = null;
+            _rethemeDue = false;
             return;
         }
-        var rects = new List<PxRect>();
-        foreach (var w in shown)
-            if (ToastNative.Rect(w.Hwnd) is { } r) rects.Add(r);
-        var bounds = ToastLayout.Union(rects);
-        if (bounds == null) return;
-        Decide(ToastLayout.StripRightOf(bounds.Value, ToastNative.Dpi(new IntPtr(_ui.MainHwnd))));
+        // Application Options is modal: the frame is disabled, so the sample would see the dialog.
+        _rethemeDue = true;
+        var suppressed = !ToastVisibility.ShouldShow(ToastNative.MainState(new IntPtr(_ui.MainHwnd)));
+        ApplySample(suppressed);
+    }
+
+    /// <summary>
+    /// Commits a backdrop sample only when <see cref="ToastSample.Target"/> says the frame is usable.
+    /// Hidden cards are not covering the canvas, so a deferred retheme samples the anchor.
+    /// </summary>
+    private void ApplySample(bool suppressed)
+    {
+        var onScreen = false;
+        foreach (var w in _stack)
+            if (w.IsOnScreen) { onScreen = true; break; }
+
+        var target = ToastSample.Target(!suppressed, _stackPalette != null, _rethemeDue, onScreen);
+        if (target == ToastSampleTarget.None) return;
+
+        var ui = _ui;
+        var dpi = ToastNative.Dpi(new IntPtr(ui.MainHwnd));
+        var anchor = Anchor(ui, dpi);
+        if (anchor == null) return;
+
+        PxRect rect;
+        if (target == ToastSampleTarget.Beside)
+        {
+            var rects = new List<PxRect>();
+            foreach (var w in _stack)
+                if (w.IsOnScreen && ToastNative.Rect(w.Hwnd) is { } r) rects.Add(r);
+            var bounds = ToastLayout.Union(rects);
+            rect = bounds == null
+                ? ToastLayout.SampleRect(anchor.Value, dpi)
+                : ToastLayout.StripRightOf(bounds.Value, dpi);
+        }
+        else
+        {
+            rect = ToastLayout.SampleRect(anchor.Value, dpi);
+        }
+
+        Decide(rect);
+        _rethemeDue = false;
         foreach (var w in _stack)
             w.ApplyPalette(_stackPalette!);
     }
@@ -220,6 +261,7 @@ internal sealed class ToastHost
         foreach (var w in all)
             w.CloseNow();
         _stackPalette = null;
+        _rethemeDue = false;
         _track?.Stop();
     }
 }
