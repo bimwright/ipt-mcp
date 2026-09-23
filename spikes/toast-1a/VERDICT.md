@@ -11,6 +11,7 @@ Question: can a toast like rvt-mcp's run inside Inventor, and on what platform t
 | DPI | Process is system-aware; 100% and 200% size/placement are correct; mixed DPI untested |
 | Ribbon + icons | Tabs in ZeroDoc/Part/Assembly/Drawing work; `Pressed` + `OnExecute` work; AxHost and OLE `IPictureDisp` both render. Pick OLE |
 | Cost | STA round-trip p95 ≤ 6 ms even with 4 animating toasts |
+| Theme (pass4/5) | Matching Inventor's Dark theme blends in (1.06–1.37:1). The UI theme doesn't change the canvas (colour scheme, here an image). Only "inverse of the **screen-sampled backdrop**" picked correctly on both themes (13.1:1). `OnApplicationOptionChange` (kAfter) lets live toasts re-theme |
 | Packaging | Unsigned new add-ins are blocked on first load, so ship the toast inside the existing, already trusted add-in |
 
 Full decisions: `ipt-mcp/docs/superpowers/specs/2026-09-23-ipt-toast-design.md` (local, gitignored).
