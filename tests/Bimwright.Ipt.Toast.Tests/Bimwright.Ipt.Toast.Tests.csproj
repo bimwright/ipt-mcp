@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!--
+    Only the host-free toast model files. The WPF / Win32 / Inventor toast code is plug-in-only and
+    is verified live (Phase 1b Task 11). No Inventor, no WPF needed to run these tests.
+  -->
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
+  </ItemGroup>
+
+</Project>
