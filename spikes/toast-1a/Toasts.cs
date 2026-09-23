@@ -31,6 +31,25 @@ namespace ToastSpike
         /// Inverse of Inventor's theme: dark UI -> elevated light toast, light UI -> elevated dark toast.
         public static Palette Inverse(string inventorTheme) =>
             (inventorTheme ?? "").IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0 ? Get("light-elevated") : Get("dark-elevated");
+
+        /// Inverse of what is actually behind the toast: pick whichever elevated palette contrasts more.
+        public static Palette ForBackdrop(Color bg)
+        {
+            var light = Get("light-elevated"); var dark = Get("dark-elevated");
+            return Contrast(light.Bg, bg) >= Contrast(dark.Bg, bg) ? light : dark;
+        }
+
+        public static double Luminance(Color c)
+        {
+            double F(byte v) { var s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); }
+            return 0.2126 * F(c.R) + 0.7152 * F(c.G) + 0.0722 * F(c.B);
+        }
+
+        public static double Contrast(Color a, Color b)
+        {
+            double la = Luminance(a), lb = Luminance(b);
+            return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+        }
     }
 
     internal sealed class ToastWin : Window
@@ -42,6 +61,7 @@ namespace ToastSpike
         public readonly bool NoActivate;
         public string Id;
         public bool AutoTheme;          // follows Inventor theme changes (inverse)
+        public string AutoMode;         // "theme" | "scheme" | "sample"
         public string PaletteName;
 
         public ToastWin(string id, string title, string body, bool noActivate, bool animate, Palette palette = null)

@@ -49,6 +49,7 @@ namespace ToastSpike
                 case "dpi_toasts": return DpiToasts(a, id);
                 case "ribbon_activate": return S.Ribbon?.ActivateTab((string)a["ribbon"]);
                 case "theme_info": return ThemeInfo();
+                case "scheme_info": return SchemeInfo();
                 case "theme_set": return ThemeSet((string)a["name"]);
                 case "retheme": return RethemeAuto(ActiveThemeName());
                 case "quit":
@@ -184,18 +185,88 @@ namespace ToastSpike
         /// Re-apply the inverse palette to every auto-themed toast (non-blocking).
         internal static object RethemeAuto(string theme)
         {
-            var p = Palette.Inverse(theme);
-            var n = 0;
+            var results = new List<object>();
             foreach (var h in Hosts())
                 foreach (var t in h.Toasts.Values.Where(t => t.AutoTheme).ToList())
                 {
-                    n++;
+                    Palette p; string backdrop = null;
+                    if (t.AutoMode == "scheme") { var bg = SchemeBackdrop(out _); backdrop = Hex(bg); p = Palette.ForBackdrop(bg); }
+                    else if (t.AutoMode == "sample")
+                    {
+                        // the toast covers its own backdrop: sample a strip just right of it
+                        Native.GetWindowRect(t.Hwnd, out var r);
+                        var bg = SampleScreen(new Native.RECT { L = r.R + 4, T = r.T, R = r.R + 60, B = r.B });
+                        backdrop = Hex(bg); p = Palette.ForBackdrop(bg);
+                    }
+                    else p = Palette.Inverse(theme);
+                    results.Add(new { t.Id, mode = t.AutoMode, backdrop, palette = p.Name });
                     h.D.BeginInvoke(new Action(() => t.ApplyPalette(p)));
                 }
-            return new { theme, palette = p.Name, toasts = n };
+            return new { theme, toasts = results };
         }
 
         private static Palette PaletteFor(string name) => name == "auto-inverse" ? Palette.Inverse(ActiveThemeName()) : Palette.Get(name);
+
+        // ---------- backdrop survey (colour behind the toast) ----------
+        private static System.Windows.Media.Color W(Inv.Color c) => System.Windows.Media.Color.FromRgb((byte)c.Red, (byte)c.Green, (byte)c.Blue);
+        private static string Hex(System.Windows.Media.Color c) => "#" + c.R.ToString("X2") + c.G.ToString("X2") + c.B.ToString("X2");
+
+        private static object SchemeInfo()
+        {
+            var cs = App.ActiveColorScheme;
+            var v = App.ActiveView;
+            object view = null;
+            if (v != null) view = new { v.Left, v.Top, v.Width, v.Height, win = Native.Win(new IntPtr(v.HWND)) };
+            return new
+            {
+                scheme = cs.Name, background_type = App.ColorSchemes.BackgroundType.ToString(),
+                screen = Hex(W(cs.ScreenColor)), top = Hex(W(cs.TopScreenColor)), bottom = Hex(W(cs.BottomScreenColor)),
+                screen2d = Hex(W(cs.ScreenColor2D)), image = cs.ImageFullFileName, theme = ActiveThemeName(), view,
+            };
+        }
+
+        /// Canvas colour from the active colour scheme; theme colour when there is no graphics view (Home page).
+        internal static System.Windows.Media.Color SchemeBackdrop(out string how)
+        {
+            var theme = ActiveThemeName() ?? "";
+            var themeBg = theme.IndexOf("dark", StringComparison.OrdinalIgnoreCase) >= 0
+                ? System.Windows.Media.Color.FromRgb(0x3B, 0x44, 0x53) : System.Windows.Media.Color.FromRgb(0xF5, 0xF5, 0xF5);
+            if (App.ActiveView == null) { how = "no-view -> theme " + theme; return themeBg; }
+            var cs = App.ActiveColorScheme;
+            switch (App.ColorSchemes.BackgroundType)
+            {
+                case Inv.BackgroundTypeEnum.kOneColorBackgroundType:
+                    how = "one-color"; return W(cs.ScreenColor);
+                case Inv.BackgroundTypeEnum.kGradientBackgroundType:
+                    // toasts sit in the upper part of the view: weight the top colour
+                    var t = W(cs.TopScreenColor); var b = W(cs.BottomScreenColor);
+                    how = "gradient 75/25";
+                    return System.Windows.Media.Color.FromRgb((byte)(t.R * .75 + b.R * .25), (byte)(t.G * .75 + b.G * .25), (byte)(t.B * .75 + b.B * .25));
+                default:
+                    how = "image -> theme " + theme; return themeBg;
+            }
+        }
+
+        internal static System.Windows.Media.Color SampleScreen(Native.RECT r)
+        {
+            using (var bmp = new Bitmap(Math.Max(1, r.W), Math.Max(1, r.H)))
+            {
+                using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(r.L, r.T, 0, 0, new Size(bmp.Width, bmp.Height));
+                long R = 0, G = 0, B = 0, n = 0;
+                for (var y = 0; y < bmp.Height; y += 3)
+                    for (var x = 0; x < bmp.Width; x += 3) { var c = bmp.GetPixel(x, y); R += c.R; G += c.G; B += c.B; n++; }
+                return System.Windows.Media.Color.FromRgb((byte)(R / n), (byte)(G / n), (byte)(B / n));
+            }
+        }
+
+        private static Native.RECT ViewRect()
+        {
+            var v = App.ActiveView;
+            Native.RECT r;
+            if (v != null && Native.GetWindowRect(new IntPtr(v.HWND), out r) && r.W > 0) return r;
+            Native.GetWindowRect(Main, out r);
+            return r;
+        }
 
         private static object Show(JObject a, string id)
         {
@@ -205,23 +276,45 @@ namespace ToastSpike
             var noAct = (bool?)a["noActivate"] ?? true;
             var animate = (bool?)a["animate"] ?? false;
             int? x = (int?)a["x"], y = (int?)a["y"];
+            var dpi = Native.GetDpiForWindow(Main);
             if (x == null && (string)a["anchor"] == "main")
             {
                 // stack top-left of the Inventor main frame, like rvt-mcp's placement
                 Native.GetWindowRect(Main, out var mr);
                 var n = h.Toasts.Count;
-                var dpi = Native.GetDpiForWindow(Main);
                 x = mr.L + (int)(16 * dpi / 96.0);
                 y = mr.T + (int)((150 + n * 90) * dpi / 96.0);
             }
+            else if (x == null && (string)a["anchor"] == "view")
+            {
+                // stack top-left of the active graphics view (over the canvas, not the browser/ribbon)
+                var vr = ViewRect();
+                var n = h.Toasts.Count;
+                x = vr.L + (int)(16 * dpi / 96.0);
+                y = vr.T + (int)((16 + n * 90) * dpi / 96.0);
+            }
             var fgBefore = Native.GetForegroundWindow();
             var paletteName = (string)a["palette"] ?? "dark";
+            Palette palette; string autoMode = null; object decision = null;
+            var target = new Native.RECT { L = x ?? 0, T = y ?? 0, R = (x ?? 0) + (int)(ToastWin.CardWidth * dpi / 96.0), B = (y ?? 0) + (int)(80 * dpi / 96.0) };
+            if (paletteName == "auto-scheme")
+            {
+                var bg = SchemeBackdrop(out var how); palette = Palette.ForBackdrop(bg); autoMode = "scheme";
+                decision = new { how, backdrop = Hex(bg), chosen = palette.Name, contrast = Math.Round(Palette.Contrast(palette.Bg, bg), 2) };
+            }
+            else if (paletteName == "auto-sample")
+            {
+                var bg = SampleScreen(target); palette = Palette.ForBackdrop(bg); autoMode = "sample";
+                decision = new { how = "screen sample under target rect", backdrop = Hex(bg), chosen = palette.Name, contrast = Math.Round(Palette.Contrast(palette.Bg, bg), 2) };
+            }
+            else { palette = PaletteFor(paletteName); if (paletteName == "auto-inverse") autoMode = "theme"; }
             var w = ShowVia(h, (string)a["tid"] ?? id, (string)a["title"] ?? ("Toast " + mode), (string)a["body"] ?? id, noAct, animate, owned ? Main : IntPtr.Zero, x, y,
-                PaletteFor(paletteName), paletteName == "auto-inverse");
+                palette, autoMode != null);
+            w.AutoMode = autoMode;
             var fgAfter = Native.GetForegroundWindow();
             return new
             {
-                mode, owned, noActivate = noAct, toast = Native.Win(w.Hwnd),
+                mode, owned, noActivate = noAct, palette = w.PaletteName, decision, toast = Native.Win(w.Hwnd),
                 fg_before = Native.Win(fgBefore), fg_after = Native.Win(fgAfter), toast_is_foreground = fgAfter == w.Hwnd,
                 sta_gui = Native.GuiThread(S.StaTid), host_gui = Native.GuiThread(h.Win32ThreadId),
             };

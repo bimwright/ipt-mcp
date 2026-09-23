@@ -6,7 +6,8 @@ param(
     [switch]$Quick,             # env + one toast + ribbon only (used for the ALC=1 pass)
     [string]$Tag = "pass1",
     [switch]$KeepTrust,         # keep the spike's AddInLoadRules entry (for a follow-up pass)
-    [switch]$ThemeSurvey        # toast palettes vs Inventor Light/Dark theme (switches theme, restores it)
+    [switch]$ThemeSurvey,       # toast palettes vs Inventor Light/Dark theme (switches theme, restores it)
+    [switch]$BackdropSurvey     # palette chosen from the colour behind the toast (scheme / pixels / theme)
 )
 $ErrorActionPreference = 'Stop'
 $here    = $PSScriptRoot
@@ -53,7 +54,18 @@ function Find-Bytes([byte[]]$hay, [byte[]]$needle) {
 function Set-SpikeTrust([bool]$allowed) {
     $b = [IO.File]::ReadAllBytes($rules)
     $i = Find-Bytes $b $spikeGuidBytes
-    if ($i -lt 0) { Say 'AddInLoadRules: spike entry not present yet'; return }
+    if ($i -lt 0) {
+        # append an entry in the same layout Inventor writes: '{z' + u64 2 + "Id" + u64 38 + GUID (UTF-16) + u32 flag + '}|'
+        $ms = New-Object IO.MemoryStream
+        $ms.Write($b, 0, $b.Length)
+        $w = New-Object IO.BinaryWriter($ms)
+        $w.Write([byte[]](0x7B, 0x7A)); $w.Write([UInt64]2); $w.Write([Text.Encoding]::Unicode.GetBytes('Id'))
+        $w.Write([UInt64]38); $w.Write($spikeGuidBytes); $w.Write([UInt32]($(if ($allowed) { 0 } else { 1 }))); $w.Write([byte[]](0x7D, 0x7C))
+        $w.Flush()
+        [IO.File]::WriteAllBytes($rules, $ms.ToArray())
+        Say "AddInLoadRules: spike entry appended (allowed=$allowed, $($b.Length) -> $($ms.Length) bytes)"
+        return
+    }
     $flag = $i + $spikeGuidBytes.Length
     $b[$flag] = if ($allowed) { 0 } else { 1 }
     [IO.File]::WriteAllBytes($rules, $b)
@@ -154,7 +166,41 @@ P ribbon_activate @{ ribbon = 'ZeroDoc' } | Out-Null
 Start-Sleep 2
 P snap @{ what = 'main_top'; name = "$Tag-ribbon-zerodoc" } | Out-Null
 
-if ($ThemeSurvey) {
+if ($BackdropSurvey) {
+    P theme_info | Out-Null
+    P part_sketch | Out-Null
+    P exit_sketch | Out-Null
+    P scheme_info | Out-Null
+    P host @{ mode = 'B' } | Out-Null
+    $body = 'inventor_extrude · 124 ms · Part1.ipt'
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-scheme';  title = 'auto-scheme (colour scheme)'; body = $body } | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-sample';  title = 'auto-sample (screen pixels)'; body = $body } | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-inverse'; title = 'auto-inverse (UI theme)'; body = $body } | Out-Null
+    Start-Sleep 2
+    P snap @{ what = 'main'; name = "$Tag-dark" } | Out-Null
+    P theme_set @{ name = 'other' } 120 | Out-Null
+    Start-Sleep 6
+    P theme_info | Out-Null
+    P scheme_info | Out-Null
+    P snap @{ what = 'main'; name = "$Tag-light-after-switch" } | Out-Null
+    P close | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-scheme';  title = 'auto-scheme (colour scheme)'; body = $body } | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-sample';  title = 'auto-sample (screen pixels)'; body = $body } | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-inverse'; title = 'auto-inverse (UI theme)'; body = $body } | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'main'; palette = 'auto-scheme';  title = 'auto-scheme, main-frame anchor'; body = $body } | Out-Null
+    Start-Sleep 2
+    P snap @{ what = 'main'; name = "$Tag-light-fresh" } | Out-Null
+    P theme_set @{ name = 'original' } 120 | Out-Null
+    Start-Sleep 6
+    P theme_info | Out-Null
+    P snap @{ what = 'main'; name = "$Tag-restored" } | Out-Null
+    P close | Out-Null
+    P close_doc | Out-Null
+    P show @{ mode = 'B'; owned = $false; anchor = 'view'; palette = 'auto-scheme'; title = 'auto-scheme on Home (no view)'; body = $body } | Out-Null
+    Start-Sleep 2
+    P snap @{ what = 'main'; name = "$Tag-home" } | Out-Null
+    P close | Out-Null
+} elseif ($ThemeSurvey) {
     $palettes = @('dark', 'dark-elevated', 'light', 'light-elevated', 'auto-inverse')
     P theme_info | Out-Null
     P part_sketch | Out-Null
