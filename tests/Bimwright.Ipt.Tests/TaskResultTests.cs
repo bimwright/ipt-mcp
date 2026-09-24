@@ -35,6 +35,19 @@ public sealed class TaskResultTests
         Assert.False(new ReportTaskResultHandler().Execute(new InventorCommandContext(), p).Ok);
     }
 
+    [Fact]
+    public void Format_characters_like_bidi_overrides_are_rejected()
+    {
+        var p = new JObject
+        {
+            ["task_id"] = "task-42", ["outcome"] = "completed",
+            ["summary"] = "draw " + (char)0x202E + " reversed",   // U+202E would render misleading text
+        };
+        var result = new ReportTaskResultHandler().Execute(new InventorCommandContext(), p);
+        Assert.False(result.Ok);
+        Assert.Equal(InventorErrorCodes.INVALID_ARGUMENT, result.Error?.Code);
+    }
+
     [Theory]
     [InlineData("completed")]
     [InlineData("failed")]

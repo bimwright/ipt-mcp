@@ -55,7 +55,7 @@ public static class ToastContentBuilder
             return new ToastModel(command, title, "MCP · Task",
                 Truncate(FirstLine(Str(data, "summary")) ?? "Agent reported a result", SummaryMax),
                 Truncate("Agent reported · " + taskId, DetailMax), null,
-                ToolActivityKind.Read, outcome == "completed", 0) { TaskId = taskId };
+                ToolActivityKind.Read, outcome != "failed", 0) { TaskId = taskId };
         }
         var softError = e.Ok ? SoftError(command, data) : null;
         var success = e.Ok && softError == null;

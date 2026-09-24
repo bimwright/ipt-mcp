@@ -39,3 +39,8 @@ runs/
 
 # MCP Registry publisher CLI (downloaded on demand)
 .mcp-publisher/
+
+# Local smoke/diagnostics artifacts and analysis scratch — never product source
+.artifacts-smoke/
+.artifacts-test/
+analysis/

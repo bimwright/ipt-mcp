@@ -24,6 +24,7 @@ internal sealed class ToastHost
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Dictionary<ToastWindow, ToastCard> _cards = new();
     private readonly List<ToastWindow> _stack = new();   // priority first
+    private DispatcherTimer? _refresh;
     private DispatcherTimer? _track;
     private ToastPalette? _stackPalette;                  // one decision per visible stack (spec theme item 4)
     private bool _rethemeDue;
@@ -43,13 +44,13 @@ internal sealed class ToastHost
             {
                 dispatcher = Dispatcher.CurrentDispatcher;
                 dispatcher.UnhandledException += (_, e) => e.Handled = true;   // a toast bug must never take Inventor down
-                // One periodic pull, regardless of how many commands finish. No per-tool UI queue.
-                var refresh = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+                // Demand-driven pull: feed changes post here; the slow timer only bridges the
+                // 500 ms snapshot throttle instead of ticking for the whole Inventor session.
+                _refresh = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
                 {
                     Interval = TimeSpan.FromMilliseconds(ToastFeed.RefreshIntervalMs),
                 };
-                refresh.Tick += (_, _) => RenderPending();
-                refresh.Start();
+                _refresh.Tick += (_, _) => RenderSignal();
                 ready.Set();
                 Dispatcher.Run();
             }
@@ -67,6 +68,7 @@ internal sealed class ToastHost
         if (!ready.Wait(5000) || dispatcher == null)
             throw new InvalidOperationException("toast thread did not start");
         _dispatcher = dispatcher;
+        _feed.Changed += () => Post(RenderSignal);
     }
 
     public string? LastDecision => _lastDecision;
@@ -88,6 +90,17 @@ internal sealed class ToastHost
     private void Post(Action action)
     {
         try { _dispatcher.BeginInvoke(action); } catch { }
+    }
+
+    /// <summary>
+    /// Toast thread. Render what the snapshot allows; while a change is still waiting behind the
+    /// throttle keep the bridge timer running, otherwise stop it — nothing ticks while the feed is idle.
+    /// </summary>
+    private void RenderSignal()
+    {
+        RenderPending();
+        if (_feed.HasPending) _refresh?.Start();
+        else _refresh?.Stop();
     }
 
     private void RenderPending()
@@ -136,7 +149,13 @@ internal sealed class ToastHost
         var order = snapshot.Select(c => c.Id).ToList();
         _stack.Sort((a, b) => order.IndexOf(_cards[a].Id).CompareTo(order.IndexOf(_cards[b].Id)));
         ApplySuppression(suppressed);
-        if (!suppressed) Reflow();
+        if (!suppressed)
+        {
+            Reflow();
+            // A card replaced mid-fade emptied the stack and reset the palette, so the window was
+            // just created from the hint alone. Resample beside it now that it has a position.
+            if (_stackPalette == null) ApplySample(false);
+        }
         if (_stack.Count > 0) StartTracking();
     }
 

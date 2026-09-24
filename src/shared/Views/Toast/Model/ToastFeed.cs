@@ -23,8 +23,16 @@ public sealed class ToastFeed
 
     private sealed record Entry(int Priority, ToastCard Card);
 
-    public void Publish(ToastModel model)
+    /// <summary>True while a change is still waiting for the next throttled snapshot.</summary>
+    public bool HasPending { get { lock (_gate) return _dirty; } }
+
+    /// <summary>Raised when the feed first becomes dirty; the UI renders on its own thread.</summary>
+    public event Action? Changed;
+
+    /// <summary>False when a full stack of strictly higher-priority cards refuses a routine arrival.</summary>
+    public bool Publish(ToastModel model)
     {
+        var notify = false;
         lock (_gate)
         {
             var priority = !model.Success ? 3 : model.TaskId != null ? 2
@@ -35,7 +43,9 @@ public sealed class ToastFeed
             if (previous == null && _cards.Count >= ToastLayout.MaxToasts)
             {
                 var victim = _cards.OrderBy(x => x.Value.Priority).ThenBy(x => x.Value.Card.Id).First();
-                if (victim.Value.Priority > priority) return; // never push an error out with routine reads
+                // An explicit task report exists to be seen, so it may evict even the oldest error;
+                // routine arrivals keep the drop rule (never push an error out with reads).
+                if (victim.Value.Priority > priority && model.TaskId == null) return false;
                 _cards.Remove(victim.Key);
             }
 
@@ -55,29 +65,40 @@ public sealed class ToastFeed
                 display = model with { Detail = model.Detail + " · " + count + " occurrences" };
             var card = new ToastCard(previous?.Card.Id ?? ++_nextId, count, display, count);
             _cards[key] = new Entry(priority, card);
+            notify = !_dirty;
             _dirty = true;
         }
+        // Notify outside the lock: subscribers marshal to their own thread and must not re-enter here.
+        if (notify) Changed?.Invoke();
+        return true;
     }
 
     /// <summary>An old window finishing its fade must not discard a newer producer update.</summary>
     public void Dismiss(long id, long revision)
     {
+        var notify = false;
         lock (_gate)
         {
             var match = _cards.FirstOrDefault(x => x.Value.Card.Id == id && x.Value.Card.Revision == revision);
             if (match.Key == null) return;
             _cards.Remove(match.Key);
+            notify = !_dirty;
             _dirty = true;
         }
+        if (notify) Changed?.Invoke();
     }
 
     public void Clear()
     {
+        var notify = false;
         lock (_gate)
         {
+            if (_cards.Count == 0 && !_dirty) return;   // nothing to wake the UI for
             _cards.Clear();
+            notify = !_dirty;
             _dirty = true;
         }
+        if (notify) Changed?.Invoke();
     }
 
     /// <summary>Null means no repaint; an empty snapshot means remove all cards.</summary>

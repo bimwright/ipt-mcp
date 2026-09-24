@@ -61,16 +61,43 @@ public sealed class ToastFeedTests
     }
 
     [Theory]
-    [InlineData("failed", "Task failed")]
-    [InlineData("cancelled", "Task cancelled")]
-    public void Agent_reported_failure_is_not_disguised_as_a_successful_tool_call(string outcome, string title)
+    [InlineData("failed", "Task failed", false)]
+    [InlineData("cancelled", "Task cancelled", true)]   // a cancelled job ended; it is not an error
+    [InlineData("completed", "Task completed", true)]
+    public void Agent_reported_outcome_drives_the_card_title_and_success_flag(string outcome, string title, bool success)
     {
         var model = ToastContentBuilder.Build(new ToastEvent("report_task_result", true,
             new JObject { ["task_id"] = "test-job", ["outcome"] = outcome, ["summary"] = "Did not finish" },
             null, null, 1, true));
-        Assert.False(model.Success);
+        Assert.Equal(success, model.Success);
         Assert.Equal(title, model.Title);
         Assert.Equal("Did not finish", model.Summary);
+    }
+
+    [Fact]
+    public void A_task_report_evicts_the_oldest_card_even_an_error_when_the_stack_is_full()
+    {
+        var feed = new ToastFeed();
+        feed.Publish(Read() with { Success = false, Summary = "E1" });
+        feed.Publish(Read() with { Success = false, Summary = "E2" });
+        feed.Publish(Read() with { Success = false, Summary = "E3" });
+        var report = Read("report_task_result") with { TaskId = "t-1", Summary = "Job done" };
+        Assert.True(feed.Publish(report));
+        var cards = feed.TakeSnapshot(0)!;
+        Assert.Equal(3, cards.Count);
+        Assert.Equal(new[] { "E3", "E2", "Job done" }, cards.Select(c => c.Model.Summary));
+    }
+
+    [Fact]
+    public void A_routine_arrival_is_dropped_when_every_slot_holds_a_higher_priority_card()
+    {
+        var feed = new ToastFeed();
+        feed.Publish(Read() with { Success = false, Summary = "E1" });
+        feed.Publish(Read() with { Success = false, Summary = "E2" });
+        feed.Publish(Read() with { Success = false, Summary = "E3" });
+        Assert.False(feed.Publish(Read()));   // a read must not push an error out
+        var cards = feed.TakeSnapshot(0)!;
+        Assert.Equal(new[] { "E3", "E2", "E1" }, cards.Select(c => c.Model.Summary));
     }
 
     [Fact]

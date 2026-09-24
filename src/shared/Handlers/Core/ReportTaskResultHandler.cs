@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Newtonsoft.Json.Linq;
@@ -8,8 +9,10 @@ namespace Bimwright.Ipt.Shared.Handlers.Core;
 /// <summary>
 /// Explicit agent-reported outcome; does not infer completion, inspect or modify any document.
 /// The normal post-response notification hook turns the returned DTO into a summary card.
+/// STA-independent: the command touches no Inventor API, so the add-in answers it on the listener
+/// thread and it still reports while the STA is jammed.
 /// </summary>
-public sealed class ReportTaskResultHandler : IInventorCommand
+public sealed class ReportTaskResultHandler : IStaIndependentCommand
 {
     public string Name => "report_task_result";
     public bool IsReadOnly => true;
@@ -35,7 +38,12 @@ public sealed class ReportTaskResultHandler : IInventorCommand
         if (token is not JValue { Type: JTokenType.String } value) return null;
         var s = (string?)value;
         if (string.IsNullOrWhiteSpace(s) || s!.Length > max) return null;
-        foreach (var c in s) if (char.IsControl(c) || c == '\u2028' || c == '\u2029') return null;
+        // Format characters (Cf) include bidi overrides and invisible marks: a summary containing
+        // U+202E could render misleading text on the toast, so reject rather than sanitize.
+        foreach (var c in s)
+            if (char.IsControl(c) || c == '\u2028' || c == '\u2029'
+                || char.GetUnicodeCategory(c) == UnicodeCategory.Format)
+                return null;
         return s.Trim();
     }
 }

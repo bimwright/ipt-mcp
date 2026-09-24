@@ -17,8 +17,9 @@ public static class ToastSample
     public static ToastSampleTarget Target(bool frameUsable, bool paletteCommitted, bool rethemeDue, bool onScreen)
     {
         if (!frameUsable) return ToastSampleTarget.None;
-        if (!paletteCommitted) return ToastSampleTarget.Anchor;
-        if (!rethemeDue) return ToastSampleTarget.None;
-        return onScreen ? ToastSampleTarget.Beside : ToastSampleTarget.Anchor;
+        // A painted card must never be its own backdrop: whenever one is on screen the sample is
+        // taken beside the stack, not at the anchor the card now covers.
+        if (!paletteCommitted || rethemeDue) return onScreen ? ToastSampleTarget.Beside : ToastSampleTarget.Anchor;
+        return ToastSampleTarget.None;
     }
 }

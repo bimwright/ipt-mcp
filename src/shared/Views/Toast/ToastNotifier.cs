@@ -49,24 +49,28 @@ internal sealed class ToastNotifier : IDisposable
         CurrentHost()?.SetSnapshot(ui);
     }
 
-    /// <summary>Never throws and never waits on Inventor. Called after the response was handed back.</summary>
-    public void Notify(ToastEvent e)
+    /// <summary>Never throws and never waits on Inventor. Called after the response was handed back.
+    /// Returns whether the card was retained for display, so a report can tell the agent the truth.</summary>
+    public bool Notify(ToastEvent e)
     {
-        if (!_enabled) return;
+        if (!_enabled) return false;
         try
         {
-            var model = ToastContentBuilder.Build(e);
             lock (_gate)
             {
                 var ui = _ui;
-                if (!_enabled || _disposed || !ToastVisibility.ShouldCreate(ui.AppVisible, ui.MainHwnd)) return;
+                // The AppVisible flag comes from the last STA snapshot and may be stale, so also read
+                // the frame's live Win32 state — a minimized or modal-blocked Inventor means no card.
+                if (!_enabled || _disposed || !ToastVisibility.ShouldCreate(ui.AppVisible, ui.MainHwnd)
+                    || !ToastVisibility.ShouldShow(ToastNative.MainState(new IntPtr(ui.MainHwnd)))) return false;
+                var model = ToastContentBuilder.Build(e);   // cheap, but pointless when nothing can show
                 _host ??= new ToastHost(_theme, ui, _feed);
-                _feed.Publish(model); // bounded state update; never queues a per-command UI operation
+                return _feed.Publish(model); // bounded state update; never queues a per-command UI operation
             }
         }
         catch
         {
-            // toasts are best effort
+            return false;   // toasts are best effort
         }
     }
 

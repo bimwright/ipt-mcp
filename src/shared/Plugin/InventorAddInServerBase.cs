@@ -163,6 +163,19 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 StaQueue = _sta!.Stats,
             };
 
+            // STA-independent commands (report_task_result) touch no Inventor API: dispatch them on
+            // this listener thread so a report still lands while the STA is jammed behind a timed-out
+            // send_code. Notify runs BEFORE the response so the agent can see whether its card posted.
+            if (dispatcher.Commands.TryGetValue(env.Command ?? "", out var direct) && direct is IStaIndependentCommand)
+            {
+                var directResult = dispatcher.Dispatch(ctx, env);
+                var shown = NotifyToast(env, dispatcher, directResult.Ok, directResult.Data,
+                    directResult.Error?.Code, directResult.Error?.Message, clock.ElapsedMilliseconds);
+                if (directResult.Data is JObject directData) directData["toast_shown"] = shown;
+                tcs.TrySetResult(JsonConvert.SerializeObject(directResult));
+                return;
+            }
+
             // Marshal the actual API work onto the STA thread. task.Wait is the single owner of
             // the timeout (spec F2-b): nothing else can interrupt work running on the STA thread.
             var task = _sta!.InvokeAsync(() =>
@@ -215,21 +228,22 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
     /// <summary>
     /// Listener thread, after the response was handed back. A toast must never change a command's outcome.
-    /// <c>health</c> is a liveness probe, not agent work, so it gets no toast.
+    /// <c>health</c> is a liveness probe, not agent work, so it gets no toast. Returns whether a card
+    /// was retained for display — STA-independent commands report it as <c>toast_shown</c>.
     /// </summary>
-    private void NotifyToast(
+    private bool NotifyToast(
         InventorCommandEnvelope env, CommandDispatcher dispatcher, bool ok, JToken? data, string? code, string? message, long ms)
     {
         var toasts = _toasts;
-        if (toasts is null || env.Command == "health") return;
+        if (toasts is null || env.Command == "health") return false;
         try
         {
             bool? isReadOnly = dispatcher.Commands.TryGetValue(env.Command ?? "", out var handler) ? handler.IsReadOnly : null;
-            toasts.Notify(new ToastEvent(env.Command ?? "", ok, data, code, message, ms, isReadOnly));
+            return toasts.Notify(new ToastEvent(env.Command ?? "", ok, data, code, message, ms, isReadOnly));
         }
         catch
         {
-            // best effort
+            return false;   // best effort
         }
     }
 

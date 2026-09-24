@@ -80,17 +80,13 @@ internal sealed class ToastWindow : Window
         _icon = new TextBlock
         {
             FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 14,
-            Margin = new Thickness(0, 1, 8, 0), Text = model.Success ? "" : "",
+            Margin = new Thickness(0, 1, 8, 0),
         };
-        _title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 13, Text = model.Title, TextTrimming = TextTrimming.CharacterEllipsis };
-        _category = new TextBlock { FontSize = 11, Margin = new Thickness(8, 2, 0, 0), Text = model.Category };
-        _duration = new TextBlock { FontSize = 11, Margin = new Thickness(8, 2, 0, 0), Text = model.DurationMs > 0 ? model.DurationMs + " ms" : "" };
-        _summary = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), Text = model.Summary };
-        _detail = new TextBlock
-        {
-            FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0), Text = model.Detail,
-            Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible,
-        };
+        _title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+        _category = new TextBlock { FontSize = 11, Margin = new Thickness(8, 2, 0, 0) };
+        _duration = new TextBlock { FontSize = 11, Margin = new Thickness(8, 2, 0, 0) };
+        _summary = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+        _detail = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
         _thumb = new Image { MaxHeight = 120, Margin = new Thickness(0, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
         _brandBim = new Run("BIM");
         _brandWright = new Run("wright");
@@ -133,10 +129,11 @@ internal sealed class ToastWindow : Window
             RelativeTransform = _shineSweep,
             GradientStops =
             {
+                // Band peak sits on the brand front's crest (0.44) so the glint and the wipe arrive together.
                 new GradientStop(Dim(0.0), 0.00),
-                new GradientStop(Dim(0.0), 0.42),
-                new GradientStop(Dim(1.0), 0.50),
-                new GradientStop(Dim(0.0), 0.58),
+                new GradientStop(Dim(0.0), 0.36),
+                new GradientStop(Dim(1.0), 0.44),
+                new GradientStop(Dim(0.0), 0.52),
                 new GradientStop(Dim(0.0), 1.00),
             },
         };
@@ -172,6 +169,7 @@ internal sealed class ToastWindow : Window
             Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Opacity = 0.45, Color = Colors.Black },
         };
         Content = _card;
+        ApplyContent(model);   // before ApplyPalette: the accent depends on Model.Success/Kind
         ApplyPalette(palette);
 
         // The timer restarts its whole interval on Start, so remaining visible time lives in _count.
@@ -192,6 +190,19 @@ internal sealed class ToastWindow : Window
             Hwnd = new WindowInteropHelper(this).Handle;
             ToastNative.MakeNoActivate(Hwnd);
         };
+    }
+
+    /// <summary>Text and icon for the current model — shared by the constructor and UpdateModel.</summary>
+    private void ApplyContent(ToastModel model)
+    {
+        Model = model;
+        _icon.Text = model.Success ? "" : "";
+        _title.Text = model.Title;
+        _category.Text = model.Category;
+        _summary.Text = model.Summary;
+        _detail.Text = model.Detail;
+        _detail.Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _duration.Text = model.DurationMs > 0 ? model.DurationMs + " ms" : "";
     }
 
     public void ApplyPalette(ToastPalette p)
@@ -219,14 +230,7 @@ internal sealed class ToastWindow : Window
     {
         if (IsClosing) return;
         PauseLife();
-        Model = model;
-        _icon.Text = model.Success ? "" : "";
-        _title.Text = model.Title;
-        _category.Text = model.Category;
-        _summary.Text = model.Summary;
-        _detail.Text = model.Detail;
-        _detail.Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        _duration.Text = model.DurationMs > 0 ? model.DurationMs + " ms" : "";
+        ApplyContent(model);
         _thumb.Source = null;
         _thumb.Visibility = Visibility.Collapsed;
         if (model.ThumbnailPath != null) SetThumbnail(ToastThumbnail.TryLoadBytes(model.ThumbnailPath));
@@ -307,8 +311,7 @@ internal sealed class ToastWindow : Window
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
         var wipe = new DoubleAnimation(-0.75, 0.75, dur) { BeginTime = start, EasingFunction = ease };
         _brandSweep.BeginAnimation(TranslateTransform.XProperty, wipe);
-        _shineSweep.BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(-0.75, 0.75, dur) { BeginTime = start, EasingFunction = ease });
+        _shineSweep.BeginAnimation(TranslateTransform.XProperty, wipe);   // same timeline, two clocks
     }
 
     private static Color Dim(double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), 0, 0, 0);
