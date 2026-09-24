@@ -139,11 +139,56 @@ public class SessionLogTests : IDisposable
             ToolName = "open_document",
             Success = false,
             ErrorMessage = "cannot open D:\\secret\\model.ipt\nline2",
+            // LogCall builds Summary from the RAW error — the grid binds Summary,
+            // so it must pass the same redaction as ErrorMessage.
+            Summary = SummaryGenerator.Generate("open_document", null, null, false,
+                "cannot open D:\\secret\\model.ipt\nline2"),
         });
 
         var e = log.Entries.Single();
         Assert.DoesNotContain("D:\\secret", e.ErrorMessage);
         Assert.DoesNotContain("\n", e.ErrorMessage);
+        Assert.DoesNotContain("D:\\secret", e.Summary);
+        Assert.DoesNotContain("model.ipt", e.Summary);
+    }
+
+    [Fact]
+    public void Historical_rows_are_pinned_under_the_cap_and_Count_tracks_live_only()
+    {
+        McpSessionLog.ConfigLoader = () => new IptPrivacyConfig(_ => null);
+        var log = new McpSessionLog();
+        for (var i = 0; i < 1500; i++)
+            log.Entries.Insert(i, new McpCallEntry { ToolName = "old", IsHistorical = true, Index = i - 1500 });
+
+        Assert.Equal(0, log.Count);              // badge counts live calls only
+        for (var i = 0; i < 1001; i++)
+            log.Add(new McpCallEntry { ToolName = "live", Success = true });
+
+        Assert.Equal(2500, log.Entries.Count);   // 1500 pinned + 1000 live (cap reached)
+        Assert.Equal(1000, log.Count);
+        Assert.True(log.Entries[0].IsHistorical);            // oldest historical survived
+        Assert.True(log.Entries[1499].IsHistorical);
+        Assert.False(log.Entries[1500].IsHistorical);        // first live row
+        Assert.Equal(2, log.Entries[1500].Index);            // live #1 was evicted
+    }
+
+    [Fact]
+    public void Clear_fires_Cleared_and_zeroes_the_live_count()
+    {
+        McpSessionLog.ConfigLoader = () => new IptPrivacyConfig(_ => null);
+        var log = new McpSessionLog();
+        log.Entries.Add(new McpCallEntry { ToolName = "old", IsHistorical = true, Index = -1 });
+        log.Add(new McpCallEntry { ToolName = "live", Success = true });
+        Assert.Equal(1, log.Count);
+
+        var cleared = 0;
+        log.Cleared += () => cleared++;
+        log.Clear();
+
+        Assert.Equal(1, cleared);
+        Assert.Equal(0, log.Count);
+        Assert.Single(log.Entries);
+        Assert.True(log.Entries[0].IsHistorical);
     }
 
     // ---------- SummaryGenerator ----------
@@ -242,5 +287,31 @@ public class SessionLogTests : IDisposable
         var body = SendCodeJournal.TryFindCodeByHash(hash);
         Assert.Equal("return 1;", body);
         Assert.Null(SendCodeJournal.TryFindCodeByHash("deadbeef"));
+    }
+
+    [Fact]
+    public void Send_code_journal_concurrent_appends_stay_wellformed()
+    {
+        // The listener thread and the STA re-run path can append at the same time;
+        // AppendLineLocked must keep every JSONL line intact (no interleaved writes).
+        var cfg = new IptPrivacyConfig(n =>
+            n == IptPrivacyConfig.EnvPersistSendCodeBodies ? "1" : null);
+
+        const int writers = 8, linesPerWriter = 25;
+        System.Threading.Tasks.Parallel.For(0, writers, w =>
+        {
+            for (var i = 0; i < linesPerWriter; i++)
+                Assert.True(SendCodeJournal.TryAppend(
+                    cfg, "conc", $"return {w}_{i};", true, i, null, "{}"));
+        });
+
+        var lines = File.ReadAllLines(SendCodeJournal.JournalPath);
+        Assert.Equal(writers * linesPerWriter, lines.Length);
+        foreach (var line in lines)
+        {
+            var obj = Newtonsoft.Json.Linq.JObject.Parse(line);   // throws if interleaved
+            var code = obj.Value<string>("code");
+            Assert.StartsWith("return ", code);
+        }
     }
 }

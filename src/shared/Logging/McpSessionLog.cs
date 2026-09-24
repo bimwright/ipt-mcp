@@ -52,6 +52,7 @@ namespace Bimwright.Ipt.Shared.Logging
         private const int MaxCodeSnippetLength = 128 * 1024;
         private const int MaxEntries = 1000;
         private int _nextIndex = 1;
+        private int _liveCount;   // live entries only — loaded history is pinned, never evicted
         private readonly Action<Action> _marshal;
         /// <summary>Test seam: swap the privacy config source.</summary>
         public static Func<IptPrivacyConfig> ConfigLoader = IptPrivacyConfig.Load;
@@ -64,6 +65,8 @@ namespace Bimwright.Ipt.Shared.Logging
         public ObservableCollection<McpCallEntry> Entries { get; } = new ObservableCollection<McpCallEntry>();
 
         public event Action<McpCallEntry>? EntryAdded;
+        /// <summary>Fires after Clear — the ribbon count depends on it (no live rows left).</summary>
+        public event Action? Cleared;
 
         public void Add(McpCallEntry entry)
         {
@@ -71,28 +74,47 @@ namespace Bimwright.Ipt.Shared.Logging
             entry.Index = Interlocked.Increment(ref _nextIndex) - 1;
             if (entry.Timestamp == default)
                 entry.Timestamp = DateTime.Now;
-            // Bound session memory: evict the oldest beyond the cap. Runs on the UI
-            // thread via _marshal so the bound DataGrid never sees a cross-thread write.
+            // Bound live memory: evict the oldest LIVE row beyond the cap — historical
+            // rows loaded via Entries.Insert are pinned and never evicted. Runs on the
+            // UI thread via _marshal so the bound DataGrid never sees a cross-thread write.
             _marshal(() =>
             {
-                while (Entries.Count >= MaxEntries)
-                    Entries.RemoveAt(0);
+                while (_liveCount >= MaxEntries && RemoveOldestLive()) _liveCount--;
                 Entries.Add(entry);
+                _liveCount++;
                 EntryAdded?.Invoke(entry);
             });
+        }
+
+        /// <summary>Removes the oldest non-historical row; false when none exists.</summary>
+        private bool RemoveOldestLive()
+        {
+            for (var i = 0; i < Entries.Count; i++)
+                if (!Entries[i].IsHistorical)
+                {
+                    Entries.RemoveAt(i);
+                    return true;
+                }
+            return false;
         }
 
         public void Clear()
         {
             // "Clear Session" drops live rows only — historical rows loaded from
             // the file log are not part of this session and stay visible.
-            for (var i = Entries.Count - 1; i >= 0; i--)
-                if (!Entries[i].IsHistorical)
-                    Entries.RemoveAt(i);
-            Interlocked.Exchange(ref _nextIndex, 1);
+            _marshal(() =>
+            {
+                for (var i = Entries.Count - 1; i >= 0; i--)
+                    if (!Entries[i].IsHistorical)
+                        Entries.RemoveAt(i);
+                Interlocked.Exchange(ref _nextIndex, 1);
+                _liveCount = 0;
+                Cleared?.Invoke();
+            });
         }
 
-        public int Count => Entries.Count;
+        /// <summary>Live session call count (the ribbon "History (N)" value) — excludes historical rows.</summary>
+        public int Count => _liveCount;
 
         private static void ApplyPrivacyPolicy(McpCallEntry entry)
         {
@@ -102,6 +124,9 @@ namespace Bimwright.Ipt.Shared.Logging
             var isSendCode = string.Equals(entry.ToolName, "send_code", StringComparison.OrdinalIgnoreCase);
             entry.ErrorMessage = McpResponsePrivacy.RedactErrorForResponse(entry.ErrorMessage);
             entry.ResultJson = BakeRedactor.RedactForBake(entry.ResultJson, redactResultFields: isSendCode);
+            // The grid binds Summary — it is generated from the raw error/result, so it
+            // must pass the same redaction or a path like D:\secret\model.ipt leaks.
+            entry.Summary = BakeRedactor.RedactForBake(entry.Summary);
 
             if (!isSendCode)
             {

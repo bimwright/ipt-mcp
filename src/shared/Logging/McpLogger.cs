@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using Bimwright.Ipt.Shared.Security;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -29,9 +30,31 @@ namespace Bimwright.Ipt.Shared.Logging
         private const int MaxLoggedErrorLength = 4 * 1024;
         /// <summary>Test seam: redirect the journal dir away from %LOCALAPPDATA%.</summary>
         public static string? LocalAppDataOverride { get; set; }
-        // ipt writes from the listener thread AND the STA (History re-run) — rvt logs
-        // from a single UI thread so it needs no lock; we do.
-        private static readonly object LogLock = new();
+
+        /// <summary>
+        /// Append one JSONL line under a named mutex — serializes writers across threads
+        /// (listener + STA re-run) AND across processes (two Inventor instances share
+        /// mcp-calls.jsonl). Mutex failure degrades to an unlocked append rather than
+        /// dropping the line.
+        /// </summary>
+        internal static void AppendLineLocked(string path, string line)
+        {
+            Mutex? mutex = null;
+            try { mutex = new Mutex(false, @"Local\Bimwright.Ipt." + Path.GetFileName(path)); } catch { }
+            var held = false;
+            if (mutex != null)
+            {
+                try { held = mutex.WaitOne(2000); }
+                catch (AbandonedMutexException) { held = true; }  // acquired despite the previous owner dying
+                catch { }
+            }
+            try { File.AppendAllText(path, line + "\n"); }
+            finally
+            {
+                if (held) try { mutex!.ReleaseMutex(); } catch { }
+                try { mutex?.Dispose(); } catch { }
+            }
+        }
 
         /// <summary>The product log dir — the journal root for this add-in instance.</summary>
         internal static string LogDir =>
@@ -125,8 +148,7 @@ namespace Bimwright.Ipt.Shared.Logging
                     result = BuildLogSafeResult(toolName, resultJson)
                 };
                 var line = JsonConvert.SerializeObject(entry, Formatting.None);
-                lock (LogLock)
-                    File.AppendAllText(_logPath, line + "\n");
+                AppendLineLocked(_logPath, line);
             }
             catch { }
         }

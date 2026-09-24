@@ -706,6 +706,13 @@ namespace Bimwright.Ipt.Shared.Views
                 var originalIndex = _selectedEntry.Index;
                 var originalResultJson = _selectedEntry.ResultJson;
 
+                // Carry the actual body onto the re-run entry: with body caching on, the
+                // numbered code view and IsRerunPossible key off CodeSnippet — without it
+                // the fresh row looks redacted (params hold {code}, not {code_hash}).
+                string? rerunSnippet = null;
+                if (toolName == SendCodeCommand)
+                    try { rerunSnippet = JObject.Parse(paramsJson ?? "{}").Value<string>("code"); } catch { }
+
                 var sw = Stopwatch.StartNew();
                 var result = await _rerunAsync(toolName, paramsJson);
                 sw.Stop();
@@ -723,6 +730,7 @@ namespace Bimwright.Ipt.Shared.Views
                     Success = result.Ok,
                     DurationMs = sw.ElapsedMilliseconds,
                     ErrorMessage = result.Error?.Message,
+                    CodeSnippet = rerunSnippet,
                     ResultJson = sessionResult,
                     ToolDescription = DescriptionOf(toolName),
                     IsReadOnly = _dispatcher.Commands.TryGetValue(toolName ?? "", out var cmd) ? cmd.IsReadOnly : (bool?)null,

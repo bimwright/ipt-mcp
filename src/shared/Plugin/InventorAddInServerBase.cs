@@ -73,6 +73,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         try { _historyHost = new HistoryHost(); } catch { _historyHost = null; }
         _sessionLog = new McpSessionLog(_historyHost is { } hh ? hh.Post : (Action<Action>?)null);
         _sessionLog.EntryAdded += OnSessionEntryAdded;
+        _sessionLog.Cleared += PostHistoryCount;
 
         // Toasts (Phase 1b): settings before the transport starts, so the first command already sees them.
         _configPath = ToastConfigStore.DefaultPath(_descriptorDir);
@@ -351,10 +352,13 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     }
 
     /// <summary>
-    /// Session log entry → ribbon "History (N)". EntryAdded fires on the history UI thread;
-    /// the label update marshals to Inventor's STA, coalesced so bursts cost one hop.
+    /// Session log change → ribbon "History (N)". EntryAdded/Cleared fire on the history
+    /// UI thread; the label update marshals to Inventor's STA, coalesced so bursts cost
+    /// one hop.
     /// </summary>
-    private void OnSessionEntryAdded(McpCallEntry entry)
+    private void OnSessionEntryAdded(McpCallEntry entry) => PostHistoryCount();
+
+    private void PostHistoryCount()
     {
         var sta = _sta;
         var ribbon = _ribbon;
@@ -496,7 +500,11 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         try { _ribbon?.Remove(); } catch { }             // 4. ribbon (STA)
         try { _descriptorWriter?.Dispose(); } catch { }
         try { _sta?.Dispose(); } catch { }
-        if (_sessionLog != null) _sessionLog.EntryAdded -= OnSessionEntryAdded;
+        if (_sessionLog != null)
+        {
+            _sessionLog.EntryAdded -= OnSessionEntryAdded;
+            _sessionLog.Cleared -= PostHistoryCount;
+        }
         _server = null;
         _descriptorWriter = null;
         _sta = null;

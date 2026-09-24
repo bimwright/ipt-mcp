@@ -83,7 +83,7 @@ namespace Bimwright.Ipt.Shared.Logging
             try
             {
                 var line = JsonConvert.SerializeObject(entry, Formatting.None);
-                File.AppendAllText(JournalPath, line + "\n");
+                McpLogger.AppendLineLocked(JournalPath, line);
                 return true;
             }
             catch
