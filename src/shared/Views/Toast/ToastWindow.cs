@@ -20,6 +20,8 @@ namespace Bimwright.Ipt.Shared.Views.Toast;
 /// </summary>
 internal sealed class ToastWindow : Window
 {
+    private const double BrandRestOpacity = 0.3;
+    private const double BrandSettleOpacity = 0.8;
     private readonly Action<ToastWindow> _closed;
     private readonly Border _card;
     private readonly Border _stripe;
@@ -32,6 +34,11 @@ internal sealed class ToastWindow : Window
     private readonly TextBlock _brand;
     private readonly Run _brandBim;
     private readonly Run _brandWright;
+    private readonly TextBlock _brandShine;
+    private readonly Run _shineBim;
+    private readonly Run _shineWright;
+    private readonly TranslateTransform _brandSweep = new(-0.75, 0);
+    private readonly TranslateTransform _shineSweep = new(-0.75, 0);
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
     private ToastCountdown _count;
@@ -89,12 +96,57 @@ internal sealed class ToastWindow : Window
         _brandWright = new Run("wright");
         _brand = new TextBlock
         {
-            // Logo casing and colours; hidden until hovered, then fades in.
-            FontSize = 10, FontWeight = FontWeights.SemiBold, Opacity = 0,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0),
+            // Logo casing and colours. Brightness lives in the OpacityMask: it starts dimmed,
+            // then a lit front wipes left→right once after the reader's eye has had time to
+            // reach the toast (~1.3 s, WipeBrand). The front carries a full-alpha crest so the
+            // eye sees a wave pass; behind it the wordmark settles at BrandSettleOpacity.
+            FontSize = 10, FontWeight = FontWeights.SemiBold,
             ToolTip = "bimwright ipt-mcp",
             Inlines = { _brandBim, _brandWright },
         };
+        var brandMask = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
+            RelativeTransform = _brandSweep,
+            GradientStops =
+            {
+                new GradientStop(Dim(BrandSettleOpacity), 0.00),
+                new GradientStop(Dim(BrandSettleOpacity), 0.32),
+                new GradientStop(Dim(1.0), 0.44),
+                new GradientStop(Dim(BrandRestOpacity), 0.58),
+                new GradientStop(Dim(BrandRestOpacity), 1.00),
+            },
+        };
+        _brand.OpacityMask = brandMask;
+        _shineBim = new Run("BIM");
+        _shineWright = new Run("wright");
+        _brandShine = new TextBlock
+        {
+            // The wordmark again in lighter tints, masked to a narrow band that sweeps with the
+            // wipe — the wave passes inside the letterforms instead of an object sliding under.
+            FontSize = 10, FontWeight = FontWeights.SemiBold, IsHitTestVisible = false,
+            Inlines = { _shineBim, _shineWright },
+        };
+        var shineMask = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
+            RelativeTransform = _shineSweep,
+            GradientStops =
+            {
+                new GradientStop(Dim(0.0), 0.00),
+                new GradientStop(Dim(0.0), 0.42),
+                new GradientStop(Dim(1.0), 0.50),
+                new GradientStop(Dim(0.0), 0.58),
+                new GradientStop(Dim(0.0), 1.00),
+            },
+        };
+        _brandShine.OpacityMask = shineMask;
+        var brandCell = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0),
+        };
+        brandCell.Children.Add(_brand);
+        brandCell.Children.Add(_brandShine);
 
         var header = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(_icon, Dock.Left);
@@ -111,7 +163,7 @@ internal sealed class ToastWindow : Window
         body.Children.Add(_summary);
         body.Children.Add(_detail);
         body.Children.Add(_thumb);
-        body.Children.Add(_brand);
+        body.Children.Add(brandCell);
 
         _stripe = new Border { CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(5, 0, 0, 0), Child = body };
         _card = new Border
@@ -127,8 +179,8 @@ internal sealed class ToastWindow : Window
         _clock.Start();
         _life = new DispatcherTimer();
         _life.Tick += (_, _) => BeginClose();
-        MouseEnter += (_, _) => { PauseLife(); FadeBrand(1); };
-        MouseLeave += (_, _) => { ResumeLife(); FadeBrand(0); };
+        MouseEnter += (_, _) => PauseLife();
+        MouseLeave += (_, _) => ResumeLife();
         MouseLeftButtonUp += (_, _) =>
         {
             if (Model.ThumbnailPath != null) OpenImage(Model.ThumbnailPath);
@@ -149,6 +201,9 @@ internal sealed class ToastWindow : Window
         var accent = Brush(!Model.Success ? p.AccentError : Model.Kind == ToolActivityKind.Write ? p.AccentWrite : p.AccentRead);
         _stripe.BorderBrush = accent;
         _icon.Foreground = accent;
+        var white = new Rgb(255, 255, 255);
+        _shineBim.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandBim, white, 0.55));
+        _shineWright.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandWright, white, 0.55));
         _title.Foreground = Brush(p.Title);
         _summary.Foreground = Brush(p.Title);
         var body = Brush(p.Body);
@@ -212,6 +267,7 @@ internal sealed class ToastWindow : Window
         Show();
         IsShown = true;
         BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+        WipeBrand();
         if (!IsMouseOver) ResumeLife();
     }
 
@@ -241,12 +297,21 @@ internal sealed class ToastWindow : Window
         }
     }
 
-    /// <summary>Brand mark reveal: quick fade-in on hover, slower fade-out on leave.</summary>
-    private void FadeBrand(double to)
+    /// <summary>Brand reveal: a lit front wipes left→right once while a narrow band of lighter
+    /// letters sweeps through the wordmark in sync, then the wordmark stays lit. The pass starts
+    /// ~1.3 s after the card appears — the delay for a reader's eye to land on a fresh toast.</summary>
+    private void WipeBrand()
     {
-        var anim = new DoubleAnimation(to, TimeSpan.FromMilliseconds(to > 0 ? 180 : 350));
-        _brand.BeginAnimation(UIElement.OpacityProperty, anim);
+        var dur = TimeSpan.FromMilliseconds(800);
+        var start = TimeSpan.FromMilliseconds(1300);
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
+        var wipe = new DoubleAnimation(-0.75, 0.75, dur) { BeginTime = start, EasingFunction = ease };
+        _brandSweep.BeginAnimation(TranslateTransform.XProperty, wipe);
+        _shineSweep.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(-0.75, 0.75, dur) { BeginTime = start, EasingFunction = ease });
     }
+
+    private static Color Dim(double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), 0, 0, 0);
 
     /// <summary>Freeze the visible-time slice. Idempotent while the timer is already stopped.</summary>
     private void PauseLife()
