@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -29,6 +30,8 @@ internal sealed class ToastWindow : Window
     private readonly TextBlock _detail;
     private readonly TextBlock _duration;
     private readonly TextBlock _brand;
+    private readonly Run _brandBim;
+    private readonly Run _brandWright;
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
     private readonly ToastCountdown _count;
@@ -81,11 +84,15 @@ internal sealed class ToastWindow : Window
             Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible,
         };
         _thumb = new Image { MaxHeight = 120, Margin = new Thickness(0, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
+        _brandBim = new Run("BIM");
+        _brandWright = new Run("wright");
         _brand = new TextBlock
         {
-            Text = "bimwright", FontSize = 10, FontWeight = FontWeights.SemiBold,
+            // Logo casing and colours; hidden until hovered, then fades in.
+            FontSize = 10, FontWeight = FontWeights.SemiBold, Opacity = 0,
             HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0),
             ToolTip = "bimwright ipt-mcp",
+            Inlines = { _brandBim, _brandWright },
         };
 
         var header = new DockPanel { LastChildFill = true };
@@ -119,8 +126,8 @@ internal sealed class ToastWindow : Window
         _clock.Start();
         _life = new DispatcherTimer();
         _life.Tick += (_, _) => BeginClose();
-        MouseEnter += (_, _) => PauseLife();
-        MouseLeave += (_, _) => ResumeLife();
+        MouseEnter += (_, _) => { PauseLife(); FadeBrand(1); };
+        MouseLeave += (_, _) => { ResumeLife(); FadeBrand(0); };
         MouseLeftButtonUp += (_, _) =>
         {
             if (Model.ThumbnailPath != null) OpenImage(Model.ThumbnailPath);
@@ -147,7 +154,8 @@ internal sealed class ToastWindow : Window
         _category.Foreground = body;
         _detail.Foreground = body;
         _duration.Foreground = body;
-        _brand.Foreground = body;
+        _brandBim.Foreground = Brush(p.BrandBim);
+        _brandWright.Foreground = Brush(p.BrandWright);
     }
 
     public void SetThumbnail(byte[]? bytes)
@@ -208,6 +216,13 @@ internal sealed class ToastWindow : Window
             Show();   // ShowActivated=false: shown without activation
             if (!IsMouseOver) ResumeLife();
         }
+    }
+
+    /// <summary>Brand mark reveal: quick fade-in on hover, slower fade-out on leave.</summary>
+    private void FadeBrand(double to)
+    {
+        var anim = new DoubleAnimation(to, TimeSpan.FromMilliseconds(to > 0 ? 180 : 350));
+        _brand.BeginAnimation(UIElement.OpacityProperty, anim);
     }
 
     /// <summary>Freeze the visible-time slice. Idempotent while the timer is already stopped.</summary>

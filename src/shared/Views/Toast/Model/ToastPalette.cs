@@ -24,17 +24,22 @@ public readonly record struct Rgb(byte R, byte G, byte B)
 /// palette is chosen for: light toasts sit on dark backdrops, dark toasts on light ones.
 /// </summary>
 public sealed record ToastPalette(
-    string Name, Rgb Background, Rgb Title, Rgb Body, Rgb Outline, Rgb AccentRead, Rgb AccentWrite, Rgb AccentError)
+    string Name, Rgb Background, Rgb Title, Rgb Body, Rgb Outline, Rgb AccentRead, Rgb AccentWrite, Rgb AccentError,
+    Rgb BrandBim, Rgb BrandWright)
 {
+    // Brand wordmark colours come from the logo: navy "BIM" + green "wright". The logo navy is nearly
+    // invisible on the dark card, so the dark palette carries brightened variants.
     public static readonly ToastPalette LightElevated = new(
         "light-elevated",
         Rgb.FromHex("#FFFFFF"), Rgb.FromHex("#0F172A"), Rgb.FromHex("#334155"), Rgb.FromHex("#94A3B8"),
-        Rgb.FromHex("#007ACC"), Rgb.FromHex("#2F855A"), Rgb.FromHex("#E53E3E"));
+        Rgb.FromHex("#007ACC"), Rgb.FromHex("#2F855A"), Rgb.FromHex("#E53E3E"),
+        Rgb.FromHex("#0C3F76"), Rgb.FromHex("#589039"));
 
     public static readonly ToastPalette DarkElevated = new(
         "dark-elevated",
         Rgb.FromHex("#111827"), Rgb.FromHex("#F9FAFB"), Rgb.FromHex("#D1D5DB"), Rgb.FromHex("#475569"),
-        Rgb.FromHex("#3B82F6"), Rgb.FromHex("#22C55E"), Rgb.FromHex("#F87171"));
+        Rgb.FromHex("#3B82F6"), Rgb.FromHex("#22C55E"), Rgb.FromHex("#F87171"),
+        Rgb.FromHex("#5B9BD5"), Rgb.FromHex("#86C55C"));
 }
 
 /// <summary>
