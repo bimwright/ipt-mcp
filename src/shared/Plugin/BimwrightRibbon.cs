@@ -1,5 +1,6 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -9,7 +10,8 @@ namespace Bimwright.Ipt.Shared.Plugin;
 
 /// <summary>
 /// "Bimwright ▸ MCP" ribbon panel in ZeroDoc/Part/Assembly/Drawing (spike 1a verified these four):
-/// a <b>Toasts</b> toggle (ButtonDefinition.Pressed, no idle polling) and a <b>Status</b> dialog.
+/// a <b>Toasts</b> toggle (ButtonDefinition.Pressed, no idle polling), a <b>Status</b> dialog,
+/// and a <b>History</b> button showing the session call count (rvt-mcp parity).
 /// Inventor STA only. Rebuilt when the user resets the ribbon.
 /// </summary>
 internal sealed class BimwrightRibbon
@@ -19,23 +21,32 @@ internal sealed class BimwrightRibbon
     private const string PanelId = "Bimwright_Ipt_Panel";
     private const string ToggleId = "Bimwright_Ipt_ToastToggle";
     private const string StatusId = "Bimwright_Ipt_Status";
+    private const string HistoryId = "Bimwright_Ipt_History";
 
     private readonly InvApi.Application _app;
     private readonly string _clientId;
     private readonly Func<bool> _isOn;
     private readonly Action<bool> _setOn;
     private readonly Func<string> _statusText;
+    private readonly Action _onHistory;
+    private readonly Func<int> _historyCount;
     private InvApi.ButtonDefinition? _toggle;
     private InvApi.ButtonDefinition? _status;
+    private InvApi.ButtonDefinition? _history;
+    private readonly List<InvApi.CommandControl> _historyControls = new();
+    private int _lastHistoryCount = -1;
     private InvApi.UserInterfaceEvents? _uiEvents;
 
-    public BimwrightRibbon(InvApi.Application app, string clientId, Func<bool> isOn, Action<bool> setOn, Func<string> statusText)
+    public BimwrightRibbon(InvApi.Application app, string clientId, Func<bool> isOn, Action<bool> setOn,
+        Func<string> statusText, Action onHistory, Func<int> historyCount)
     {
         _app = app;
         _clientId = clientId;
         _isOn = isOn;
         _setOn = setOn;
         _statusText = statusText;
+        _onHistory = onHistory;
+        _historyCount = historyCount;
     }
 
     /// <summary>Idempotent: also used after a ribbon reset.</summary>
@@ -62,7 +73,12 @@ internal sealed class BimwrightRibbon
                 InvApi.ButtonDisplayEnum.kAlwaysDisplayText);
             _status.OnExecute += OnStatus;
         }
+        // History caption carries the live count ("History (N)"). Inventor DisplayName is
+        // creation-time only, so the definition is (re)made with the current count baked in.
+        _historyControls.Clear();
+        RebuildHistoryDefinition(HistoryCaption(_historyCount()));
         _toggle.Pressed = _isOn();
+        _lastHistoryCount = _historyCount();
 
         var ui = _app.UserInterfaceManager;
         foreach (var name in RibbonNames)
@@ -76,6 +92,7 @@ internal sealed class BimwrightRibbon
                 {
                     panel.CommandControls.AddButton(_toggle, true, true, "", false);
                     panel.CommandControls.AddButton(_status, true, true, "", false);
+                    _historyControls.Add(panel.CommandControls.AddButton(_history, true, true, "", false));
                 }
             }
             catch
@@ -100,8 +117,12 @@ internal sealed class BimwrightRibbon
         }
         try { if (_toggle != null) { _toggle.OnExecute -= OnToggle; _toggle.Delete(); } } catch { }
         try { if (_status != null) { _status.OnExecute -= OnStatus; _status.Delete(); } } catch { }
+        try { if (_history != null) { _history.OnExecute -= OnHistory; _history.Delete(); } } catch { }
         _toggle = null;
         _status = null;
+        _history = null;
+        _historyControls.Clear();
+        _lastHistoryCount = -1;
         _uiEvents = null;
     }
 
@@ -124,6 +145,59 @@ internal sealed class BimwrightRibbon
                 "Bimwright Inventor MCP", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch { }
+    }
+
+    /// <summary>"History (N)" — the live session call count, like rvt-mcp's ribbon label.
+    /// Inventor has no settable caption on a ribbon control, so the definition + its bound
+    /// controls are recreated in place on each count change (STA thread, cheap COM calls).</summary>
+    public void SetHistoryCount(int count)
+    {
+        if (count == _lastHistoryCount) return;
+        _lastHistoryCount = count;
+        try
+        {
+            var caption = HistoryCaption(count);
+            foreach (var c in _historyControls) { try { c.Delete(); } catch { } }
+            _historyControls.Clear();
+            RebuildHistoryDefinition(caption);
+            foreach (var name in RibbonNames)
+            {
+                try
+                {
+                    var tab = FindTab(_app.UserInterfaceManager.Ribbons[name].RibbonTabs, TabId + "_" + name);
+                    var panel = tab == null ? null : FindPanel(tab.RibbonPanels, PanelId + "_" + name);
+                    if (panel != null)
+                        _historyControls.Add(panel.CommandControls.AddButton(_history, true, true, "", false));
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
+
+    private static string HistoryCaption(int count) => count > 0 ? $"History ({count})" : "History";
+
+    private void RebuildHistoryDefinition(string caption)
+    {
+        var defs = _app.CommandManager.ControlDefinitions;
+        var old = _history ?? Existing(defs, HistoryId);
+        if (old != null)
+        {
+            try { old.OnExecute -= OnHistory; old.Delete(); } catch { }
+            _history = null;
+        }
+        _history = defs.AddButtonDefinition(
+            caption, HistoryId, InvApi.CommandTypesEnum.kQueryOnlyCmdType, _clientId,
+            "MCP command history",
+            "Every MCP command run in this Inventor session — tool, parameters, result, status, duration.",
+            RibbonIcons.Letter('H', 16, Color.MediumPurple), RibbonIcons.Letter('H', 32, Color.MediumPurple),
+            InvApi.ButtonDisplayEnum.kAlwaysDisplayText);
+        _history.OnExecute += OnHistory;
+    }
+
+    private void OnHistory(InvApi.NameValueMap context)
+    {
+        try { _onHistory(); } catch { }
     }
 
     private void OnResetRibbonInterface(InvApi.NameValueMap context)

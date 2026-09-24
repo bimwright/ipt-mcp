@@ -110,6 +110,18 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - The listener thread NEVER touches `_marshal` except via `BeginInvoke`.
 - Shutdown (`Deactivate`): dispose transport, dispose dispatcher, null out `_app`, `GC.Collect()`.
 
+### Command history (rvt-mcp parity)
+`HandleLine` fans every authorized command outcome through `RecordOutcome` → plugin-side journal + in-memory session log + toast, covering the STA path, the STA-independent `report_task_result` path, timeouts, and dispatch errors.
+
+- `src/shared/Logging/` (host-free — compiled into the test project):
+  - `McpLogger` — `mcp-calls.jsonl` under `%LOCALAPPDATA%\Bimwright\ipt-mcp`, 5 MB rotation + `mcp-calls.version`, per-launch `session_id`, sanitized/redacted fields (`send_code` params collapse to `{code_hash, code_length}`). Writes are locked — they arrive from the listener thread AND the STA (re-run).
+  - `McpSessionLog` — `ObservableCollection` capped at 1000 live entries; mutations marshal through the history UI thread (`HistoryHost.Post`) so the bound grid never sees a cross-thread write. `EntryAdded` drives the ribbon count. `send_code` bodies redact to hash/length unless `BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`.
+  - `SessionLogHistoryLoader` — rotated archives + current journal → `IsHistorical` rows (negative index, session tag); hides the newest `liveSessionCount` rows of the current session so evicted live rows return read-only without duplicating the tail.
+  - `SendCodeJournal` + `SendCodeJournalGate` + `PersistSendCodeTtl` — opt-in (`BIMWRIGHT_PERSIST_SEND_CODE_BODIES`, TTL default 4 h) bake-redacted body persistence; `TryFindCodeByHash` recovers bodies for re-run. `RunMaintenance` purges at Activate.
+  - `IptPrivacyConfig` — env-driven privacy flags (rvt-mcp uses a JSON config; same env names).
+- `HistoryHost` (`src/shared/Views/`) owns a dedicated WPF STA thread (`Bimwright.Ipt.History`) — separate from the demand-driven toast thread because the session log marshals mutations through it from the first command. `HistoryWindow` is API-free: re-run is injected as `Func<string,string?,Task<InventorCommandResult>>` and marshals through `InventorStaDispatcher.InvokeAsync` (Inventor has no `ExternalEvent`). Kind filtering uses the handler's `IsReadOnly` captured on the entry (authoritative; rvt classifies by name).
+- Ribbon: `Bimwright ▸ MCP → History (N)` — Inventor ribbon captions are creation-time only, so `BimwrightRibbon` recreates the `ButtonDefinition` + its bound `CommandControl`s in place on count change (coalesced via a pending flag + STA post).
+
 ### Commands / handlers
 - `IInventorCommand { string Name; bool IsReadOnly; InventorCommandResult Execute(InventorCommandContext, JObject); }`.
 - Wire command names are snake_case and unprefixed (`extrude`); the MCP tool name is `inventor_extrude`. The 3 meta tools and the server-side ToolBaker DB tools have NO wire command.

@@ -42,6 +42,7 @@
     <Compile Include="..\..\src\shared\Handlers\BatchExecutor.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\Vec3Params.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\EnumText.cs" LinkBase="Shared\Handlers" />
+    <Compile Include="..\..\src\shared\Logging\*.cs" LinkBase="Shared\Logging" />
   </ItemGroup>
 
 </Project>

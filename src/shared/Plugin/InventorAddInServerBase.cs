@@ -6,7 +6,9 @@ using InvApi = global::Inventor;      // Autodesk.Inventor.Interop (aliased to a
 using Newtonsoft.Json;
 using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Logging;
 using Bimwright.Ipt.Shared.Transport;
+using Bimwright.Ipt.Shared.Views;
 using Bimwright.Ipt.Shared.Views.Toast;
 using Newtonsoft.Json.Linq;
 
@@ -38,6 +40,10 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private ToastSettings? _toastSettings;
     private ToastNotifier? _toasts;
     private BimwrightRibbon? _ribbon;
+    private CommandDispatcher? _dispatcher;
+    private HistoryHost? _historyHost;
+    private McpSessionLog? _sessionLog;
+    private int _historyCountQueued;
     private InvApi.ApplicationEvents? _appEvents;
     private BackdropHint? _hint;
     private string _configPath = "";
@@ -58,6 +64,15 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _options = options;
         var handlers = InventorCommandRegistry.Build(options);
         var dispatcher = new CommandDispatcher(handlers, maxResponseBytes: 5_000_000);
+        _dispatcher = dispatcher;
+
+        // Command history (rvt-mcp parity): journal file + in-memory session log on a
+        // dedicated UI thread. Everything is best-effort — history must never stop the MCP path.
+        try { McpLogger.Initialize(); } catch { }
+        try { SendCodeJournal.RunMaintenance(IptPrivacyConfig.Load()); } catch { }
+        try { _historyHost = new HistoryHost(); } catch { _historyHost = null; }
+        _sessionLog = new McpSessionLog(_historyHost is { } hh ? hh.Post : (Action<Action>?)null);
+        _sessionLog.EntryAdded += OnSessionEntryAdded;
 
         // Toasts (Phase 1b): settings before the transport starts, so the first command already sees them.
         _configPath = ToastConfigStore.DefaultPath(_descriptorDir);
@@ -89,7 +104,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 GetType().GUID.ToString("B").ToUpperInvariant(),   // the per-year add-in ClientId
                 () => _toasts?.Enabled ?? false,
                 SetToastsOn,
-                BuildStatusText);
+                BuildStatusText,
+                ShowOrFocusHistoryWindow,
+                () => _sessionLog?.Count ?? 0);
             _ribbon.Build();
         }
         catch
@@ -169,7 +186,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             if (dispatcher.Commands.TryGetValue(env.Command ?? "", out var direct) && direct is IStaIndependentCommand)
             {
                 var directResult = dispatcher.Dispatch(ctx, env);
-                var shown = NotifyToast(env, dispatcher, directResult.Ok, directResult.Data,
+                var shown = RecordOutcome(env, dispatcher, directResult.Ok, directResult.Data,
                     directResult.Error?.Code, directResult.Error?.Message, clock.ElapsedMilliseconds);
                 if (directResult.Data is JObject directData) directData["toast_shown"] = shown;
                 tcs.TrySetResult(JsonConvert.SerializeObject(directResult));
@@ -193,12 +210,14 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             {
                 var result = task.Result;
                 tcs.TrySetResult(JsonConvert.SerializeObject(result));
-                NotifyToast(env, dispatcher, result.Ok, result.Data, result.Error?.Code, result.Error?.Message, clock.ElapsedMilliseconds);
+                RecordOutcome(env, dispatcher, result.Ok, result.Data, result.Error?.Code, result.Error?.Message, clock.ElapsedMilliseconds);
             }
             else if (env.Command == "health")
             {
+                var busyData = BusyHealthData(o);
                 tcs.TrySetResult(JsonConvert.SerializeObject(
-                    InventorCommandResult.Success(env.Id, BusyHealthData(o), meta)));
+                    InventorCommandResult.Success(env.Id, busyData, meta)));
+                RecordOutcome(env, dispatcher, true, busyData, null, null, clock.ElapsedMilliseconds);
             }
             else if (env.Command == "send_code")
             {
@@ -206,13 +225,13 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                     $"send_code exceeded {env.TimeoutMs} ms. The script MAY STILL BE RUNNING on Inventor's STA thread " +
                     "and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; " +
                     "do not resend the same script.", meta));
-                NotifyToast(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
+                RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
                     $"Script still running after {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
             else
             {
                 tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT, "STA dispatch timed out", meta));
-                NotifyToast(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
+                RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
                     $"Inventor did not answer within {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
         }
@@ -222,7 +241,137 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             var inner = ex is AggregateException agg ? agg.GetBaseException() : ex;
             tcs.TrySetResult(Err(envId, InventorErrorCodes.API_ERROR, inner.Message, meta));
             if (authorized != null)
-                NotifyToast(authorized, dispatcher, false, null, InventorErrorCodes.API_ERROR, inner.Message, clock.ElapsedMilliseconds);
+                RecordOutcome(authorized, dispatcher, false, null, InventorErrorCodes.API_ERROR, inner.Message, clock.ElapsedMilliseconds);
+        }
+    }
+
+    /// <summary>
+    /// Command outcome fan-out (rvt-mcp parity): every authorized wire command is journaled to
+    /// mcp-calls.jsonl, appended to the session log behind the History window, and (for
+    /// send_code) offered to the opt-in send-code journal — then toasted. Returns the toast_shown
+    /// value for STA-independent commands. Never throws; never changes a command's outcome.
+    /// </summary>
+    private bool RecordOutcome(
+        InventorCommandEnvelope env, CommandDispatcher dispatcher, bool ok, JToken? data, string? code, string? message, long ms)
+    {
+        LogCall(env, dispatcher, ok, data, code, message, ms);
+        return NotifyToast(env, dispatcher, ok, data, code, message, ms);
+    }
+
+    /// <summary>Journal + session-log side of <see cref="RecordOutcome"/>. Best effort, swallows everything.</summary>
+    private void LogCall(
+        InventorCommandEnvelope env, CommandDispatcher dispatcher, bool ok, JToken? data, string? code, string? message, long ms)
+    {
+        try
+        {
+            var tool = env.Command ?? "";
+            var paramsJson = env.Params?.ToString(Formatting.None);
+            var handler = dispatcher.Commands.TryGetValue(tool, out var h) ? h : null;
+            var error = ok ? null : (message ?? code ?? "failed");
+            string? codeSnippet = null;
+            if (tool == "send_code")
+            {
+                try { codeSnippet = env.Params?.Value<string>("code"); } catch { }
+            }
+            string? resultJson = null;
+            try { resultJson = data?.ToString(Formatting.None); } catch { }
+            var sessionResult = resultJson != null && resultJson.Length > 10240
+                ? resultJson.Substring(0, 10240) : resultJson;
+
+            McpLogger.Log(tool, paramsJson, ok, ms, error, codeSnippet, resultJson);
+            SendCodeJournalGate.OnSendCodeLogged(tool, paramsJson, codeSnippet, ok, ms, error, resultJson);
+            _sessionLog?.Add(new McpCallEntry
+            {
+                ToolName = tool,
+                ParamsJson = paramsJson,
+                Success = ok,
+                DurationMs = ms,
+                ErrorMessage = error,
+                CodeSnippet = codeSnippet,
+                ResultJson = sessionResult,
+                IsReadOnly = handler?.IsReadOnly,
+                Summary = SummaryGenerator.Generate(tool, paramsJson, sessionResult, ok, error),
+            });
+        }
+        catch
+        {
+            // history is best effort — never disturb the command path
+        }
+    }
+
+    /// <summary>
+    /// Re-run executor for the History window (rvt-mcp parity: their window re-enqueues through
+    /// the event handler + ExternalEvent; Inventor marshals through <see cref="InventorStaDispatcher"/>).
+    /// The file journal covers the re-run so the audit trail stays complete; the window adds the
+    /// single session-log entry itself (marked re-run of #N).
+    /// </summary>
+    private async Task<InventorCommandResult> ReRunCommandAsync(string toolName, string? paramsJson)
+    {
+        JObject p;
+        try { p = JObject.Parse(paramsJson ?? "{}"); } catch { p = new JObject(); }
+        var env = new InventorCommandEnvelope
+        {
+            Id = Guid.NewGuid(),
+            Command = toolName,
+            Params = p,
+            TimeoutMs = 60000,
+        };
+        var ctx = new InventorCommandContext
+        {
+            ReadOnly = _options?.ReadOnly ?? false,
+            EnableSendCode = _options?.EnableSendCode ?? false,
+            InventorYear = _year,
+            TargetId = _descriptor?.TargetId,
+            Application = _app,
+            Commands = _dispatcher?.Commands,
+            StaQueue = _sta?.Stats,
+        };
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var result = await _sta!.InvokeAsync(() => _dispatcher!.Dispatch(ctx, env));
+        var resultJson = result.Data?.ToString(Formatting.None);
+        var errMsg = result.Error?.Message;
+        string? codeSnippet = null;
+        if (toolName == "send_code")
+        {
+            try { codeSnippet = p.Value<string>("code"); } catch { }
+        }
+        McpLogger.Log(toolName, paramsJson, result.Ok, clock.ElapsedMilliseconds, errMsg, codeSnippet, resultJson);
+        SendCodeJournalGate.OnSendCodeLogged(toolName, paramsJson, codeSnippet, result.Ok, clock.ElapsedMilliseconds, errMsg, resultJson);
+        return result;
+    }
+
+    /// <summary>Ribbon "History" button (Inventor STA): show-or-focus the window on the history thread.</summary>
+    private void ShowOrFocusHistoryWindow()
+    {
+        var host = _historyHost;
+        var log = _sessionLog;
+        var dispatcher = _dispatcher;
+        if (host == null || log == null || dispatcher == null) return;
+        host.ShowOrFocus(() => new HistoryWindow(log, dispatcher, ReRunCommandAsync));
+    }
+
+    /// <summary>
+    /// Session log entry → ribbon "History (N)". EntryAdded fires on the history UI thread;
+    /// the label update marshals to Inventor's STA, coalesced so bursts cost one hop.
+    /// </summary>
+    private void OnSessionEntryAdded(McpCallEntry entry)
+    {
+        var sta = _sta;
+        var ribbon = _ribbon;
+        if (sta == null || ribbon == null) return;
+        if (System.Threading.Interlocked.Exchange(ref _historyCountQueued, 1) != 0) return;
+        try
+        {
+            _ = sta.InvokeAsync(() =>
+            {
+                System.Threading.Interlocked.Exchange(ref _historyCountQueued, 0);
+                try { ribbon.SetHistoryCount(_sessionLog?.Count ?? 0); } catch { }
+                return true;
+            });
+        }
+        catch
+        {
+            System.Threading.Interlocked.Exchange(ref _historyCountQueued, 0);
         }
     }
 
@@ -343,15 +492,20 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         }
         catch { }
         try { _toasts?.Dispose(); } catch { }            // 2. close toast windows on their thread, stop it
-        try { _ribbon?.Remove(); } catch { }             // 3. ribbon (STA)
+        try { _historyHost?.Shutdown(); } catch { }      // 3. close history window on its thread, stop it
+        try { _ribbon?.Remove(); } catch { }             // 4. ribbon (STA)
         try { _descriptorWriter?.Dispose(); } catch { }
         try { _sta?.Dispose(); } catch { }
+        if (_sessionLog != null) _sessionLog.EntryAdded -= OnSessionEntryAdded;
         _server = null;
         _descriptorWriter = null;
         _sta = null;
         _descriptor = null;
         _toasts = null;
         _ribbon = null;
+        _historyHost = null;
+        _sessionLog = null;
+        _dispatcher = null;
         _appEvents = null;
         _hint = null;
         _app = null!;

@@ -271,6 +271,12 @@ Toasts run on a dedicated UI thread, never steal focus, and never block a comman
 
 Toggle toasts from the ribbon: **Bimwright ▸ MCP → Toasts** (Status opens a diagnostic dialog). The choice persists in `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` under `enableToast`; `toastTheme` accepts `auto` (default), `light`, or `dark`. Environment variables `BIMWRIGHT_INVENTOR_ENABLE_TOAST` and `BIMWRIGHT_INVENTOR_TOAST_THEME` override the JSON values. A malformed config file is left untouched — the toggle refuses to overwrite it.
 
+## MCP Command History
+
+Every wire command is journaled to `%LOCALAPPDATA%\Bimwright\ipt-mcp\mcp-calls.jsonl` (one JSON line per call — timestamp, per-launch `session_id`, tool, success, duration, sanitized error, redacted params, capped result; rotated at 5 MB) and appended to a bounded in-memory session log (1000 entries, oldest evicted). **Bimwright ▸ MCP → History (N)** shows the live session count and opens **BIMwright · MCP Command History**: search, success/failure and read/write kind filters, a detail pane (WHAT/INPUT/OUTPUT, JSON pretty-print, numbered code view), Clear Session, Open logs, and **Load past sessions** — rotated archives plus the current journal merge back as read-only rows tagged by session and deduplicated against the live tail. **Re-run** re-executes a live entry on Inventor's STA thread and diffs numeric result fields; historical and params-truncated entries are view-only.
+
+`send_code` bodies are redacted to `{code_hash, code_length}` by default. `BIMWRIGHT_CACHE_SEND_CODE_BODIES=1` keeps bodies in memory for display and re-run; `BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1` (+ optional `BIMWRIGHT_PERSIST_SEND_CODE_BODIES_TTL`, e.g. `4h`/`2d`, default 4 h) writes bake-redacted bodies to `send-code-journal.jsonl` so re-run can recover them — the window warns that a recovered body is redacted and may behave differently than the original.
+
 ---
 
 ## Safety

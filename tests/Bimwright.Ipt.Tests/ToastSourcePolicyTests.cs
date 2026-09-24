@@ -78,9 +78,9 @@ public sealed class ToastSourcePolicyTests
     {
         var text = ReadBase();
         var set = text.IndexOf("tcs.TrySetResult(JsonConvert.SerializeObject(result));", StringComparison.Ordinal);
-        var notify = text.IndexOf("NotifyToast(env, dispatcher, result.Ok", StringComparison.Ordinal);
+        var notify = text.IndexOf("RecordOutcome(env, dispatcher, result.Ok", StringComparison.Ordinal);
         Assert.True(set >= 0, "success path must serialize the result it hands back");
-        Assert.True(notify > set, "the toast must be posted after tcs.TrySetResult");
+        Assert.True(notify > set, "the outcome record (toast + history) must happen after tcs.TrySetResult");
     }
 
     [Fact]
