@@ -9,11 +9,11 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Phase 3 review-gate guard: locks the public tool count at exactly <b>73</b> MCP tools when
+/// Review-gate guard: locks the public tool count at exactly <b>74</b> MCP tools when
 /// every toolset is enabled (<c>--toolsets all --enable-send-code</c>) and pins the read-only subset.
-/// The 73 breaks down by toolset: meta 3 + query 6 (incl. F4 list_bodies/list_features/probe_brep) +
+/// The 74 breaks down by toolset: meta 3 + query 7 (incl. report_task_result) +
 /// document 7 + parameters 4 + properties 4 + sketch 10 (incl. P3 draw_text) + feature 15 (incl. P2 loft/sweep + P3 work_point/bim_connector) + export 9 (incl. P2 derive_envelope) + code 1 +
-/// toolbaker 6 + assembly 3 + assembly_query 5 = 73. The read-only registration keeps only meta + query (QueryTools) +
+/// toolbaker 6 + assembly 3 + assembly_query 5 = 74. The read-only registration keeps only meta + query (QueryTools) +
 /// assembly_query (AssemblyQueryTools) + read-only ToolBaker, and drops every write/export/code/toolbaker_write type.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -39,7 +39,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_73_tools()
+    public void All_toolsets_with_send_code_register_exactly_74_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -47,11 +47,11 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(73, names.Length);
+        Assert.Equal(74, names.Length);
     }
 
     [Fact]
-    public void The_73_tools_match_the_frozen_surface()
+    public void The_74_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
@@ -59,8 +59,8 @@ public sealed class RegistrationCountTests
         {
             // meta (3)
             "inventor_list_available_targets", "inventor_get_current_target", "inventor_switch_target",
-            // core + document (13): health + 3 model queries + 9 doc
-            "inventor_health", "inventor_list_open_documents", "inventor_get_document_info",
+            // query (7) + document (7)
+            "inventor_report_task_result", "inventor_health", "inventor_list_open_documents", "inventor_get_document_info",
             "inventor_list_bodies", "inventor_list_features", "inventor_probe_brep",
             "inventor_new_part", "inventor_new_assembly", "inventor_open_document",
             "inventor_save_document", "inventor_close_document", "inventor_set_units", "inventor_set_material",
@@ -93,10 +93,10 @@ public sealed class RegistrationCountTests
             "inventor_get_assembly_bom", "inventor_list_constraints",
         };
 
-        Assert.Equal(73, expected.Length);
+        Assert.Equal(74, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
-        // and nothing extra beyond the 73 expected
+        // and nothing extra beyond the 74 expected
         foreach (var n in names)
             Assert.True(expected.Contains(n), $"unexpected extra tool: {n}");
     }
@@ -148,11 +148,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_72_tools_without_send_code()
+    public void Default_config_registers_73_tools_without_send_code()
     {
-        // Default (no --enable-send-code) drops the single `code` tool, leaving 72.
+        // Default (no --enable-send-code) drops the single `code` tool, leaving 73.
         var names = ToolNames(new InventorMcpConfig());
         Assert.False(names.Contains("inventor_send_code"), "send_code must be off by default");
-        Assert.Equal(72, names.Length);
+        Assert.Equal(73, names.Length);
     }
 }

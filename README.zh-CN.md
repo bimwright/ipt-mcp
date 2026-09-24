@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-72%20or%2073%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -54,7 +54,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 - Inventor 从 2025 起把桌面 add-in 开发从 .NET Framework 上移开：**2025/2026 用 .NET 8，2027 用 .NET 10**。 （.NET 8 add-in 在 2027 上仍二进制兼容，但 net10 是原生目标。）
 - 全程使用**4-digit calendar years**（2022..2027）—— 永远不要使用 legacy 版本号。
 
-> **状态：已验证。** Phase 1-3 已完成且全绿（默认 72 个 MCP tools，启用 send_code 时为 73 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
+> **状态：已验证。** Phase 1-3 已完成且全绿（默认 73 个 MCP tools，启用 send_code 时为 74 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
 
 ---
 
@@ -94,7 +94,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **72 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **73 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **73 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **74 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -109,11 +109,12 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_get_current_target` | 报告 server 当前选中的 target，若没有 live 的则返回 `NO_TARGET`。 |
 | `inventor_switch_target` | 按 descriptor id、Inventor year、process id 或 pipe/session 名选择 active target。仅 server-side。 |
 
-### query (6) —— 只读的 document/health/model 探测
+### query (7) —— 只读的 document/health/model 探测及任务结果报告
 
 | Tool | 描述 |
 |---|---|
 | `inventor_health` | 探测 active add-in：inventor_year、process_id、是否有 document 打开、active document type。 |
+| `inventor_report_task_result` | agent 用 `task_id`、`outcome`（`completed`/`failed`/`cancelled`）及单行 `summary` 显式报告任务结果；不修改模型。 |
 | `inventor_list_open_documents` | 列出所有打开的 documents：标题、路径、类型，以及哪个是 active。 |
 | `inventor_get_document_info` | 获取 active document 的标题、完整路径和 document type。 |
 | `inventor_list_bodies` | 列出 part 的 solid bodies：id（`body:N`）、name、volume_mm3、bbox_mm、face_count、生成 feature（created_by）、visible。 |
@@ -247,7 +248,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## Toast 通知
 
-当 Inventor 可见时，每个完成的命令都会在图形视图上弹出一个小 toast，让你看到 agent 仍在运行——读操作蓝色（`MCP · Query`），写操作绿色（`MCP · Modified`），失败红色（`MCP · Failed`，包括 `send_code` 脚本返回错误或 `batch_execute` 回滚等软失败）。`inventor_capture_view` 的 toast 带可点击缩略图；最多叠放四张卡片，最新在最上，数秒后自动消失（悬停可保留）。`inventor_health` 是存活探针，不产生 toast。
+当 Inventor 可见时，结果合并为 **最多 3 张卡片**，**每秒最多更新 2 次**，不会为每次 tool 调用排队创建 toast。普通成功合并为显示操作数与最新 tool 的活动卡片；相同错误合并并显示次数。读操作蓝色、写操作绿色、失败红色（包含软失败和 rollback）。优先级为错误、显式任务总结、snapshot/export、普通活动。满额时替换同优先级的旧卡片，或丢弃优先级更低的新通知，不在稍后重放。截图保留可点击缩略图。最后一次显示更新数秒后卡片消失，悬停暂停计时。`inventor_health` 不产生 toast。
+
+操作数按当前 target 的卡片保留期间统计，不代表某个 agent 的整项任务。agent 必须显式调用 `inventor_report_task_result` 报告工作结果：每项 agent/job 使用唯一 `task_id`（1–80 字符），`outcome` 为 `completed`/`failed`/`cancelled`，`summary` 为真实的单行总结（1–120 字符）。卡片标注 **Agent reported**，不会从空闲时间或单个 tool 成功推断任务完成。遵守 Toasts 开关，需同时更新 server 和 add-in。[验证状态](docs/testing/smart-toasts.md)。
 
 Toast 运行在专用 UI 线程上，从不抢占焦点，也从不阻塞命令——它们在响应返回后才投递。Inventor 最小化或有模态对话框打开时 toast 会隐藏；即使其他应用拥有焦点，toast 仍保持置顶（这正是目的：证明 agent 仍在运行）。卡片颜色使用自动调色板，对 toast 背后的像素采样；采样仅存在于内存中——不写盘、不记日志。
 

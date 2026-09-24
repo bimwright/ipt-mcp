@@ -21,6 +21,11 @@ public sealed class QueryTools
     public Task<string> Health(CancellationToken ct = default)
         => Call("health", new JObject(), ct);
 
+    [McpServerTool(Name = "inventor_report_task_result"),
+     Description("Report an agent task's final outcome to the user as a summary toast. Call once after verifying the whole requested job, never after each tool or merely because tools went idle. task_id must be unique per agent/job (1-80 chars); outcome is completed, failed or cancelled; summary is a truthful single-line result (1-120 chars). Agent-reported, not independently verified. Does not change the model; respects the Toasts toggle and requires the updated add-in.")]
+    public Task<string> ReportTaskResult(string task_id, string outcome, string summary, CancellationToken ct = default)
+        => Call("report_task_result", new JObject { ["task_id"] = task_id, ["outcome"] = outcome, ["summary"] = summary }, ct);
+
     [McpServerTool(Name = "inventor_list_open_documents"),
      Description("List all open Inventor documents: title, full path, document type, and which one is active.")]
     public Task<string> ListOpenDocuments(CancellationToken ct = default)

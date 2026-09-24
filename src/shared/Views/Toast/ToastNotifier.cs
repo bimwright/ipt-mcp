@@ -12,6 +12,7 @@ internal sealed class ToastNotifier : IDisposable
 {
     private readonly object _gate = new();
     private readonly ToastTheme _theme;
+    private readonly ToastFeed _feed = new();
     private ToastHost? _host;
     private bool _disposed;
     private volatile bool _enabled;
@@ -28,8 +29,15 @@ internal sealed class ToastNotifier : IDisposable
         get => _enabled;
         set
         {
-            _enabled = value;
-            if (!value) CurrentHost()?.DismissAll();
+            lock (_gate)
+            {
+                _enabled = value;
+                if (!value)
+                {
+                    _feed.Clear();
+                    _host?.DismissAll();
+                }
+            }
         }
     }
 
@@ -47,10 +55,14 @@ internal sealed class ToastNotifier : IDisposable
         if (!_enabled) return;
         try
         {
-            var ui = _ui;
-            if (!ToastVisibility.ShouldCreate(ui.AppVisible, ui.MainHwnd)) return;   // invisible Inventor: no window
             var model = ToastContentBuilder.Build(e);
-            GetOrCreateHost()?.Show(model);
+            lock (_gate)
+            {
+                var ui = _ui;
+                if (!_enabled || _disposed || !ToastVisibility.ShouldCreate(ui.AppVisible, ui.MainHwnd)) return;
+                _host ??= new ToastHost(_theme, ui, _feed);
+                _feed.Publish(model); // bounded state update; never queues a per-command UI operation
+            }
         }
         catch
         {
@@ -66,6 +78,7 @@ internal sealed class ToastNotifier : IDisposable
         lock (_gate)
         {
             _disposed = true;
+            _feed.Clear();
             host = _host;
             _host = null;
         }
@@ -77,13 +90,5 @@ internal sealed class ToastNotifier : IDisposable
         lock (_gate) return _host;
     }
 
-    private ToastHost? GetOrCreateHost()
-    {
-        lock (_gate)
-        {
-            if (_disposed) return null;
-            return _host ??= new ToastHost(_theme, _ui);
-        }
-    }
 }
 #endif

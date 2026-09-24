@@ -34,7 +34,7 @@ internal sealed class ToastWindow : Window
     private readonly Run _brandWright;
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
-    private readonly ToastCountdown _count;
+    private ToastCountdown _count;
     private readonly Stopwatch _clock = new();
     private PxPoint? _pos;
     private bool _hidden;
@@ -42,7 +42,8 @@ internal sealed class ToastWindow : Window
     private bool _done;
     private bool _lifeRunning;
 
-    public ToastModel Model { get; }
+    public ToastModel Model { get; private set; }
+    public bool IsClosing => _closing || _done;
     public IntPtr Hwnd { get; private set; }
     public bool IsShown { get; private set; }
     /// <summary>Painted right now. A hidden card is not covering the backdrop the sampler reads.</summary>
@@ -156,6 +157,28 @@ internal sealed class ToastWindow : Window
         _duration.Foreground = body;
         _brandBim.Foreground = Brush(p.BrandBim);
         _brandWright.Foreground = Brush(p.BrandWright);
+    }
+
+    /// <summary>Refresh a retained card without recreating its HWND or replaying its entrance fade.</summary>
+    public void UpdateModel(ToastModel model, ToastPalette palette)
+    {
+        if (IsClosing) return;
+        PauseLife();
+        Model = model;
+        _icon.Text = model.Success ? "" : "";
+        _title.Text = model.Title;
+        _category.Text = model.Category;
+        _summary.Text = model.Summary;
+        _detail.Text = model.Detail;
+        _detail.Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _duration.Text = model.DurationMs > 0 ? model.DurationMs + " ms" : "";
+        _thumb.Source = null;
+        _thumb.Visibility = Visibility.Collapsed;
+        if (model.ThumbnailPath != null) SetThumbnail(ToastThumbnail.TryLoadBytes(model.ThumbnailPath));
+        ApplyPalette(palette);
+        _count = new ToastCountdown(model.LifetimeMs);
+        UpdateLayout(); // height changes must be visible to the stack's physical-pixel reflow
+        if (!IsMouseOver) ResumeLife();
     }
 
     public void SetThumbnail(byte[]? bytes)

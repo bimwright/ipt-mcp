@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-72%20or%2073%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: verified.** Phases 1-3 are complete and green (72 MCP tools by default, or 73 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
+> **Status: verified.** Phases 1-3 are complete and green (73 MCP tools by default, or 74 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
 
 ---
 
@@ -109,7 +109,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **72 tools** by default when all platform toolsets are enabled, or **73 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **73 tools** by default when all platform toolsets are enabled, or **74 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
 Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
@@ -124,11 +124,12 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
 | `inventor_switch_target` | Select the active target by descriptor id, Inventor year, process id, or pipe/session name. Server-side only. |
 
-### query (6) — read-only document/health/model probes
+### query (7) — read-only document/health/model probes and agent outcome reports
 
 | Tool | Description |
 |---|---|
 | `inventor_health` | Probe the active add-in: inventor_year, process_id, whether a document is open, active document type. |
+| `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`. No model changes. |
 | `inventor_list_open_documents` | List all open documents: title, path, type, and which is active. |
 | `inventor_get_document_info` | Get the active document's title, full path, and document type. |
 | `inventor_list_bodies` | List the part's solid bodies: id (`body:N`), name, volume_mm3, bbox_mm, face_count, created_by feature, visible. |
@@ -262,7 +263,9 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 ## Toast Notifications
 
-When Inventor is visible, every completed command pops a small toast over the graphics view so you can see the agent is still working — blue for reads (`MCP · Query`), green for writes (`MCP · Modified`), red for failures (`MCP · Failed`, including soft failures such as a `send_code` script that returned an error or a rolled-back `batch_execute`). `inventor_capture_view` toasts carry a clickable thumbnail; up to four cards stack, newest on top, and age out after a few seconds (hover to keep one). `inventor_health` is a liveness probe and never toasts.
+When Inventor is visible, command results update **at most three retained cards**, at most **twice per second**, rather than queueing one toast per tool. Routine successes share an activity card with a count and latest tool; reads are blue, writes green, failures red (including soft script failures and rolled-back batches). Repeated identical errors share a card with an occurrence count. Errors take priority over explicit task summaries, snapshots/exports, and routine activity; when full, older equally important cards are replaced and lower-priority arrivals are dropped, not replayed later. Capture cards retain their clickable thumbnail. Cards age out a few seconds after their last displayed update (hover pauses). `inventor_health` never toasts.
+
+Activity counts cover the retained card's lifetime on this Inventor target, not an inferred job or a particular MCP client. To report a whole job's outcome, the agent explicitly calls `inventor_report_task_result` with a unique agent/job `task_id` (1–80 chars), `outcome` (`completed`, `failed`, `cancelled`), and a truthful single-line `summary` (1–120 chars). These cards say **Agent reported**; idle time and successful tool calls never imply task completion. Reports respect the Toasts toggle. Requires the updated server **and** add-in. See [smart-toast verification](docs/testing/smart-toasts.md) for build/live-test status.
 
 Toasts run on a dedicated UI thread, never steal focus, and never block a command — they are posted only after the response is handed back. They hide while Inventor is minimized or a modal dialog is open, and stay topmost even when another application has focus (that is the point: proof the agent is still running). The card colour follows an auto palette sampled from the pixels behind the toast; the sample lives in memory only — nothing is written to disk or logged.
 

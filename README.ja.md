@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-72%20or%2073%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **72** MCP ツール、`send_code` 有効時 **73**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **73** MCP ツール、`send_code` 有効時 **74**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **72 ツール**です（inventor_send_code が有効な場合は **73 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **73 ツール**です（inventor_send_code が有効な場合は **74 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -105,11 +105,12 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_get_current_target` | サーバーが現在選択しているターゲットを報告。稼働中でない場合は `NO_TARGET`。 |
 | `inventor_switch_target` | ディスクリプタ ID、Inventor のバージョン年、プロセス ID、またはパイプ/セッション名でアクティブターゲットを選択。サーバーサイドのみ。 |
 
-### query (6) — 読み取り専用のドキュメント/ヘルス/モデルプローブ
+### query (7) — 読み取り専用のドキュメント/ヘルス/モデルプローブとタスク結果報告
 
 | ツール | 説明 |
 |---|---|
 | `inventor_health` | アクティブなアドインをプローブ: inventor_year、process_id、ドキュメントが開いているか、アクティブドキュメントの種類。 |
+| `inventor_report_task_result` | agent が `task_id`、`outcome`（`completed`/`failed`/`cancelled`）、1 行の `summary` で結果を明示的に報告。モデル変更なし。 |
 | `inventor_list_open_documents` | 開いているすべてのドキュメントを一覧: タイトル、パス、種類、アクティブかどうか。 |
 | `inventor_get_document_info` | アクティブドキュメントのタイトル、完全パス、ドキュメントの種類を取得。 |
 | `inventor_list_bodies` | パートのソリッドボディを一覧: id（`body:N`）、名前、volume_mm3、bbox_mm、face_count、生成フィーチャ（created_by）、visible。 |
@@ -243,7 +244,9 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## Toast 通知
 
-Inventor が表示されている間、完了した各コマンドがグラフィックスビュー上に小さな toast を表示し、agent がまだ動作中であることを示します — 読み取りは青（`MCP · Query`）、書き込みは緑（`MCP · Modified`）、失敗は赤（`MCP · Failed`。`send_code` スクリプトがエラーを返した場合や `batch_execute` がロールバックされた場合などのソフト失敗を含む）。`inventor_capture_view` の toast にはクリック可能なサムネイルが付き、最大 4 枚のカードが新しい順に積み重なり、数秒で消えます（ホバーで保持）。`inventor_health` は liveness probe のため toast を生成しません。
+Inventor の表示中、結果は **最大 3 枚**のカードに集約され、更新は **毎秒最大 2 回**です。ツールごとの toast はキューに蓄積しません。通常の成功は操作数と最新ツールを持つ活動カードにまとめ、同じエラーは回数付きで統合します。読み取りは青、書き込みは緑、失敗は赤（ソフト失敗や rollback を含む）。優先順位はエラー、明示的なタスク結果、snapshot/export、通常の活動です。満杯なら同優先度の古いカードを置換し、低優先度の到着は破棄します。後から再生しません。画像のサムネイルはクリック可能です。最終表示更新から数秒で消え、ホバーで一時停止します。`inventor_health` は toast を生成しません。
+
+操作数はカードが保持されている期間・target 単位で、特定 agent のジョブ全体の件数ではありません。ジョブ結果は agent が `inventor_report_task_result` で明示的に送ります。agent/job ごとに一意な `task_id`（1–80 文字）、`outcome`（`completed`/`failed`/`cancelled`）、正確な 1 行の `summary`（1–120 文字）が必要です。**Agent reported** と表示し、無通信時間や単一ツールの成功から完了を推測しません。Toasts 設定に従い、server と add-in の両方の更新が必要です。[検証状況](docs/testing/smart-toasts.md)。
 
 Toast は専用 UI スレッドで動作し、フォーカスを奪わず、コマンドをブロックしません — レスポンスが返された後にのみ投稿されます。Inventor が最小化されている間やモーダルダイアログが開いている間は toast は非表示になり、他のアプリケーションがフォーカスを持っていても常に最前面に表示されます（これが目的です：agent がまだ動いている証拠）。カードの色は toast の背後のピクセルをサンプリングする自動パレットに従います。サンプルはメモリ内のみ — ディスクにもログにも書き込まれません。
 

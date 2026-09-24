@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-72%20or%2073%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (72 MCP tools mặc định, hoặc 73 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
+> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (73 MCP tools mặc định, hoặc 74 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **72 công cụ** khi bật mọi platform toolset mặc định, hoặc **73 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **73 công cụ** khi bật mọi platform toolset mặc định, hoặc **74 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
 Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
@@ -105,11 +105,12 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_get_current_target` | Báo target đang được server chọn, hoặc `NO_TARGET` nếu không có target sống. |
 | `inventor_switch_target` | Chọn target theo descriptor id, năm hoặc session. Chỉ phía server. |
 
-### query (6) — probe document/health/model read-only
+### query (7) — probe document/health/model read-only và báo kết quả công việc
 
 | Tool | Mô tả |
 |---|---|
 | `inventor_health` | Probe add-in đang hoạt động: inventor_year, process_id, có document mở không, loại document. |
+| `inventor_report_task_result` | Agent chủ động báo kết quả: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), `summary` một dòng. Không sửa model. |
 | `inventor_list_open_documents` | List mọi document đang mở: title, path, type, và cái nào active. |
 | `inventor_get_document_info` | Lấy title, full path và document type của document đang active. |
 | `inventor_list_bodies` | List các solid body của part: id (`body:N`), name, volume_mm3, bbox_mm, face_count, feature tạo ra (created_by), visible. |
@@ -243,7 +244,9 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 
 ## Thông báo toast
 
-Khi Inventor đang hiển thị, mỗi command hoàn thành sẽ pop một toast nhỏ trên khung đồ họa để bạn thấy agent vẫn đang chạy — xanh dương cho read (`MCP · Query`), xanh lá cho write (`MCP · Modified`), đỏ cho lỗi (`MCP · Failed`, kể cả soft-fail như script `send_code` trả về lỗi hay `batch_execute` bị rollback). Toast của `inventor_capture_view` kèm thumbnail có thể click; tối đa bốn thẻ xếp chồng, mới nhất trên cùng, tự mất sau vài giây (rê chuột để giữ lại). `inventor_health` là liveness probe nên không tạo toast.
+Khi Inventor hiển thị, kết quả tool cập nhật vào **tối đa 3 thẻ**, **không quá 2 lần/giây**, không xếp hàng một toast cho từng tool. Thành công thông thường gom chung thành thẻ hoạt động với số thao tác và tool gần nhất; read màu xanh dương, write xanh lá, lỗi đỏ (kể cả soft-fail và rollback). Lỗi giống nhau gộp kèm số lần. Thứ tự ưu tiên: lỗi → tổng kết do agent báo → snapshot/export → hoạt động thường. Khi đầy, thay thẻ cũ cùng mức ưu tiên hoặc bỏ thông báo mới có ưu tiên thấp hơn, không phát lại về sau. Snapshot giữ thumbnail có thể click. Thẻ tự mất sau vài giây tính từ lần cập nhật hiển thị cuối (hover tạm dừng). `inventor_health` không tạo toast.
+
+Số thao tác chỉ tính trong vòng đời thẻ trên target, không phải toàn bộ công việc hoặc riêng từng agent. Agent chỉ báo tổng kết bằng `inventor_report_task_result` khi biết kết quả: `task_id` riêng cho agent/công việc (1–80 ký tự), `outcome` (`completed`, `failed`, `cancelled`), `summary` trung thực một dòng (1–120 ký tự). Thẻ ghi **Agent reported**; không suy đoán hoàn thành từ khoảng im lặng hoặc một tool thành công. Tôn trọng nút Toasts và cần cập nhật cả server lẫn add-in. Trạng thái kiểm thử: [smart-toasts](docs/testing/smart-toasts.md).
 
 Toast chạy trên một UI thread riêng, không bao giờ giật focus, và không bao giờ chặn command — chúng chỉ được post sau khi response đã trả về. Toast ẩn khi Inventor bị minimize hoặc có modal dialog mở, và luôn topmost ngay cả khi ứng dụng khác đang focus (đúng mục đích: bằng chứng agent vẫn đang chạy). Màu thẻ theo palette auto lấy mẫu từ pixel phía sau toast; mẫu màu chỉ nằm trong bộ nhớ — không ghi đĩa, không log.
 

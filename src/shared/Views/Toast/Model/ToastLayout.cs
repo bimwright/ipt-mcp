@@ -24,7 +24,7 @@ public static class ToastLayout
     public const double GapDip = 4;
     public const double MinViewHeightDip = 120;
     public const double SampleHeightDip = 80;
-    public const int MaxToasts = 4;
+    public const int MaxToasts = 3;
 
     public static int Px(double dip, uint dpi)
         => (int)Math.Round(dip * (dpi == 0 ? 96 : dpi) / 96.0, MidpointRounding.AwayFromZero);
@@ -43,7 +43,7 @@ public static class ToastLayout
         return new PxPoint(main.Left + edge, main.Top + Px(HomeTopDip, dpi));
     }
 
-    /// <summary>Newest first, top to bottom.</summary>
+    /// <summary>Caller supplies priority order, top to bottom.</summary>
     public static IReadOnlyList<PxPoint> Stack(PxPoint anchor, IReadOnlyList<int> heightsPx, uint dpi)
     {
         var gap = Px(GapDip, dpi);

@@ -19,6 +19,7 @@ public static partial class InventorCommandRegistry
     static partial void AddCore(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add)
     {
         add(new HealthHandler());
+        add(new ReportTaskResultHandler());
         add(new GetDocumentInfoHandler());
         add(new ListBodiesHandler());
         add(new ListFeaturesHandler());

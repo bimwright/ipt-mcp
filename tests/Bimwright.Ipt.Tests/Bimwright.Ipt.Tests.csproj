@@ -38,6 +38,7 @@
     <Compile Include="..\..\src\shared\Handlers\Export\CaptureImagePolicy.cs" LinkBase="Shared\Handlers\Export" />
     <Compile Include="..\..\src\shared\Handlers\Export\CameraParams.cs" LinkBase="Shared\Handlers\Export" />
     <Compile Include="..\..\src\shared\Handlers\Feature\ExtrudeParams.cs" LinkBase="Shared\Handlers\Feature" />
+    <Compile Include="..\..\src\shared\Handlers\Core\ReportTaskResultHandler.cs" LinkBase="Shared\Handlers\Core" />
     <Compile Include="..\..\src\shared\Handlers\BatchExecutor.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\Vec3Params.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\EnumText.cs" LinkBase="Shared\Handlers" />

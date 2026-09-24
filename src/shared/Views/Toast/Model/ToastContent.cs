@@ -28,8 +28,11 @@ public sealed record ToastModel(
     bool Success,
     long DurationMs)
 {
-    /// <summary>Auto-dismiss: error 8 s, thumbnail 9 s, write 6 s, read 3 s.</summary>
-    public int LifetimeMs => !Success ? 8000 : ThumbnailPath != null ? 9000 : Kind == ToolActivityKind.Write ? 6000 : 3000;
+    /// <summary>Only set for an explicit agent-reported result, never inferred from activity.</summary>
+    public string? TaskId { get; init; }
+
+    /// <summary>Auto-dismiss: error/task summary 8 s, thumbnail 9 s, write 6 s, read 3 s.</summary>
+    public int LifetimeMs => !Success || TaskId != null ? 8000 : ThumbnailPath != null ? 9000 : Kind == ToolActivityKind.Write ? 6000 : 3000;
 }
 
 /// <summary>Turns an Inventor command result into toast copy. Cheap: never serializes large payloads.</summary>
@@ -45,6 +48,15 @@ public static class ToastContentBuilder
         var command = e.Command == null || e.Command.Trim().Length == 0 ? "unknown" : e.Command;
         var kind = ToolActivityClassifier.Classify(command, e.HandlerIsReadOnly);
         var data = e.Data as JObject;
+        if (e.Ok && command == "report_task_result" && Str(data, "task_id") is { } taskId)
+        {
+            var outcome = Str(data, "outcome") ?? "failed";
+            var title = outcome == "completed" ? "Task completed" : outcome == "cancelled" ? "Task cancelled" : "Task failed";
+            return new ToastModel(command, title, "MCP · Task",
+                Truncate(FirstLine(Str(data, "summary")) ?? "Agent reported a result", SummaryMax),
+                Truncate("Agent reported · " + taskId, DetailMax), null,
+                ToolActivityKind.Read, outcome == "completed", 0) { TaskId = taskId };
+        }
         var softError = e.Ok ? SoftError(command, data) : null;
         var success = e.Ok && softError == null;
 
