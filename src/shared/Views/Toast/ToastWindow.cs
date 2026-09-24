@@ -196,7 +196,7 @@ internal sealed class ToastWindow : Window
     private void ApplyContent(ToastModel model)
     {
         Model = model;
-        _icon.Text = model.Success ? "" : "";
+        _icon.Text = ToastGlyph.For(model.Icon);
         _title.Text = model.Title;
         _category.Text = model.Category;
         _summary.Text = model.Summary;

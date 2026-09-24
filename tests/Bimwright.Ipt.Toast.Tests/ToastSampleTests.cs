@@ -20,6 +20,10 @@ public sealed class ToastSampleTests
         => Assert.Equal(ToastSampleTarget.Anchor, ToastSample.Target(frameUsable: true, paletteCommitted: false, rethemeDue: true, onScreen: false));
 
     [Fact]
+    public void A_replacement_card_on_screen_before_a_palette_is_set_samples_beside_the_stack()
+        => Assert.Equal(ToastSampleTarget.Beside, ToastSample.Target(frameUsable: true, paletteCommitted: false, rethemeDue: false, onScreen: true));
+
+    [Fact]
     public void Restore_keeps_a_palette_taken_from_the_canvas()
         => Assert.Equal(ToastSampleTarget.None, ToastSample.Target(frameUsable: true, paletteCommitted: true, rethemeDue: false, onScreen: false));
 

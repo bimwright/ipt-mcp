@@ -12,6 +12,30 @@ public sealed class ToastContentBuilderTests : IDisposable
     private static ToastModel Ok(string command, JToken? data, bool? isReadOnly = true, long ms = 42)
         => ToastContentBuilder.Build(new ToastEvent(command, true, data, null, null, ms, isReadOnly));
 
+    [Theory]
+    [InlineData("completed", ToastIcon.Success)]
+    [InlineData("cancelled", ToastIcon.Neutral)]   // ended on purpose: neither a tick nor an error mark
+    [InlineData("failed", ToastIcon.Error)]
+    public void Task_report_icon_follows_the_outcome(string outcome, ToastIcon expected)
+        => Assert.Equal(expected, Ok("report_task_result",
+            new JObject { ["task_id"] = "job-1", ["outcome"] = outcome, ["summary"] = "Checked 12 parts" }).Icon);
+
+    [Fact]
+    public void Tool_result_icon_follows_success()
+    {
+        Assert.Equal(ToastIcon.Success, Ok("list_open_documents", new JObject()).Icon);
+        Assert.Equal(ToastIcon.Error, ToastContentBuilder.Build(
+            new ToastEvent("extrude", false, null, "API_ERROR", "Profile is not closed", 12, false)).Icon);
+    }
+
+    [Fact]
+    public void Every_icon_has_its_own_nonempty_glyph()
+    {
+        var glyphs = ((ToastIcon[])Enum.GetValues(typeof(ToastIcon))).Select(ToastGlyph.For).ToArray();
+        Assert.All(glyphs, g => Assert.False(string.IsNullOrEmpty(g)));   // an emptied literal hid every icon
+        Assert.Equal(glyphs.Length, glyphs.Distinct().Count());
+    }
+
     [Fact]
     public void Capture_in_file_mode_has_thumbnail_and_long_lifetime()
     {

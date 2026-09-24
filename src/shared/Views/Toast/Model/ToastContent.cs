@@ -31,8 +31,32 @@ public sealed record ToastModel(
     /// <summary>Only set for an explicit agent-reported result, never inferred from activity.</summary>
     public string? TaskId { get; init; }
 
+    /// <summary>The agent-reported outcome (completed, failed, cancelled); null for tool results.</summary>
+    public string? Outcome { get; init; }
+
+    /// <summary>A cancelled job ended on purpose: neutral, neither a tick nor an error mark.</summary>
+    public ToastIcon Icon => !Success ? ToastIcon.Error : Outcome == "cancelled" ? ToastIcon.Neutral : ToastIcon.Success;
+
     /// <summary>Auto-dismiss: error/task summary 8 s, thumbnail 9 s, write 6 s, read 3 s.</summary>
     public int LifetimeMs => !Success || TaskId != null ? 8000 : ThumbnailPath != null ? 9000 : Kind == ToolActivityKind.Write ? 6000 : 3000;
+}
+
+public enum ToastIcon
+{
+    Success,
+    Error,
+    Neutral,
+}
+
+/// <summary>Segoe MDL2 Assets glyphs. Escaped, not literal: editors silently drop private-use characters.</summary>
+public static class ToastGlyph
+{
+    public static string For(ToastIcon icon) => icon switch
+    {
+        ToastIcon.Error => "\uE783",     // ErrorBadge
+        ToastIcon.Neutral => "\uE733",   // Blocked
+        _ => "\uE73E",                   // CheckMark
+    };
 }
 
 /// <summary>Turns an Inventor command result into toast copy. Cheap: never serializes large payloads.</summary>
@@ -55,7 +79,7 @@ public static class ToastContentBuilder
             return new ToastModel(command, title, "MCP · Task",
                 Truncate(FirstLine(Str(data, "summary")) ?? "Agent reported a result", SummaryMax),
                 Truncate("Agent reported · " + taskId, DetailMax), null,
-                ToolActivityKind.Read, outcome != "failed", 0) { TaskId = taskId };
+                ToolActivityKind.Read, outcome != "failed", 0) { TaskId = taskId, Outcome = outcome };
         }
         var softError = e.Ok ? SoftError(command, data) : null;
         var success = e.Ok && softError == null;

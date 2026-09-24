@@ -78,6 +78,17 @@ public sealed class ToastLayoutTests
     public void Create_only_for_visible_Inventor(bool appVisible, long main, bool expected)
         => Assert.Equal(expected, ToastVisibility.ShouldCreate(appVisible, main));
 
+    [Theory]
+    [InlineData(true, true, true, false, true, true)]     // usable frame
+    [InlineData(true, true, true, true, true, true)]      // minimized: held hidden, shown on restore
+    [InlineData(true, true, true, false, false, true)]    // modal dialog: held hidden, shown when it closes
+    [InlineData(true, true, false, false, true, false)]   // frame hidden since the snapshot: stale AppVisible
+    [InlineData(true, false, false, false, false, false)] // frame destroyed
+    [InlineData(false, true, true, false, true, false)]   // snapshot says invisible Inventor
+    public void Notify_holds_a_card_for_a_minimized_or_modal_frame_but_not_a_hidden_one(
+        bool appVisible, bool exists, bool visible, bool iconic, bool enabled, bool expected)
+        => Assert.Equal(expected, ToastVisibility.ShouldCreate(appVisible, 1234L, new HostWindowState(exists, visible, iconic, enabled)));
+
     [Fact]
     public void Empty_snapshot_creates_nothing()
         => Assert.False(ToastVisibility.ShouldCreate(InventorUiSnapshot.Empty.AppVisible, InventorUiSnapshot.Empty.MainHwnd));

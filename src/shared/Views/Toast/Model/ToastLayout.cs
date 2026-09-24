@@ -89,6 +89,14 @@ public static class ToastVisibility
 
     /// <summary>No toast at all for invisible Inventor (automation, Inventor Server) or before the frame exists.</summary>
     public static bool ShouldCreate(bool appVisible, long mainHwnd) => appVisible && mainHwnd != 0;
+
+    /// <summary>
+    /// Notify-time gate. The snapshot's AppVisible may be stale, so the live frame must still exist and be
+    /// visible. A minimized or modal-blocked frame still gets a card: it is held hidden and shown once the
+    /// frame is usable again (<see cref="ShouldShow"/> decides when, not whether).
+    /// </summary>
+    public static bool ShouldCreate(bool appVisible, long mainHwnd, HostWindowState live)
+        => ShouldCreate(appVisible, mainHwnd) && live.Exists && live.Visible;
 }
 
 /// <summary>What the toast thread knows about Inventor. Read on the Inventor STA after each command.</summary>

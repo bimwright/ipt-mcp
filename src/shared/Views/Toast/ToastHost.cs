@@ -152,8 +152,8 @@ internal sealed class ToastHost
         if (!suppressed)
         {
             Reflow();
-            // A card replaced mid-fade emptied the stack and reset the palette, so the window was
-            // just created from the hint alone. Resample beside it now that it has a position.
+            // A card replaced mid-fade emptied the stack and reset the palette; the new window reused the
+            // palette read before the loop. Resample beside it now that it has a position.
             if (_stackPalette == null) ApplySample(false);
         }
         if (_stack.Count > 0) StartTracking();
