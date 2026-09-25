@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -File "$dir\install.ps1" -WhatIf
 powershell -ExecutionPolicy Bypass -File "$dir\install.ps1"
 ```
 
-Deploys `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` and `ipt-mcp.exe` under `%LOCALAPPDATA%\Bimwright\ipt-mcp\server\<version>\`. Restart Inventor. Point your MCP client at that `ipt-mcp.exe` path. Pin a year with `--target 2025` or `BIMWRIGHT_INVENTOR_TARGET=2025`.
+Deploys `%APPDATA%\Autodesk\ApplicationPlugins\Bimwright.Ipt.bundle\` and `ipt-mcp.exe` to the fixed path `%LOCALAPPDATA%\Bimwright\ipt-mcp\server\current\ipt-mcp.exe`. The installer rolls back on failure, verifies the installed bundle against the package, smoke-checks the server with `--help`, and never edits MCP client configs — point your client at that fixed `ipt-mcp.exe` path yourself (see `AGENTS.md` in the ZIP for agent-driven wiring). Updates keep the path, so clients only need a restart; `-PruneOldServers` retires legacy `server\<version>\` copies once clients are repointed. `uninstall.ps1` runs the full sweep (personal data kept unless `-Purge`; `install.ps1 -Uninstall` removes the bundle only). Pin a year with `--target 2025` or `BIMWRIGHT_INVENTOR_TARGET=2025`.
 
 Do **not** `dotnet tool install -g Bimwright.Ipt.Server` — that is not the supported client install.
 

@@ -31,10 +31,20 @@ Current pending release: **v0.2.0** — version fields already pinned
    pwsh scripts/package-client-setup.ps1 -Config Release
    ```
    Output: `build/client-setup/IptMcp.Setup-v<ver>-win-x64.zip`.
+   The script **refuses a dirty working tree** — commit first so the package
+   matches a commit (`manifest.json` records `commit` + `dirty`); `-AllowDirty`
+   is for throwaway test packages only. The ZIP ships `install.ps1`,
+   `uninstall.ps1`/`uninstall-all.ps1` (the same full-sweep script), `AGENTS.md`
+   and `README.md` when present, `bundle/` (PackageContents.xml + per-year
+   `Contents\<year>\`), `server/ipt-mcp.exe`, and a checksummed `manifest.json`.
    The script only ships Inventor years with a **real interop DLL** on the build
    machine — shape-only fallback builds are never packed. Check `manifest.json`
    inside the ZIP (`packedInventorYears`) against the intended support matrix.
    Missing years need a build box with that year's interop.
+   Installer semantics: server goes to the fixed `server\current\` path with
+   rollback on failure, byte-verified bundle install, `--help` smoke check,
+   and `-PruneOldServers` for legacy versioned copies — see `AGENTS.md` for the
+   client-facing contract.
 
 4. **Regen registry tool schemas** (after any tool-surface change):
    ```bash

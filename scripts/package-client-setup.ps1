@@ -9,7 +9,10 @@ param(
     [string]$Config = 'Release',
     [string]$RepoRoot,
     [string]$Version,
-    [string]$OutputDir
+    [string]$OutputDir,
+
+    # Package an uncommitted working tree for a throwaway test build.
+    [switch]$AllowDirty
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +20,17 @@ Set-StrictMode -Version Latest
 
 if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 $RepoRoot = (Resolve-Path $RepoRoot).Path
+
+# A package must match a commit, otherwise testers exercise code nobody can
+# identify. -AllowDirty marks the manifest instead.
+$dirty = $false
+$status = $null
+try { $status = & git -C $RepoRoot status --porcelain 2>$null } catch { $status = $null } # no git: commit stays unknown, as below
+if ($status) {
+    if (-not $AllowDirty) { throw 'Working tree has uncommitted changes. Commit them so the package matches a commit, or pass -AllowDirty for a throwaway test package.' }
+    $dirty = $true
+    Write-Warning 'Packaging a dirty working tree (-AllowDirty): manifest records dirty=true.'
+}
 if (-not $OutputDir) { $OutputDir = Join-Path $RepoRoot 'build\client-setup' }
 
 if (-not $Version) {
@@ -118,7 +132,15 @@ foreach ($e in ($packed | Sort-Object Year)) {
 Set-Content -Path (Join-Path $bundleStage 'PackageContents.xml') -Value $sb.ToString() -Encoding UTF8
 
 Copy-Item (Join-Path $RepoRoot 'scripts\install.ps1') (Join-Path $stageRoot 'install.ps1') -Force
-Copy-Item (Join-Path $RepoRoot 'scripts\uninstall.ps1') (Join-Path $stageRoot 'uninstall.ps1') -Force
+# The shipped uninstaller is the full sweep (keeps personal data unless -Purge);
+# it is packaged under both names so either entry point works.
+Copy-Item (Join-Path $RepoRoot 'scripts\uninstall-all.ps1') (Join-Path $stageRoot 'uninstall.ps1') -Force
+Copy-Item (Join-Path $RepoRoot 'scripts\uninstall-all.ps1') (Join-Path $stageRoot 'uninstall-all.ps1') -Force
+# Agent install guide / docs are shipped when present so client wiring is documented offline.
+foreach ($doc in 'AGENTS.md', 'README.md') {
+    $docPath = Join-Path $RepoRoot $doc
+    if (Test-Path -LiteralPath $docPath -PathType Leaf) { Copy-Item $docPath (Join-Path $stageRoot $doc) -Force }
+}
 
 function Get-Rel([string]$Root, [string]$Path) {
     return $Path.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/'
@@ -141,6 +163,7 @@ $manifest = [ordered]@{
     version = $Version
     generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
     commit = $commit
+    dirty = $dirty
     platform = 'win-x64'
     packedInventorYears = $years
     supportedInventorYears = @(2022, 2023, 2024, 2025, 2026, 2027)

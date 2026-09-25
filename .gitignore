@@ -43,4 +43,5 @@ runs/
 # Local smoke/diagnostics artifacts and analysis scratch — never product source
 .artifacts-smoke/
 .artifacts-test/
+artifacts/
 analysis/
