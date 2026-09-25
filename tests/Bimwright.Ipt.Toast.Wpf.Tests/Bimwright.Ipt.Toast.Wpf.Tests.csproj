@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <!-- ToastWindow.cs and BrandAssets.cs are guarded by the per-year plugin symbols.
+         The toast code never touches the Inventor API (ToastSourcePolicyTests), so any
+         year symbol compiles it; the window is instantiated on a plain STA thread. -->
+    <DefineConstants>$(DefineConstants);INVENTOR2025</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!--
+    The real toast window, linked like a plugin shell would — the types live in this
+    assembly so internal seams (BrandWipeCount, _brandSweep) are directly testable.
+  -->
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Compile Include="..\..\src\shared\Views\BrandAssets.cs" LinkBase="Shared\Views" />
+    <Compile Include="..\..\src\shared\Views\Toast\ToastNative.cs" LinkBase="Shared\Views\Toast" />
+    <Compile Include="..\..\src\shared\Views\Toast\ToastWindow.cs" LinkBase="Shared\Views\Toast" />
+    <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
+  </ItemGroup>
+
+</Project>

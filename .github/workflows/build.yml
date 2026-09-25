@@ -21,6 +21,12 @@ jobs:
         run: dotnet build src/server -c Release
       - name: Test (server-only)
         run: dotnet test tests/Bimwright.Ipt.Tests -c Release
+      # Toast model tests are net8.0 host-free; the WPF suite is net8.0-windows and
+      # instantiates the real window on an STA thread — both run headless on the runner.
+      - name: Test (toast model)
+        run: dotnet test tests/Bimwright.Ipt.Toast.Tests -c Release
+      - name: Test (toast WPF)
+        run: dotnet test tests/Bimwright.Ipt.Toast.Wpf.Tests -c Release
 
   installer:
     name: installer-${{ matrix.shell }}

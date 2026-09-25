@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bimwright.Ipt.Plugin.Inv27"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bimwright.Ipt.Toast.Tests", "..\tests\Bimwright.Ipt.Toast.Tests\Bimwright.Ipt.Toast.Tests.csproj", "{032E0876-C7E7-4F77-9BDA-A869706629CF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bimwright.Ipt.Toast.Wpf.Tests", "..\tests\Bimwright.Ipt.Toast.Wpf.Tests\Bimwright.Ipt.Toast.Wpf.Tests.csproj", "{041E6443-570F-423B-9B64-5ADEC0BA1616}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -153,6 +155,18 @@ Global
 		{032E0876-C7E7-4F77-9BDA-A869706629CF}.Release|x64.Build.0 = Release|Any CPU
 		{032E0876-C7E7-4F77-9BDA-A869706629CF}.Release|x86.ActiveCfg = Release|Any CPU
 		{032E0876-C7E7-4F77-9BDA-A869706629CF}.Release|x86.Build.0 = Release|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Debug|x64.Build.0 = Debug|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Debug|x86.Build.0 = Debug|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Release|Any CPU.Build.0 = Release|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Release|x64.ActiveCfg = Release|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Release|x64.Build.0 = Release|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Release|x86.ActiveCfg = Release|Any CPU
+		{041E6443-570F-423B-9B64-5ADEC0BA1616}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

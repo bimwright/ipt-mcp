@@ -20,8 +20,6 @@ namespace Bimwright.Ipt.Shared.Views.Toast;
 /// </summary>
 internal sealed class ToastWindow : Window
 {
-    private const double BrandRestOpacity = 0.3;
-    private const double BrandSettleOpacity = 0.8;
     private readonly Action<ToastWindow> _closed;
     private readonly Border _card;
     private readonly Border _stripe;
@@ -37,8 +35,8 @@ internal sealed class ToastWindow : Window
     private readonly TextBlock _brandShine;
     private readonly Run _shineBim;
     private readonly Run _shineWright;
-    private readonly TranslateTransform _brandSweep = new(-0.75, 0);
-    private readonly TranslateTransform _shineSweep = new(-0.75, 0);
+    internal readonly TranslateTransform _brandSweep = new(BrandMotion.SweepFrom, 0);
+    internal readonly TranslateTransform _shineSweep = new(BrandMotion.SweepFrom, 0);
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
     private ToastCountdown _count;
@@ -88,55 +86,43 @@ internal sealed class ToastWindow : Window
         _summary = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
         _detail = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
         _thumb = new Image { MaxHeight = 120, Margin = new Thickness(0, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
-        _brandBim = new Run("BIM");
-        _brandWright = new Run("wright");
+        _brandBim = new Run(BrandAssets.WordmarkLeft);
+        _brandWright = new Run(BrandAssets.WordmarkRight);
         _brand = new TextBlock
         {
             // Logo casing and colours. Brightness lives in the OpacityMask: it starts dimmed,
             // then a lit front wipes left→right once after the reader's eye has had time to
             // reach the toast (~1.3 s, WipeBrand). The front carries a full-alpha crest so the
-            // eye sees a wave pass; behind it the wordmark settles at BrandSettleOpacity.
-            FontSize = 10, FontWeight = FontWeights.SemiBold,
-            ToolTip = "bimwright ipt-mcp",
+            // eye sees a wave pass; behind it the wordmark settles at BrandMotion.SettleOpacity.
+            FontSize = BrandMotion.FontSizeDip, FontWeight = FontWeights.SemiBold,
+            ToolTip = BrandAssets.ProductTag,
             Inlines = { _brandBim, _brandWright },
         };
         var brandMask = new LinearGradientBrush
         {
             StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
             RelativeTransform = _brandSweep,
-            GradientStops =
-            {
-                new GradientStop(Dim(BrandSettleOpacity), 0.00),
-                new GradientStop(Dim(BrandSettleOpacity), 0.32),
-                new GradientStop(Dim(1.0), 0.44),
-                new GradientStop(Dim(BrandRestOpacity), 0.58),
-                new GradientStop(Dim(BrandRestOpacity), 1.00),
-            },
         };
+        foreach (var (offset, alpha) in BrandMotion.BrandStops)
+            brandMask.GradientStops.Add(new GradientStop(Dim(alpha), offset));
         _brand.OpacityMask = brandMask;
-        _shineBim = new Run("BIM");
-        _shineWright = new Run("wright");
+        _shineBim = new Run(BrandAssets.WordmarkLeft);
+        _shineWright = new Run(BrandAssets.WordmarkRight);
         _brandShine = new TextBlock
         {
             // The wordmark again in lighter tints, masked to a narrow band that sweeps with the
             // wipe — the wave passes inside the letterforms instead of an object sliding under.
-            FontSize = 10, FontWeight = FontWeights.SemiBold, IsHitTestVisible = false,
+            FontSize = BrandMotion.FontSizeDip, FontWeight = FontWeights.SemiBold, IsHitTestVisible = false,
             Inlines = { _shineBim, _shineWright },
         };
         var shineMask = new LinearGradientBrush
         {
             StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
             RelativeTransform = _shineSweep,
-            GradientStops =
-            {
-                // Band peak sits on the brand front's crest (0.44) so the glint and the wipe arrive together.
-                new GradientStop(Dim(0.0), 0.00),
-                new GradientStop(Dim(0.0), 0.36),
-                new GradientStop(Dim(1.0), 0.44),
-                new GradientStop(Dim(0.0), 0.52),
-                new GradientStop(Dim(0.0), 1.00),
-            },
         };
+        // Band peak sits on the brand front's crest so the glint and the wipe arrive together.
+        foreach (var (offset, alpha) in BrandMotion.ShineStops)
+            shineMask.GradientStops.Add(new GradientStop(Dim(alpha), offset));
         _brandShine.OpacityMask = shineMask;
         var brandCell = new Grid
         {
@@ -177,7 +163,11 @@ internal sealed class ToastWindow : Window
         _clock.Start();
         _life = new DispatcherTimer();
         _life.Tick += (_, _) => BeginClose();
-        MouseEnter += (_, _) => PauseLife();
+        MouseEnter += (_, _) =>
+        {
+            PauseLife();
+            WipeBrand(BrandMotion.HoverDelayMs);   // the eye is already there — replay quickly
+        };
         MouseLeave += (_, _) => ResumeLife();
         MouseLeftButtonUp += (_, _) =>
         {
@@ -213,8 +203,8 @@ internal sealed class ToastWindow : Window
         _stripe.BorderBrush = accent;
         _icon.Foreground = accent;
         var white = new Rgb(255, 255, 255);
-        _shineBim.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandBim, white, 0.55));
-        _shineWright.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandWright, white, 0.55));
+        _shineBim.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandBim, white, BrandMotion.ShineBlendWeight));
+        _shineWright.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandWright, white, BrandMotion.ShineBlendWeight));
         _title.Foreground = Brush(p.Title);
         _summary.Foreground = Brush(p.Title);
         var body = Brush(p.Body);
@@ -303,16 +293,26 @@ internal sealed class ToastWindow : Window
 
     /// <summary>Brand reveal: a lit front wipes left→right once while a narrow band of lighter
     /// letters sweeps through the wordmark in sync, then the wordmark stays lit. The pass starts
-    /// ~1.3 s after the card appears — the delay for a reader's eye to land on a fresh toast.</summary>
-    private void WipeBrand()
+    /// ~1.3 s after the card appears — the delay for a reader's eye to land on a fresh toast
+    /// (delayMs = EntranceDelayMs). Replayed quickly on hover (delayMs = HoverDelayMs).
+    /// Re-applying replaces the pending clock, so repeated hover never queues extra passes.</summary>
+    private void WipeBrand(int delayMs = BrandMotion.EntranceDelayMs)
     {
-        var dur = TimeSpan.FromMilliseconds(800);
-        var start = TimeSpan.FromMilliseconds(1300);
+        if (IsClosing) return;
+        BrandWipeCount++;
+        LastWipeDelayMs = delayMs;
+        var dur = TimeSpan.FromMilliseconds(BrandMotion.SweepMs);
+        var start = TimeSpan.FromMilliseconds(delayMs);
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
-        var wipe = new DoubleAnimation(-0.75, 0.75, dur) { BeginTime = start, EasingFunction = ease };
+        var wipe = new DoubleAnimation(BrandMotion.SweepFrom, BrandMotion.SweepTo, dur) { BeginTime = start, EasingFunction = ease };
         _brandSweep.BeginAnimation(TranslateTransform.XProperty, wipe);
         _shineSweep.BeginAnimation(TranslateTransform.XProperty, wipe);   // same timeline, two clocks
     }
+
+    /// <summary>WPF-test hook: scheduled wipes and the delay of the last one. UpdateModel,
+    /// retheme and reflow must not bump these — only Appear and hover replay may.</summary>
+    internal int BrandWipeCount { get; private set; }
+    internal int LastWipeDelayMs { get; private set; }
 
     private static Color Dim(double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), 0, 0, 0);
 

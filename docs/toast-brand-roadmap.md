@@ -1,4 +1,4 @@
-# Lộ trình toast & brand — ipt-mcp
+﻿# Lộ trình toast & brand — ipt-mcp
 
 **Ngày khảo sát:** 2026-09-25 · **Baseline:** `f12d522` + working tree tại thời điểm khảo sát.
 **Trạng thái:** kế hoạch đề xuất, chưa triển khai. Chủ repo yêu cầu kiểm tra và viết lộ trình; không phải phê duyệt deploy hay thay đổi sản phẩm.
@@ -70,10 +70,10 @@ Hai repo triển khai độc lập cùng hợp đồng; không thêm ProjectRefe
 
 **Phụ thuộc:** chốt hợp đồng §3 trước khi sửa. Không phụ thuộc refactor RVT.
 
-- [ ] **IPT-01 — Test nền và tokens.** Thêm thông số brand host-free nội bộ (`Model/BrandMotion.cs`, tên đề xuất) và tests cho delay, duration, alpha, offsets. Thêm WPF regression executable riêng (tên đề xuất `tests/Bimwright.Ipt.Toast.Wpf.Tests`); không đưa WPF/Inventor vào suite model hiện tại.
-- [ ] **IPT-02 — Single source of truth.** Thay các literal wordmark/tooltip trong `ToastWindow.cs` bằng `BrandAssets`. Giữ hai TextBlock cùng font, kích thước, vị trí để glint không lệch nét.
-- [ ] **IPT-03 — Hover replay.** Cho `WipeBrand` nhận delay; MouseEnter vừa pause lifetime vừa gọi replay 150 ms, có guard closing/disposed. Giữ `ToastCountdown` và MouseLeave resume thời gian còn lại.
-- [ ] **IPT-04 — Khóa anti-flicker.** Test actual window: update card, retheme, reflow không reset sweep; hover liên tục không tích lũy clock; đóng giữa sweep an toàn.
+- [x] **IPT-01 — Test nền và tokens.** Thêm thông số brand host-free nội bộ (`Model/BrandMotion.cs`, tên đề xuất) và tests cho delay, duration, alpha, offsets. Thêm WPF regression executable riêng (tên đề xuất `tests/Bimwright.Ipt.Toast.Wpf.Tests`); không đưa WPF/Inventor vào suite model hiện tại.
+- [x] **IPT-02 — Single source of truth.** Thay các literal wordmark/tooltip trong `ToastWindow.cs` bằng `BrandAssets`. Giữ hai TextBlock cùng font, kích thước, vị trí để glint không lệch nét.
+- [x] **IPT-03 — Hover replay.** Cho `WipeBrand` nhận delay; MouseEnter vừa pause lifetime vừa gọi replay 150 ms, có guard closing/disposed. Giữ `ToastCountdown` và MouseLeave resume thời gian còn lại.
+- [x] **IPT-04 — Khóa anti-flicker.** Test actual window: update card, retheme, reflow không reset sweep; hover liên tục không tích lũy clock; đóng giữa sweep an toàn.
 
 **Files chính:** `src/shared/Views/Toast/ToastWindow.cs`, `Model/BrandMotion.cs` (mới), `src/shared/Views/BrandAssets.cs` (chỉ đổi nếu cần), hai nhóm test kể trên.
 **Exit:** effect đầu vào không thay đổi; hover có replay như RVT; mọi chuỗi brand lấy từ một nguồn; tests model + WPF pass; không thay feed/thread/transport trong P0.
