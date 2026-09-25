@@ -1,4 +1,7 @@
+using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Bimwright.Ipt.Shared.Views;
@@ -337,5 +340,114 @@ public sealed class ToastWindowBrandTests
                     $"sweep did not finish after retheme, X={w._brandSweep.X}");
             }
             finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
+        });
+
+    // ---- IPT-06: close button + RVT-style layout ----
+
+    private static void Click(FrameworkElement target, RoutedEvent routed) =>
+        target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = routed,
+            Source = target,
+        });
+
+    [Fact]
+    public void Close_button_carries_a_tooltip_and_accessible_name()
+        => Sta.Run(() =>
+        {
+            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            try
+            {
+                Assert.Equal("Close", AutomationProperties.GetName(w._closeHost));
+                Assert.Equal("Close", w._closeHost.ToolTip);
+                Assert.IsType<DockPanel>(w._closeHost.Parent);   // docked in the header
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void Close_click_dismisses_without_reaching_the_card_click_path()
+        => Sta.Run(() =>
+        {
+            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            try
+            {
+                w.Appear();
+
+                Click(w._closeHost, UIElement.MouseLeftButtonUpEvent);
+
+                Assert.True(w.IsClosing);
+                Assert.Equal(0, w.CardClickCount);   // the thumbnail-open/dismiss path never ran
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void Card_click_still_runs_the_dismiss_path_once()
+        => Sta.Run(() =>
+        {
+            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            try
+            {
+                w.Appear();
+
+                Click(w, Window.MouseLeftButtonUpEvent);
+
+                Assert.True(w.IsClosing);
+                Assert.Equal(1, w.CardClickCount);
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void Category_lives_on_its_own_row_and_duration_in_the_footer()
+        => Sta.Run(() =>
+        {
+            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            try
+            {
+                // Category is a direct child of the vertical body stack, not glued to the title.
+                var categoryParent = Assert.IsType<StackPanel>(w._category.Parent);
+                Assert.Equal(Orientation.Vertical, categoryParent.Orientation);
+
+                // Duration shares the footer DockPanel with the right-docked brand cell.
+                var footer = Assert.IsType<DockPanel>(w._duration.Parent);
+                Assert.NotSame(w._closeHost.Parent, footer);
+                Assert.Contains(footer.Children.Cast<UIElement>(), c => c is Grid);   // the brand cell
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void Long_content_is_height_capped_with_ellipsis()
+        => Sta.Run(() =>
+        {
+            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            try
+            {
+                Assert.Equal(64, w._summary.MaxHeight);
+                Assert.Equal(40, w._detail.MaxHeight);
+                Assert.Equal(TextTrimming.CharacterEllipsis, w._summary.TextTrimming);
+                Assert.Equal(TextTrimming.CharacterEllipsis, w._detail.TextTrimming);
+                Assert.Equal(TextWrapping.Wrap, w._summary.TextWrapping);
+                Assert.Equal(TextWrapping.Wrap, w._detail.TextWrapping);
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void An_empty_category_collapses_instead_of_leaving_a_blank_row()
+        => Sta.Run(() =>
+        {
+            var w = new ToastWindow(Model() with { Category = "" }, ToastPalette.LightElevated, _ => { });
+            try
+            {
+                Assert.Equal(Visibility.Collapsed, w._category.Visibility);
+
+                w.UpdateModel(Model(), ToastPalette.LightElevated);   // back to a real category
+
+                Assert.Equal(Visibility.Visible, w._category.Visibility);
+            }
+            finally { w.CloseNow(); }
         });
 }

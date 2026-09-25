@@ -3,12 +3,14 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -25,10 +27,13 @@ internal sealed class ToastWindow : Window
     private readonly Border _stripe;
     private readonly TextBlock _icon;
     private readonly TextBlock _title;
-    private readonly TextBlock _category;
-    private readonly TextBlock _summary;
-    private readonly TextBlock _detail;
-    private readonly TextBlock _duration;
+    internal readonly TextBlock _category;
+    internal readonly TextBlock _summary;
+    internal readonly TextBlock _detail;
+    internal readonly TextBlock _duration;
+    internal readonly Border _closeHost;
+    private readonly TextBlock _closeGlyph;
+    private Brush _closeHover = Brushes.Transparent;
     private readonly TextBlock _brand;
     internal readonly Run _brandBim;
     internal readonly Run _brandWright;
@@ -79,15 +84,23 @@ internal sealed class ToastWindow : Window
 
         _icon = new TextBlock
         {
-            FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 14,
-            Margin = new Thickness(0, 1, 8, 0),
+            FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 16,
+            Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Top,
         };
-        _title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
-        _category = new TextBlock { FontSize = 11, Margin = new Thickness(8, 2, 0, 0) };
-        _duration = new TextBlock { FontSize = 11, Margin = new Thickness(8, 2, 0, 0) };
-        _summary = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
-        _detail = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
-        _thumb = new Image { MaxHeight = 120, Margin = new Thickness(0, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
+        _title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        _category = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(24, 2, 0, 0) };
+        _duration = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        _summary = new TextBlock
+        {
+            FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(24, 4, 0, 0),
+            MaxHeight = 64, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        _detail = new TextBlock
+        {
+            FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(24, 2, 0, 0),
+            MaxHeight = 40, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        _thumb = new Image { MaxHeight = 120, Margin = new Thickness(24, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
         _brandBim = new Run(BrandAssets.WordmarkLeft);
         _brandWright = new Run(BrandAssets.WordmarkRight);
         _brand = new TextBlock
@@ -126,29 +139,51 @@ internal sealed class ToastWindow : Window
         foreach (var (offset, alpha) in BrandMotion.ShineStops)
             shineMask.GradientStops.Add(new GradientStop(Dim(alpha), offset));
         _brandShine.OpacityMask = shineMask;
-        var brandCell = new Grid
-        {
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0),
-        };
+        var brandCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
         brandCell.Children.Add(_brand);
         brandCell.Children.Add(_brandShine);
 
+        _closeGlyph = new TextBlock
+        {
+            Text = "\uE711",   // ChromeClose — escaped, not literal (see ToastGlyph)
+            FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 10,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        _closeHost = new Border
+        {
+            Width = 22, Height = 22, CornerRadius = new CornerRadius(11),
+            Background = Brushes.Transparent, Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Top,
+            ToolTip = "Close", Child = _closeGlyph,
+        };
+        AutomationProperties.SetName(_closeHost, "Close");
+        _closeHost.MouseEnter += (_, _) => _closeHost.Background = _closeHover;
+        _closeHost.MouseLeave += (_, _) => _closeHost.Background = Brushes.Transparent;
+        _closeHost.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;   // only dismiss — the card's click-to-open must not see this
+            BeginClose();
+        };
+
         var header = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(_icon, Dock.Left);
-        DockPanel.SetDock(_duration, Dock.Right);
+        DockPanel.SetDock(_closeHost, Dock.Right);
         header.Children.Add(_icon);
-        header.Children.Add(_duration);
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
-        titleRow.Children.Add(_title);
-        titleRow.Children.Add(_category);
-        header.Children.Add(titleRow);
+        header.Children.Add(_closeHost);
+        header.Children.Add(_title);
+
+        var footer = new DockPanel { Margin = new Thickness(24, 6, 0, 0) };
+        DockPanel.SetDock(brandCell, Dock.Right);
+        footer.Children.Add(brandCell);
+        footer.Children.Add(_duration);
 
         var body = new StackPanel { Margin = new Thickness(10, 10, 12, 10) };
         body.Children.Add(header);
+        body.Children.Add(_category);
         body.Children.Add(_summary);
         body.Children.Add(_detail);
         body.Children.Add(_thumb);
-        body.Children.Add(brandCell);
+        body.Children.Add(footer);
 
         _stripe = new Border { CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(5, 0, 0, 0), Child = body };
         _card = new Border
@@ -171,8 +206,11 @@ internal sealed class ToastWindow : Window
             WipeBrand(BrandMotion.HoverDelayMs);   // the eye is already there — replay quickly
         };
         MouseLeave += (_, _) => ResumeLife();
-        MouseLeftButtonUp += (_, _) =>
+        MouseLeftButtonUp += (_, e) =>
         {
+            // × already marked its click handled — never let it reach the card's open path.
+            if (ReferenceEquals(e.OriginalSource, _closeHost) || ReferenceEquals(e.OriginalSource, _closeGlyph)) return;
+            CardClickCount++;
             if (Model.ThumbnailPath != null) OpenImage(Model.ThumbnailPath);
             BeginClose();
         };
@@ -191,6 +229,7 @@ internal sealed class ToastWindow : Window
         _icon.Text = ToastGlyph.For(model.Icon);
         _title.Text = model.Title;
         _category.Text = model.Category;
+        _category.Visibility = model.Category.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         _summary.Text = model.Summary;
         _detail.Text = model.Detail;
         _detail.Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -213,6 +252,8 @@ internal sealed class ToastWindow : Window
         _category.Foreground = body;
         _detail.Foreground = body;
         _duration.Foreground = body;
+        _closeGlyph.Foreground = body;
+        _closeHover = Brush(ToastPaletteChooser.Blend(p.Body, p.Background, 0.08));
         _brandBim.Foreground = Brush(p.BrandBim);
         _brandWright.Foreground = Brush(p.BrandWright);
     }
@@ -347,6 +388,10 @@ internal sealed class ToastWindow : Window
     /// retheme and reflow must not bump these — only Appear and hover replay may.</summary>
     internal int BrandWipeCount { get; private set; }
     internal int LastWipeDelayMs { get; private set; }
+
+    /// <summary>WPF-test hook: card-level clicks that reached the open/dismiss path.
+    /// A × click must leave this at zero — it dismisses without opening the thumbnail.</summary>
+    internal int CardClickCount { get; private set; }
 
     private static Color Dim(double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), 0, 0, 0);
 
