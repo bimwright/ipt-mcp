@@ -30,13 +30,15 @@ internal sealed class ToastWindow : Window
     private readonly TextBlock _detail;
     private readonly TextBlock _duration;
     private readonly TextBlock _brand;
-    private readonly Run _brandBim;
-    private readonly Run _brandWright;
+    internal readonly Run _brandBim;
+    internal readonly Run _brandWright;
     private readonly TextBlock _brandShine;
-    private readonly Run _shineBim;
-    private readonly Run _shineWright;
+    internal readonly Run _shineBim;
+    internal readonly Run _shineWright;
     internal readonly TranslateTransform _brandSweep = new(BrandMotion.SweepFrom, 0);
     internal readonly TranslateTransform _shineSweep = new(BrandMotion.SweepFrom, 0);
+    private AnimationClock? _brandClock;
+    private AnimationClock? _shineClock;
     private readonly Image _thumb;
     private readonly DispatcherTimer _life;
     private ToastCountdown _count;
@@ -260,7 +262,10 @@ internal sealed class ToastWindow : Window
         if (IsShown || _done) return;
         Show();
         IsShown = true;
-        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+        if (MotionEnabled)
+            BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+        else
+            Opacity = 1;
         WipeBrand();
         if (!IsMouseOver) ResumeLife();
     }
@@ -282,11 +287,13 @@ internal sealed class ToastWindow : Window
         if (suppressed)
         {
             PauseLife();
+            PauseBrand();   // a hidden sweep finishes unseen — freeze it, resume on restore
             Hide();
         }
         else
         {
             Show();   // ShowActivated=false: shown without activation
+            ResumeBrand();
             if (!IsMouseOver) ResumeLife();
         }
     }
@@ -295,19 +302,46 @@ internal sealed class ToastWindow : Window
     /// letters sweeps through the wordmark in sync, then the wordmark stays lit. The pass starts
     /// ~1.3 s after the card appears — the delay for a reader's eye to land on a fresh toast
     /// (delayMs = EntranceDelayMs). Replayed quickly on hover (delayMs = HoverDelayMs).
-    /// Re-applying replaces the pending clock, so repeated hover never queues extra passes.</summary>
+    /// Re-applying replaces the pending clock, so repeated hover never queues extra passes.
+    /// With Windows' "animate controls and elements" off, the wordmark settles directly —
+    /// same end state, no motion.</summary>
     private void WipeBrand(int delayMs = BrandMotion.EntranceDelayMs)
     {
-        if (IsClosing) return;
+        if (IsClosing || _hidden) return;
+        if (!MotionEnabled)
+        {
+            _brandSweep.X = BrandMotion.SweepTo;
+            _shineSweep.X = BrandMotion.SweepTo;
+            return;
+        }
         BrandWipeCount++;
         LastWipeDelayMs = delayMs;
         var dur = TimeSpan.FromMilliseconds(BrandMotion.SweepMs);
         var start = TimeSpan.FromMilliseconds(delayMs);
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
         var wipe = new DoubleAnimation(BrandMotion.SweepFrom, BrandMotion.SweepTo, dur) { BeginTime = start, EasingFunction = ease };
-        _brandSweep.BeginAnimation(TranslateTransform.XProperty, wipe);
-        _shineSweep.BeginAnimation(TranslateTransform.XProperty, wipe);   // same timeline, two clocks
+        _brandClock = wipe.CreateClock();
+        _shineClock = wipe.CreateClock();
+        _brandSweep.ApplyAnimationClock(TranslateTransform.XProperty, _brandClock);
+        _shineSweep.ApplyAnimationClock(TranslateTransform.XProperty, _shineClock);   // same timeline, two clocks
     }
+
+    /// <summary>Freeze the sweep while the card is hidden — a wipe that runs unseen is wasted.</summary>
+    private void PauseBrand()
+    {
+        try { _brandClock?.Controller.Pause(); } catch { }
+        try { _shineClock?.Controller.Pause(); } catch { }
+    }
+
+    private void ResumeBrand()
+    {
+        try { _brandClock?.Controller.Resume(); } catch { }
+        try { _shineClock?.Controller.Resume(); } catch { }
+    }
+
+    /// <summary>Windows' "animate controls and elements" toggle — off means settle, not sweep.</summary>
+    private static bool MotionEnabled => MotionOverrideForTests ?? SystemParameters.ClientAreaAnimation;
+    internal static bool? MotionOverrideForTests;   // WPF-test seam: the OS setting can't flip per-test
 
     /// <summary>WPF-test hook: scheduled wipes and the delay of the last one. UpdateModel,
     /// retheme and reflow must not bump these — only Appear and hover replay may.</summary>
@@ -353,6 +387,11 @@ internal sealed class ToastWindow : Window
         _closing = true;
         PauseLife();
         if (!IsShown)
+        {
+            CloseNow();
+            return;
+        }
+        if (!MotionEnabled)
         {
             CloseNow();
             return;
