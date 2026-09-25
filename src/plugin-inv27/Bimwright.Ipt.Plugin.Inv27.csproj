@@ -7,7 +7,7 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>Bimwright.Ipt.Plugin</RootNamespace>
     <AssemblyName>Bimwright.Ipt.Plugin.Inv27</AssemblyName>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Version>0.2.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <InventorYear>2027</InventorYear>

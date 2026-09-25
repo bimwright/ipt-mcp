@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>Bimwright.Ipt.Plugin</RootNamespace>
     <AssemblyName>Bimwright.Ipt.Plugin.Inv24</AssemblyName>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Version>0.2.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <InventorYear>2024</InventorYear>
