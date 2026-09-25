@@ -192,6 +192,46 @@ public sealed class ToastFeedTests
         Assert.Contains("Get Document Info", second.Model.Detail);
     }
 
+    private static ToastModel Connected(string info = "Pipe:BimwrightInventor-1234") => new(
+        "client_connected", "Agent connected", "MCP · Connected", "ipt-mcp is ready", info, null,
+        ToolActivityKind.Read, true, 0);
+
+    [Fact]
+    public void A_client_connected_card_rides_the_activity_bucket_like_a_routine_read()
+    {
+        var feed = new ToastFeed();
+        feed.Publish(Read());
+        feed.Publish(Connected());
+        var card = Assert.Single(feed.TakeSnapshot(0)!);
+        // The connect note folds into the one activity card instead of taking a second slot.
+        Assert.Equal(2, card.Count);
+        Assert.Contains("Agent connected", card.Model.Detail);
+    }
+
+    [Fact]
+    public void A_client_connected_card_never_pushes_an_error_out_of_a_full_stack()
+    {
+        var feed = new ToastFeed();
+        feed.Publish(Read() with { Success = false, Summary = "E1" });
+        feed.Publish(Read() with { Success = false, Summary = "E2" });
+        feed.Publish(Read() with { Success = false, Summary = "E3" });
+        Assert.False(feed.Publish(Connected()));
+        var cards = feed.TakeSnapshot(0)!;
+        Assert.Equal(new[] { "E3", "E2", "E1" }, cards.Select(c => c.Model.Summary));
+    }
+
+    [Fact]
+    public void A_client_connected_card_is_the_fresh_card_when_nothing_is_retained()
+    {
+        var feed = new ToastFeed();
+        Assert.True(feed.Publish(Connected("TCP:50011")));
+        var card = Assert.Single(feed.TakeSnapshot(0)!);
+        Assert.Equal("Agent connected", card.Model.Title);
+        Assert.Equal("MCP · Connected", card.Model.Category);
+        Assert.Equal("TCP:50011", card.Model.Detail);
+        Assert.Equal(1, card.Count);
+    }
+
     [Fact]
     public void Hundred_tool_results_become_one_activity_card_without_a_replay_queue()
     {

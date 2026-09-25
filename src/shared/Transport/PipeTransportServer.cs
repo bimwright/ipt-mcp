@@ -107,7 +107,6 @@ public sealed class PipeTransportServer : ITransportServer
 
     private void HandleClient(NamedPipeServerStream pipe)
     {
-        _clientConnected = true;
         try
         {
             var reader = new StreamReader(pipe, Encoding.UTF8);
@@ -152,6 +151,7 @@ public sealed class PipeTransportServer : ITransportServer
                     TryWrite(writer, ErrorJson(id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token."));
                     break; // drop the connection on auth failure
                 }
+                _clientConnected = true;   // authenticated attach — ConnectionWatch fires on this edge
 
                 var now = DateTime.UtcNow;
                 while (requestTimestamps.Count > 0 && (now - requestTimestamps.Peek()) > rateLimitWindow)

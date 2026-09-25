@@ -49,6 +49,37 @@ internal sealed class ToastNotifier : IDisposable
         CurrentHost()?.SetSnapshot(ui);
     }
 
+    /// <summary>
+    /// One-shot card when an MCP client attaches (or re-attaches) to the transport — the wire is
+    /// proven end-to-end. Not a command outcome: no journal, no session log, no per-tool bucket.
+    /// It publishes as routine activity, so a full stack of errors/task reports simply refuses it.
+    /// <paramref name="connectionInfo"/> is the transport endpoint only (<c>TCP:port</c> /
+    /// <c>Pipe:name</c>) — never the auth token. Same gates as <see cref="Notify"/>: toggle,
+    /// suppression, and the no-frame-at-all case all apply.
+    /// </summary>
+    public bool NotifyConnection(string connectionInfo)
+    {
+        if (!_enabled) return false;
+        try
+        {
+            lock (_gate)
+            {
+                var ui = _ui;
+                if (!_enabled || _disposed
+                    || !ToastVisibility.ShouldCreate(ui.AppVisible, ui.MainHwnd, ToastNative.MainState(new IntPtr(ui.MainHwnd)))) return false;
+                _host ??= new ToastHost(_theme, ui, _feed);
+                return _feed.Publish(new ToastModel(
+                    "client_connected", "Agent connected", "MCP · Connected",
+                    "ipt-mcp is ready", connectionInfo, null,
+                    ToolActivityKind.Read, true, 0));
+            }
+        }
+        catch
+        {
+            return false;   // best effort
+        }
+    }
+
     /// <summary>Never throws and never waits on Inventor. Called after the response was handed back.
     /// Returns whether the card was retained for display, so a report can tell the agent the truth.</summary>
     public bool Notify(ToastEvent e)

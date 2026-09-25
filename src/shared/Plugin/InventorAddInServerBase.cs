@@ -47,6 +47,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private InvApi.ApplicationEvents? _appEvents;
     private BackdropHint? _hint;
     private string _configPath = "";
+    private ConnectionWatch? _connectionWatch;
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
@@ -93,11 +94,16 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _descriptorWriter.Start(docTitle, docPath);
 
         StartToastUi();
+
+        // Rising-edge watch (rvt-mcp IdlingUpdater parity — Inventor has no Idling event):
+        // each client attach/re-attach gets one "Agent connected" toast.
+        _connectionWatch = new ConnectionWatch(_server, info => _toasts?.NotifyConnection(info));
     }
 
     /// <summary>Ribbon + Inventor events for toasts. Failures here never stop the MCP transport.</summary>
     private void StartToastUi()
     {
+        RefreshToastSnapshot();   // seed _ui now — a client can attach before the first command
         try
         {
             _ribbon = new BimwrightRibbon(
@@ -485,6 +491,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
     public void Deactivate()
     {
+        try { _connectionWatch?.Dispose(); } catch { }   // 0. stop the attach watch before the transport dies
         try { _server?.Dispose(); } catch { }            // 1. no new commands, so no new toasts
         try
         {
@@ -506,6 +513,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             _sessionLog.Cleared -= PostHistoryCount;
         }
         _server = null;
+        _connectionWatch = null;
         _descriptorWriter = null;
         _sta = null;
         _descriptor = null;
