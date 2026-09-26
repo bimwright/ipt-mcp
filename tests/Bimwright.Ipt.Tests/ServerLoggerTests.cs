@@ -13,7 +13,7 @@ using Newtonsoft.Json.Linq;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Call journal v2 (improvement spec F1). The <c>finish</c> line keeps <c>success</c> at envelope
+/// Call journal v2. The <c>finish</c> line keeps <c>success</c> at envelope
 /// level and adds the script-level outcome (<c>data_ok</c>/<c>data_error</c>/<c>stdout_bytes</c>),
 /// response size, add-in duration and target. New keys are always present (null when not
 /// applicable) so journal analysis sees stable keys.

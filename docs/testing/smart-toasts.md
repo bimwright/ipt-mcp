@@ -1,6 +1,7 @@
 # Smart toast verification
 
-Status **2026-09-24**. The READMEs link here for build and live-test status of the aggregated toast feed. This is not a release note.
+Public behavior, motion contract, and verification coverage for the aggregated toast feed.
+Historical checks below are limited evidence, not a claim about the currently deployed add-in or a release certification.
 
 ## Behavior covered
 
@@ -14,22 +15,41 @@ Status **2026-09-24**. The READMEs link here for build and live-test status of t
 - `inventor_health` does not toast.
 - Backdrop samples are always taken beside the stack while a card is on screen — a painted card is never its own backdrop.
 
-## Automated — passed 2026-09-24
+## Brand motion contract
 
-```
+`toast-brand-v1` is defined by `BrandMotion` and consumed by `ToastWindow`:
+
+- Both wordmark layers use 10 DIP SemiBold text.
+- The initial left-to-right wipe starts 1300 ms after the card appears. Hover replays it after 150 ms; repeated hover replaces the pending pass rather than queuing passes.
+- The wordmark mask and glint sweep together for 800 ms, with quadratic ease-in/out, from relative offset -0.75 to +0.75.
+- Wordmark alpha is 0.3 ahead of the wipe, 1.0 at the crest, and 0.8 after it settles.
+- Model updates, retheming, and reflow do not replay the wipe or entrance animation.
+- Suppression while Inventor is minimized or modal-blocked pauses the visible lifetime and motion; restoring the frame resumes them. A card created while suppressed starts its initial pass only when first shown. Hover keeps its lifetime paused.
+- With Windows' **Animate controls and elements** setting disabled, the wordmark settles directly at alpha 0.8 without a sweep.
+
+## Verification
+
+Automated test commands:
+
+```bash
 dotnet test tests/Bimwright.Ipt.Toast.Tests -c Debug
-dotnet test tests/Bimwright.Ipt.Tests -c Debug --artifacts-path .artifacts-test
+dotnet test tests/Bimwright.Ipt.Tests -c Debug
 ```
 
-| Project | Result |
+Historical automated results (2026-09-24):
+
+| Project | Historical result |
 |---|---|
 | `Bimwright.Ipt.Toast.Tests` | 161 passed, 0 failed |
 | `Bimwright.Ipt.Tests` | 437 passed, 0 failed |
 
-The server test used a side output directory because running server processes held the default build output.
+Limited historical live checks on Inventor 2027 covered write, thumbnail, read,
+error, and task-result card accents; the delayed wordmark wipe; and
+`inventor_report_task_result` responding while ordinary commands queued behind
+a busy STA. These checks do not establish coverage for every supported Inventor year.
 
-## Live
+## Remaining coverage
 
-Verified on Inventor 2027 (2026-09-24): write / thumbnail / read / error / task-result cards all display with the right accents, the BIMwright wordmark rests dimmed then a lit front wipes left→right once ~1.3 s after the card appears, and `report_task_result` answers while ordinary commands queue (send_code sleeping 25 s on the STA: report returned in 7 ms, a queued read took 25.5 s). Still open: the 100-call burst check — before this feed, 100 `inventor_list_open_documents` calls returned in ~0.3 s and toast windows kept appearing for ~13 s afterwards; a post-feed burst should not keep creating toasts after the calls have returned — and the hover edge: a card the mouse rests on while a modal covers the frame stays paused until the pointer moves off it.
-
-Not yet loaded into Inventor (compiled for 2027 and, as a net48 check, for 2024): the restored ✓ / error glyphs (an earlier refactor had emptied both, so cards showed no icon), the neutral icon for `cancelled`, and cards held while Inventor is minimized or behind a modal dialog, then shown once the frame is usable.
+- Run a 100-call `inventor_list_open_documents` burst: the aggregated feed must not continue creating a backlog of new toast windows after the calls return.
+- Verify hover across modal suppression: a card under the pointer must keep its lifetime paused until the pointer leaves after the frame is restored.
+- Live-check success/error glyphs, the neutral `cancelled` icon, and cards retained while minimized or modal-blocked and shown after restore. These behaviors were not covered by the historical live checks above.

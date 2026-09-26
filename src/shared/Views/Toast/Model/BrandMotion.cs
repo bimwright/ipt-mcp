@@ -2,7 +2,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast;
 
 /// <summary>
 /// Host-free tokens for the wordmark wipe — the one place the animation's numbers live.
-/// Contract: docs/toast-brand-roadmap.md §3 (toast-brand-v1). The WPF window consumes these;
+/// Contract: docs/testing/smart-toasts.md#brand-motion-contract (toast-brand-v1). The WPF window consumes these;
 /// the model tests pin them so the effect cannot drift silently.
 /// </summary>
 public static class BrandMotion

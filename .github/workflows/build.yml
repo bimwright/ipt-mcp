@@ -2,11 +2,19 @@ name: build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
+  public-tree:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject internal documentation and diagnostics
+        shell: pwsh
+        run: ./scripts/check-public-tree.ps1
+
   build:
     runs-on: windows-latest
     steps:

@@ -3,7 +3,7 @@ using Bimwright.Ipt.Shared.Views.Toast;
 namespace Bimwright.Ipt.Toast.Tests;
 
 /// <summary>
-/// Pins the toast-brand-v1 contract (docs/toast-brand-roadmap.md §3): the wordmark wipe must
+/// Pins the toast-brand-v1 contract (docs/testing/smart-toasts.md#brand-motion-contract): the wordmark wipe must
 /// match rvt-mcp's numbers exactly. These tokens feed the WPF window; drift here is a bug.
 /// </summary>
 public sealed class BrandMotionTests

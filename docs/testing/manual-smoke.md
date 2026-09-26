@@ -4,9 +4,9 @@ Follow this numbered checklist on a machine with a runnable Autodesk Inventor de
 (2022–2027) plus the matching .NET SDK installed, to verify the add-in, transport, and server
 integration end to end.
 
-> **Not runnable in CI.** The build machine has only Inventor interop assemblies and no confirmed
-> runnable `Inventor.exe`. Do **not** claim packaging is production-ready until this checklist
-> passes on a real Inventor install (see the Non-Goals in the design spec).
+> **Requires a real Inventor desktop.** Interop-only builds or CI checks do not replace
+> this checklist. Verify packaging on a runnable Inventor install before claiming it is
+> production-ready. The examples below are synthetic test recipes, not recorded results.
 >
 > Tool names below use the `inventor_` MCP prefix. Lengths are millimetres at the tool boundary;
 > the add-in converts to Inventor's internal centimetres.
@@ -121,8 +121,8 @@ integration end to end.
       server-side target selection only, not any Inventor document.
 
 17. **Assembly batch smoke** (place / constrain / verify / part features / view)
-    Fixtures `A.ipt` (plate 50×50×5 with a planar iMate `IF_MATE_TOP`) and `B.ipt` (Ø20×30 cylinder
-    with an insert iMate `IF_INSERT_SHAFT`) from `C:\Temp\bimwright-spike\`.
+    Create throwaway fixtures `A.ipt` (plate 50×50×5 with a planar iMate `IF_MATE_TOP`) and
+    `B.ipt` (Ø20×30 cylinder with an insert iMate `IF_INSERT_SHAFT`) in a temporary test folder.
     1. On the fixture parts, run `inventor_list_interfaces`, then create an additional named interface
        with `inventor_create_imate`. Intentionally submit one ambiguous selector first.
        **Expected:** the failure is `INVALID_ARGUMENT` with `candidates[{centroid_mm,area_mm2}]`; retry
@@ -144,18 +144,18 @@ integration end to end.
        `inventor_capture_view` in output-path mode. **Expected:** each orientation is echoed, fit reports
        `fitted: true`, and every PNG exists, has non-zero size, and is visually non-blank.
 
-18. **Call journal v2** (improvement spec F1; server-only, no add-in rebuild)
+18. **Call journal**
     `scripts\mcp-smoke.ps1` starts its own server with the journal redirected to
     `%TEMP%\ipt-mcp-smoke-calls.jsonl`, so MCP servers already running for other clients (which lock
     `src\server\bin\`) can stay up. Start Inventor with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`,
     then in a pwsh 7 session (not `pwsh -File`, which cannot bind `-ToolCalls`):
     ```powershell
-    dotnet build src/server -c Debug --artifacts-path bin\f1-artifacts
+    dotnet build src/server -c Debug --artifacts-path bin\smoke-artifacts
     # --enable-send-code alone does not register inventor_send_code: `code` is not in the default
-    # toolset list, so request it explicitly (known gap, tracked outside F1).
+    # toolset list, so request it explicitly.
     $env:BIMWRIGHT_INVENTOR_TOOLSETS = "all"
     & .\scripts\mcp-smoke.ps1 -EnableSendCode `
-        -ServerExe .\bin\f1-artifacts\bin\Bimwright.Ipt.Server\debug\Bimwright.Ipt.Server.exe `
+        -ServerExe .\bin\smoke-artifacts\bin\Bimwright.Ipt.Server\debug\Bimwright.Ipt.Server.exe `
         -ToolCalls @(
             @{ name = 'inventor_get_current_target'; arguments = @{} },
             @{ name = 'inventor_new_part';           arguments = @{} },
@@ -174,71 +174,40 @@ integration end to end.
     - With no Inventor running, an add-in call such as `inventor_get_document_info` still leaves a
       `finish` line with `success: false`, `error_code: "NO_TARGET"`.
 
-    **Recorded 2026-09-15** — branch `feat/call-journal-v2`, Inventor 2027 (`inventor-2027-74076`):
-    all expectations met. `new_part` logged `duration_ms` 9073 / `plugin_duration_ms` 9055, i.e. the
-    time is spent inside the add-in, not in transport.
-    ```text
-    {"timestamp":"2026-09-15T16:07:21.9410448Z","session_id":"server-20260915T160712Z-9516","request_id":"907b268f06594a479a01e4cf6d67cf2a","tool":"get_document_info","phase":"finish","success":true,"duration_ms":6,"error":null,"error_code":null,"target_id":"inventor-2027-74076","response_bytes":250,"plugin_duration_ms":0,"data_ok":null,"data_error":null,"stdout_bytes":null}
-    {"timestamp":"2026-09-15T16:07:22.6167580Z","session_id":"server-20260915T160712Z-9516","request_id":"494f6b4a01e74a2dafbec2be7c040031","tool":"send_code","phase":"finish","success":true,"duration_ms":670,"error":null,"error_code":null,"target_id":"inventor-2027-74076","response_bytes":283,"plugin_duration_ms":223,"data_ok":false,"data_error":"compile error: (1,9): error CS1525: Invalid expression term ';'","stdout_bytes":0}
-    {"timestamp":"2026-09-15T16:07:26.1950946Z","session_id":"server-20260915T160712Z-9516","request_id":"e780d3a3da9b40bab1ee9fd9f092e723","tool":"send_code","phase":"finish","success":true,"duration_ms":3574,"error":null,"error_code":null,"target_id":"inventor-2027-74076","response_bytes":231,"plugin_duration_ms":3571,"data_ok":true,"data_error":null,"stdout_bytes":7}
-    ```
-    No Inventor running (same build):
-    ```text
-    {"timestamp":"2026-09-15T16:03:54.1462388Z","session_id":"server-20260915T160354Z-27180","request_id":"b7596b5cdb5c456bb9fe74b41339dbc4","tool":"get_document_info","phase":"finish","success":false,"duration_ms":0,"error":"No live Inventor target. Start Inventor with the bimwright add-in loaded.","error_code":"NO_TARGET","target_id":null,"response_bytes":null,"plugin_duration_ms":null,"data_ok":null,"data_error":null,"stdout_bytes":null}
-    ```
-
-19. **send_code contract** (improvement spec F2; needs the REBUILT add-in deployed and the
-    F2 server build — run via `scripts\mcp-smoke.ps1` like step 18):
-    - `inventor_send_code` `return new { a = 1 };` → `ok:true`, `result:{a:1}` (F2-a return value).
+19. **send_code contract** (run via `scripts\mcp-smoke.ps1` like step 18 with matching
+    server and add-in versions):
+    - `inventor_send_code` `return new { a = 1 };` → `ok:true`, `result:{a:1}`.
     - `inventor_send_code` `return app;` → `ok:false`, error `"return a DTO (anonymous object /
-      primitives / arrays), not an Inventor API object"` (F2-a API-object rejection).
+      primitives / arrays), not an Inventor API object"`.
     - `inventor_send_code` `var x = ;` → `ok:false`, `compile error` (script-level error still in data).
-    - Denylist regression (F2-c): `"Drain_1p5NPT_VisibleSocket"` in a string literal and
+    - Denylist regression: `"Drain_1p5NPT_VisibleSocket"` in a string literal and
       `ex.GetType().Name` inside a catch block both run (`ok:true`); `System.IO.File.Exists` is still
       rejected with `INVALID_ARGUMENT: send_code source uses forbidden token: System.IO`.
     - `inventor_send_code` `Thread.Sleep(40000)` with `timeout_ms=5000` → `TIMEOUT` after ~5 s with the
-      new message warning the script may still be running; the script keeps occupying the STA thread.
+      message warning the script may still be running; the script keeps occupying the STA thread.
     - `inventor_health` while the script is still running → `sta_busy:true`, `pending_commands:1`,
-      `answered_without_sta:true` (fast-path, F2-b). After the queue drains → `sta_busy:false`,
+      `answered_without_sta:true` (fast-path). After the queue drains → `sta_busy:false`,
       `pending_commands:0`.
     - A `send_code` submitted while the STA is still busy queues behind it: `duration_ms` includes the
       wait while `plugin_duration_ms` reflects only the actual script run.
 
-    **Recorded 2026-09-16** — branch `feat/send-code-contract`, Inventor 2027
-    (`inventor-2027-34876`, pipe): all expectations met. Queued `Thread.Sleep(5000)` returned
-    `duration_ms` 38488 / `plugin_duration_ms` 5346 — the queue wait is visible in the journal.
-    ```text
-    {"tool":"send_code","phase":"finish","success":false,"duration_ms":5004,"error":"TIMEOUT: send_code exceeded 5000 ms. The script MAY STILL BE RUNNING on Inventor's STA thread and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; do not resend the same script.","error_code":"TIMEOUT","target_id":"inventor-2027-34876",...}
-    {"tool":"health","phase":"finish","success":true,"duration_ms":2014,...,"target_id":"inventor-2027-34876"}   # sta_busy:true, answered_without_sta:true
-    {"tool":"send_code","phase":"finish","success":true,"duration_ms":38488,"plugin_duration_ms":5346,...}     # queued behind the 40 s script
-    {"tool":"health","phase":"finish","success":true,"duration_ms":27,...}                                    # sta_busy:false, pending_commands:0
-    ```
     Journal note: `plugin_duration_ms:0` on TIMEOUT/denylist/health lines means "not measured"
-    (response generated before/without a STA dispatch), not a real 0 ms — `target_id` is now filled on
-    these `Err()` lines (F1 hand-off item, verified).
+    (response generated before/without a STA dispatch), not a real 0 ms. Check that `target_id`
+    identifies the selected target on these responses. After a timeout, call `inventor_health`
+    before retrying; do not resend the same script while it may still be running.
 
-20. **Output guardrails** (improvement spec F3; needs the REBUILT add-in deployed and the F3
-    server build — run via `scripts\mcp-smoke.ps1` like step 18/19):
+20. **Output guardrails** (run via `scripts\mcp-smoke.ps1` like step 18/19):
     - `inventor_send_code` `Console.Write(new string('x', 100*1024));` → `ok:true`,
       `stdout` = first 8 KiB only, `stdout_truncated:true`, `stdout_file` →
       `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill\send_code-<ts>-<id>.txt` holding the full 100 KiB.
-      Journal: `stdout_bytes:8192`, `response_bytes` stays ~8.5 KB (F3-b).
+      Journal: `stdout_bytes:8192`, `response_bytes` stays ~8.5 KB.
     - `inventor_capture_view` with no `output_path` → `{path,width,height,bytes}` pointing at
-      `%LOCALAPPDATA%\Bimwright\ipt-mcp\captures\capture-<ts>-<seq>.png`, no base64 (F3-c default).
+      `%LOCALAPPDATA%\Bimwright\ipt-mcp\captures\capture-<ts>-<seq>.png`, no base64 by default.
     - `inventor_capture_view` `inline=true` + small size → legacy `{mime_type,width,height,bytes,base64}`.
-    - `inventor_list_parameters` on a small part → indented JSON text (F3-d small-payload path);
-      the inline base64 response above is single-line compact (F3-d >4 KiB path).
+    - `inventor_list_parameters` on a small part → indented JSON text;
+      responses larger than 4 KiB, such as inline base64 captures, use single-line compact JSON.
 
-    **Recorded 2026-09-16** — branch `feat/output-guardrails`, Inventor 2027
-    (`inventor-2027-29540`, pipe): all expectations met.
-    ```text
-    {"tool":"send_code","phase":"finish","success":true,"duration_ms":1060,"target_id":"inventor-2027-29540","response_bytes":8568,"plugin_duration_ms":1051,"data_ok":true,"stdout_bytes":8192}   # 100 KiB stdout → 8 KiB inline + spill file (102400 B on disk)
-    {"tool":"capture_view","phase":"finish","success":true,"response_bytes":332,...}    # file mode → captures\capture-20260915-193057-001.png (356233 B)
-    {"tool":"capture_view","phase":"finish","success":true,"response_bytes":44272,...}  # inline=true → compact base64 response
-    {"tool":"list_parameters","phase":"finish","success":true,"response_bytes":211,...} # indented small response
-    ```
-
-21. **Extrude v2** (improvement spec F4-P0-1; run via `scripts\mcp-smoke.ps1` like step 20):
+21. **Extrude** (run via `scripts\mcp-smoke.ps1` like step 20):
     - `extrude {distance:"10 mm", operation:"new_body", name:"base"}` on a 50×30 sketch →
       `feature_name:"base"`, `volume_mm3:15000`.
     - `extrude {distance:5, operation:"cut", affected_bodies:["body:1"]}` on a 10×10 sketch →
@@ -247,11 +216,7 @@ integration end to end.
       ("affected_bodies has no meaning with operation=new_body…").
     - `send_code` verify: `SurfaceBodies.Count=1`, `get_Volume(0.01)`≈14.5 cm³.
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-23888`, pipe): all expectations met. `volume_mm3` fix verified
-    (`get_Volume(0.0)` → E_INVALIDARG; 0.01 works).
-
-22. **Fixed work plane** (F4-P0-2):
+22. **Fixed work plane**:
     - `create_work_plane {type:"fixed", origin:{x:0,y:0,z:25}, x_axis:[1,0,0], y_axis:{x:0,y:1,z:0},
       name:"wp_z25", visible:true}` → `work_plane_name:"wp_z25"`, `type:"fixed"`, `visible:true`.
       `send_code` verify: `WorkPlanes.Count=4`, `[4].Name="wp_z25"`, `Plane.RootPoint.Z=2.5` cm,
@@ -261,10 +226,7 @@ integration end to end.
       `type:"offset"` without `refs` → INVALID_ARGUMENT ("refs[] is required").
     - Regression: `{type:"offset", refs:["XY"], offset:15}` → `Work Plane2`, count=5.
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-45036`, pipe): all expectations met.
-
-23. **Model queries** (F4-P0-3; run via `scripts\mcp-smoke.ps1`):
+23. **Model queries** (run via `scripts\mcp-smoke.ps1`):
     - `list_bodies` / `list_features` on an empty part → `[]`, `total:0`, `truncated:false`.
     - After `extrude {operation:"new_body", name:"base"}` on a 50×30×10 box:
       `list_bodies` → `{id:"body:1", name:"base_body", visible:true, volume_mm3:15000,
@@ -273,122 +235,100 @@ integration end to end.
       health:"UpToDate", body_names:["base_body"]}`.
     - `list_features {include_health:false}` → same rows without the `health` key.
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-80176`, pipe): all expectations met.
-
-24. **set_camera** (F4-P0-4; run via `scripts\mcp-smoke.ps1`):
+24. **set_camera** (run via `scripts\mcp-smoke.ps1`):
     - Full spec `{eye:[150,-120,100], target:[25,15,5], up:[0,0,1], perspective:true,
       extents_mm:[120,90]}` on a 50×30×10 box → applied; readback `perspective:true`,
-      `extents_mm:[120,90]`, `eye_mm:[138.2,-107.2,91.0]` — Inventor slides the eye along the
-      view direction to satisfy extents, which is exactly why the response is a readback.
-    - `capture_view {640×480}` immediately after → file-mode PNG (125 KB) at the framed angle.
-    - `{perspective:false, fit:true}` → ortho, reframed (`extents_mm`→~61).
+      `extents_mm:[120,90]`. Inspect `eye_mm`: Inventor may slide the eye along the
+      view direction to satisfy extents, so the response reports the readback.
+    - `capture_view {640×480}` immediately after → non-empty file-mode PNG at the framed angle.
+    - `{perspective:false, fit:true}` → orthographic view, reframed to fit the model.
     - Negatives all `INVALID_ARGUMENT`: empty call ("at least one of …"), `eye==target`
       ("zero-length view direction"), `up=[0,0,0]` ("non-zero direction vector"),
       up ∥ view dir ("parallel"), `extents_mm:[100,-5]` ("positive numeric").
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-35216`, pipe): all expectations met.
-
-25. **export_sat** (F4-P0-5; run via `scripts\mcp-smoke.ps1`):
-    - `export_sat {output_path:%TEMP%\ipt-f4p5-part.sat}` on the 50×30×10 box →
-      `{format:"SAT", acis_version:7, exported:true}`; file exists (7159 B) with ACIS header
+25. **export_sat** (run via `scripts\mcp-smoke.ps1`):
+    - `export_sat {output_path:%TEMP%\smoke-part.sat}` on the 50×30×10 box →
+      `{format:"SAT", acis_version:7, exported:true}`; a non-empty file exists with ACIS header
       `700 0 1 0` — leading 700 = ACIS 7.0, so the translator `Version` option took effect.
     - `acis_version:4` → INVALID_ARGUMENT ("ACIS 7.0 only"), rejected server-side before the
       wire call; `acis_version:7.0` explicit → exported.
-    - `output_path:"D:\models\out.sat"` → INVALID_ARGUMENT allowed-root (the C4
-      scenario — README export section now points at `BIMWRIGHT_INVENTOR_EXPORT_ROOT`).
+    - An `output_path` outside the allowed export roots → INVALID_ARGUMENT.
+      Use `BIMWRIGHT_INVENTOR_EXPORT_ROOT` to configure an additional permitted root.
     - `output_path` ending `.step` → INVALID_ARGUMENT "must end in .sat".
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-78896`, pipe): all expectations met.
-
-26. **combine** (F4-P1; sequential-driver smoke — the MCP SDK can dispatch piped
-    `tools/call` concurrently, so each call was sent only after the previous
-    response id arrived; PowerShell hashtable note: `ConvertFrom-Json` ids are
-    `Int64`, key lookups must cast `[int]`):
+26. **combine** (sequential-driver smoke):
+    The MCP SDK can dispatch piped `tools/call` concurrently, so send each dependent call
+    only after the previous response id arrives. Match numeric types when using response ids
+    as PowerShell hashtable keys (`ConvertFrom-Json` returns `Int64`).
     - `base` box 50×30×10 (15000 mm³) + `post` box 20×20×15 overlapping →
       `combine {base_body:"base_body", tool_bodies:["post_body"], operation:"join",
       name:"joined"}` → `{feature_name:"joined", body_names:["base_body"],
       volume_mm3:17000}` — exact union math (15000+6000−4000 overlap); subsequent
       `list_bodies` shows total:1.
     - `combine {base_body:"body:1", tool_bodies:["slot_tool_body"], operation:"cut"}`
-      (slot 40×10×8 fully inside base) → `volume_mm3:13800` (17000−3200) ✓.
+      (slot 40×10×8 fully inside base) → `volume_mm3:13800` (17000−3200).
     - `combine {base_body:"1", tool_bodies:["clip_body"], operation:"intersect",
       keep_tool_bodies:true}` → `volume_mm3:2900` (3000 slab − 600 slot void + 500
-      post region) ✓; `list_bodies` → total:2 (result + kept `clip_body`).
+      post region); `list_bodies` → total:2 (result + kept `clip_body`).
     - Negatives all `INVALID_ARGUMENT`: `tool_bodies:[]` ("non-empty array"),
       base∈tools ("base and tools must differ"), unknown ref ("unknown body
       'nosuch'"), `operation:"new_body"` ("not valid for combine").
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-38784`, pipe): all expectations met.
-
-27. **batch_execute** (F4-P1; sequential driver):
-    - The WS2 6-call modeling ring as ONE call — `[create_work_plane fixed,
+27. **batch_execute** (sequential driver):
+    - A six-command modeling sequence as one call: `[create_work_plane fixed,
       create_sketch, draw_rectangle, close_sketch, extrude new_body, list_bodies]` →
-      `executed:6, rolled_back:false`, `batched_body` 4000 mm³ at z 20–25 (the fixed
-      plane's Z offset flowed through correctly).
+      `executed:6, rolled_back:false`. Use a 40×20 rectangle on a fixed plane at z=20
+      and a 5 mm extrusion named `batched`: expect `batched_body` 4000 mm³ at z 20–25.
     - Stop-at-error default: batch with a bad `sketch_name` at index 3 →
-      `executed:4, rolled_back:true`; the earlier Sketch2 was rolled back too —
-      proven by the next batch reusing the name "Sketch2" (Inventor hands out the
-      lowest free index).
-    - `continue_on_error:true` → `executed:5, rolled_back:false`; index 4 still ran
-      after index 3's `INVALID_ARGUMENT` (script-side note: the survivor step also
-      failed because the driver hardcoded "Sketch3" while the new sketch was
-      "Sketch2" — continuation itself is verified).
+      `executed:4, rolled_back:true`. Verify that sketches created earlier in the batch
+      are absent afterward.
+    - Repeat a five-command batch with `continue_on_error:true`, a bad `sketch_name`
+      at index 3, and a valid independent query at index 4: expect
+      `executed:5, rolled_back:false`, index 3's `INVALID_ARGUMENT`, and a successful
+      query at index 4. Avoid relying on hardcoded auto-generated sketch names.
     - Blocked: `send_code` / nested `batch_execute` → "'X' cannot run inside
       batch_execute"; unknown command → "unknown command: fly_to_moon";
       21 commands → "at most 20"; `commands:[]` → "non-empty array".
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`, Inventor 2027
-    (`inventor-2027-82484`, pipe): all expectations met.
-
-    **Regression pass (review fixes, 2026-09-16)** — Inventor 2027
-    (`inventor-2027-65680`, pipe), add-in rebuilt with the hardened block list:
+    Additional regression cases:
     - Case-variant bypass attempts: `Batch_Execute` and `SEND_CODE` both →
       "'X' cannot run inside batch_execute" (OrdinalIgnoreCase block list).
     - Document lifecycle inside a batch: `new_part` and `Save_Document` →
-      blocked at index 0, `rolled_back:true` — the transaction's document can
-      no longer be swapped out from under the wrapper.
-    - `params:"not-an-object"` → step failure "'params' must be an object"
-      (was silently treated as {} before).
+      blocked at index 0, `rolled_back:true`; the transaction must keep the same document.
+    - `params:"not-an-object"` → step failure "'params' must be an object".
     - `commands:"bogus"` → `INVALID_ARGUMENT` at the MCP layer (server-side
       ValueKind check — never reaches the wire).
     - Sanity: 2-step batch (`list_bodies`+`get_document_info`) →
       `executed:2, rolled_back:false`.
-  27. `inventor_fillet` edge selector (F4-P1) — Inventor 2027 (`inventor-2027-57748`,
-      pipe). Two bosses r=8 at (50,0,0..10) and (-50,0,0..10) + cylinder r=15:
-      - `edges:{kind:"circular"}` on the r15 cylinder → Fillet1 over 2 edges
-        (top+bottom), `matched_edges` reporting `radius_mm:15`,
-        `center_mm` z=30/z=0, `adjacent:["cylinder","plane"]`.
-      - `radius_mm:8` → only the boss edges matched (r15 edges skipped).
-      - `on_body:"bossB_body"` → only body:2 edges (centers x=-50).
-      - `center_mm:[50,0,10], center_tol_mm:2` → exactly ONE edge: bossA top.
-      - `adjacent_surface_types:["plane"]` → 0 matches → INVALID_ARGUMENT
-        (rim edges are cylinder+plane; BOTH faces must be in the set).
-      - Negatives: kind:"planar" → "edges.kind must be 'circular'";
-        edges:"bogus" → "array of edge ids or a selector object";
-        radius<=0 / missing edges → INVALID_ARGUMENT.
-      - Caveat observed: re-filleting an already-filleted edge → API_ERROR
-        E_FAIL from AddSimple (geometry conflict, not a selector miss).
-      - `close_sketch` now forces `Profiles.AddForSolid()` when UpdateProfiles
-        leaves 0 profiles — verified: circle sketch profile_count 0→1, extrude
-        succeeded (previously draw_circle could not produce an extrudable
-        profile at all).
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`.
-  28. `inventor_probe_brep` (F4-P1) — Inventor 2027 (`inventor-2027-80000`, pipe).
-      Plate 60x40x8 with a through hole d=10 at (30,20):
-      - Full survey → exactly 2 ports: top mouth (face 6, normal [0,0,1],
-        center z=8) and bottom mouth (face 7, normal [0,0,-1], center z=0) —
-        the IsParamReversed correction is visible in the flipped bottom normal.
-        Both report port_diameter_mm=10, inner_loop circle r=5 at (30,20).
-        planar_faces_scanned=6, bodies_scanned=1.
-      - min/max_diameter_mm [9,11] → 2 ports; min_diameter_mm=50 → 0 ports.
-      - body:"plate_body" scopes the scan; body:"body:9" → INVALID_ARGUMENT
-        "body index 9 out of range (1..1)".
-      - min>max → INVALID_ARGUMENT "min_diameter_mm must be <= max_diameter_mm".
+28. **inventor_fillet edge selector**:
+    Create two bosses r=8 at (50,0,0..10) and (-50,0,0..10), plus a cylinder r=15
+    from z=0 to z=30. Use fresh geometry for each selector case:
+    - `edges:{kind:"circular"}` scoped to the r15 cylinder → a fillet over 2 edges
+      (top+bottom), `matched_edges` reporting `radius_mm:15`,
+      `center_mm` z=30/z=0, `adjacent:["cylinder","plane"]`.
+    - `radius_mm:8` → only the boss edges match (r15 edges skipped).
+    - `on_body:"bossB_body"` → only bossB edges (centers x=-50).
+    - `center_mm:[50,0,10], center_tol_mm:2` → exactly one edge: bossA top.
+    - `adjacent_surface_types:["plane"]` → 0 matches → INVALID_ARGUMENT
+      (rim edges are cylinder+plane; both faces must be in the set).
+    - Negatives: kind:"planar" → "edges.kind must be 'circular'";
+      edges:"bogus" → "array of edge ids or a selector object";
+      radius<=0 / missing edges → INVALID_ARGUMENT.
+    - Re-filleting an already-filleted edge can return API_ERROR/E_FAIL from AddSimple
+      due to a geometry conflict, rather than a selector miss.
+    - Circle-profile regression: draw a circle, then `close_sketch`; expect a solid
+      profile and a successful extrusion. When UpdateProfiles leaves no profiles,
+      `close_sketch` uses `Profiles.AddForSolid()` to create one.
 
-    **Recorded 2026-09-16** — branch `feat/f4-typed-tools`.
-
+29. **inventor_probe_brep**:
+    Create a plate 60×40×8 with a through hole d=10 at (30,20):
+    - Full survey → exactly 2 ports: top mouth (normal [0,0,1], center z=8) and
+      bottom mouth (normal [0,0,-1], center z=0). Check outward normal orientation
+      rather than relying on face indices.
+      Both report port_diameter_mm=10, inner_loop circle r=5 at (30,20),
+      planar_faces_scanned=6, bodies_scanned=1.
+    - min/max_diameter_mm [9,11] → 2 ports; min_diameter_mm=50 → 0 ports.
+    - body:"plate_body" scopes the scan; body:"body:9" → INVALID_ARGUMENT
+      "body index 9 out of range (1..1)".
+    - min>max → INVALID_ARGUMENT "min_diameter_mm must be <= max_diameter_mm".

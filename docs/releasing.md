@@ -4,10 +4,6 @@ Ordered pipeline for cutting a release. Each step lists its gate; do not reorder
 the MCP registry validates that the NuGet package exists, and the setup ZIP embeds
 the plugin builds.
 
-Current pending release: **v0.2.0** — version fields already pinned
-(`server.json`, `src/server/Bimwright.Ipt.Server.csproj`), CHANGELOG section cut,
-`mcps/ipt-mcp/tools/` schemas regenerated (73 tools, `--toolsets all --enable-send-code`).
-
 ## Pipeline
 
 1. **Tests + builds** — all green before anything ships:
@@ -48,10 +44,11 @@ Current pending release: **v0.2.0** — version fields already pinned
 
 4. **Regen registry tool schemas** (after any tool-surface change):
    ```bash
-   python scripts/regen-mcps-schemas.py
+   python scripts/regen-mcps-schemas.py --out build/tool-schemas
    ```
-   Writes `<workspace>/mcps/ipt-mcp/tools/*.json` (73 files at v0.2.0). Local state,
-   not git — consumed by registry publishing.
+   Use a dedicated generated-output directory: the script replaces schemas and
+   removes stale tool JSON files there. Review the generated schemas against the
+   intended public tool surface before publishing.
 
 5. **GitHub release** — tag `v<ver>` on the release commit, attach the ZIP from
    step 3:
@@ -61,22 +58,20 @@ Current pending release: **v0.2.0** — version fields already pinned
    ```
 
 6. **MCP registry publish** — requires the NuGet package from step 2 to be live
-   (the registry validates it). Uses the `mcp-publisher` CLI (binary kept at
-   `.mcp-publisher/mcp-publisher.exe`, gitignored — same layout as rvt-mcp;
-   a copy exists at the workspace root `.mcp-publisher/`):
+   (the registry validates it). Install the `mcp-publisher` CLI and run it from
+   the repository root:
    ```powershell
-   .mcp-publisher/mcp-publisher.exe login github   # device flow, first time / on 401
-   .mcp-publisher/mcp-publisher.exe publish        # from repo root; reads server.json
+   mcp-publisher login github   # device flow, first time / on 401
+   mcp-publisher publish        # reads server.json
    ```
-   Registry name: `io.github.bimwright/ipt-mcp`. First publish for this project —
-   `Bimwright.Ipt.Server` has no NuGet versions yet, so step 2 is a hard
-   prerequisite, not just an ordering nicety.
+   Registry name: `io.github.bimwright/ipt-mcp`. The matching NuGet version must
+   be available before publishing the registry entry.
 
 ## Gates / known gaps
 
-- **NuGet key**: not stored in the repo. Last publish in the family (rvt-mcp)
-  the key was pasted into chat and told to be revoked — confirm with the owner
-  whether that happened; get a fresh key at release time.
+- **Credentials**: use a securely supplied NuGet API key at release time. Never
+  commit credentials or paste them into documentation, chat, or logs; revoke
+  and replace any exposed credential.
 - **NuGet is registry plumbing, not the client install.** README directs users
   to the GitHub setup ZIP; `dotnet tool install -g Bimwright.Ipt.Server` is not
   the supported client path. The nupkg exists so the registry can point `dnx`

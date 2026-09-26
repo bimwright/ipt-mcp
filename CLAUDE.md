@@ -70,6 +70,15 @@ tests/Bimwright.Ipt.Tests/     # net8.0, xUnit. Server-only — no Inventor need
 
 The **server** compiles only `shared/Contracts/*` + `shared/Security/*` (and ToolBaker) explicitly, so it builds with no Inventor SDK present. Each **add-in** uses `<Compile Include="..\shared\**\*.cs" />` to pull in everything, including the API-touching `Infrastructure`/`Plugin`/`Handlers`.
 
+## Documentation Boundary
+
+This is a public repository. Keep private design discussions, implementation plans,
+handoffs, review transcripts, raw session logs and diagnostic captures in the
+maintainer's separate private documentation checkout, never inside this repository
+or its worktrees. Do not create junctions to private notes in the public tree.
+Public docs describe the product, contributor procedures and reproducible tests.
+Run `pwsh -NoProfile -File scripts/check-public-tree.ps1` before publishing changes.
+
 ## Build & Test
 
 ```bash
@@ -137,7 +146,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - `ServerInstructions.Text` is keyword-dense (part/sketch/extrude/parameter/iproperty/export) so MCP Tool Search can discover the surface.
 
 ### Read-only & opt-in gates
-- `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in). Its banned-API source scan is best-effort and file writes made through the Inventor API (`SaveAs`/`SaveCopyAs`/translators) bypass `ExportPathPolicy` by design (spec F2-d) — the two-sided opt-in is the trust boundary.
+- `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in). Its banned-API source scan is best-effort and file writes made through the Inventor API (`SaveAs`/`SaveCopyAs`/translators) bypass `ExportPathPolicy` by design — the two-sided opt-in is the trust boundary.
 - `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write`) but keeps `meta` + `query` + `assembly_query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 

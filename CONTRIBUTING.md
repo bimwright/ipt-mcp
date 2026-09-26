@@ -93,6 +93,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the conceptual model. Quick reference
 
 ## Commit + PR
 
+- This repository is public. Keep private design notes, plans, handoffs, review
+  transcripts and raw diagnostic evidence outside the checkout, including worktrees.
+  Only product documentation and reproducible contributor instructions belong here.
+- Run `pwsh -NoProfile -File scripts/check-public-tree.ps1` before publishing.
+  New public document paths require an explicit review of the script's allowlist.
 - One logical change per commit. Commit messages start with a short scope prefix
   (e.g. `handlers:`, `transport:`, `docs:`).
 - Open a PR against `main`. CI (server-only build + tests) must be green.
