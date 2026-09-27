@@ -28,7 +28,8 @@ public sealed class ListIPropertySetsHandler : HandlerBase, IInventorCommand
         var app = (Application)ctx.Application!;
 
         global::Inventor.Document? doc;
-        try { doc = app.ActiveDocument; } catch { doc = null; }
+        doc = ActiveDocumentSupport.ResolveTarget(ctx, p, out var targetFailure);
+        if (targetFailure != null) return targetFailure;
         if (doc is null)
             return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
 

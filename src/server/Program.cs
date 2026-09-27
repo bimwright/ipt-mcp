@@ -23,6 +23,7 @@ builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 builder.Services.AddSingleton(cfg);
 builder.Services.AddSingleton<ServerState>();
 builder.Services.AddSingleton<PluginClient>();
+builder.Services.AddSingleton(_ => new CodeModuleStore());
 
 var mcp = builder.Services
     .AddMcpServer(o =>
@@ -37,7 +38,14 @@ var mcp = builder.Services
             WebsiteUrl = "https://github.com/bimwright/ipt-mcp"
         };
     })
-    .WithStdioServerTransport();
+    .WithStdioServerTransport()
+    .WithRequestFilters(f => f.AddCallToolFilter(next => async (ctx, ct) =>
+    {
+        // Journal v3: stamp the calling client once it is known (initialize has completed by now).
+        if (ServerLogger.ClientName is null && ctx.Server.ClientInfo is { } ci)
+            ServerLogger.SetClient(ci.Name, ci.Version);
+        return await next(ctx, ct);
+    }));
 mcp = Program.RegisterToolsets(mcp, Program.ResolveToolTypesForRegistration(cfg));
 
 await builder.Build().RunAsync();

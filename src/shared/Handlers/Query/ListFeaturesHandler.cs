@@ -22,7 +22,7 @@ public sealed class ListFeaturesHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "list_features", out var app, out var part, out var failure))
+        if (!ActiveDocumentSupport.TryGetPart(ctx, p, "list_features", out var app, out var part, out var failure))
             return failure!;
 
         int maxItems = (int?)p["max_items"] ?? 200;

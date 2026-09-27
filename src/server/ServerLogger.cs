@@ -31,6 +31,21 @@ internal static class ServerLogger
     private static readonly string LogPath;
     private static readonly object Gate = new object();
 
+    // Journal v3: the MCP client that drives this server (from `initialize.clientInfo`), so journal
+    // analysis can tell channels apart without the "<=2 calls per session" heuristic. Set once by
+    // the call-tool filter in Program; null until the first tool call.
+    private static string? _clientName;
+    private static string? _clientVersion;
+
+    internal static string? ClientName => _clientName;
+    internal static string? ClientVersion => _clientVersion;
+
+    internal static void SetClient(string? name, string? version)
+    {
+        _clientName = string.IsNullOrWhiteSpace(name) ? null : name;
+        _clientVersion = string.IsNullOrWhiteSpace(version) ? null : version;
+    }
+
     static ServerLogger()
     {
         LogPath = ResolveLogPath(Environment.GetEnvironmentVariable(LogPathEnvVar));
@@ -55,6 +70,8 @@ internal static class ServerLogger
                 request_id = requestId,
                 tool = toolName,
                 phase = "start",
+                client_name = _clientName,
+                client_version = _clientVersion,
                 @params = MaskParams(parameters)
             });
         }
@@ -178,6 +195,8 @@ internal static class ServerLogger
             ["data_ok"] = dataOk,
             ["data_error"] = NullableString(SanitizeOrNull(dataError)),
             ["stdout_bytes"] = stdoutBytes,
+            ["client_name"] = NullableString(_clientName),
+            ["client_version"] = NullableString(_clientVersion),
         };
     }
 

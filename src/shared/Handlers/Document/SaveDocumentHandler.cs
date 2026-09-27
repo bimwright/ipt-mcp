@@ -9,7 +9,8 @@ using Inventor;
 namespace Bimwright.Ipt.Shared.Handlers.Document;
 
 /// <summary>
-/// <c>save_document</c> — saves the active document. With a <c>path</c> it performs a Save-As to that
+/// <c>save_document</c> — saves the target document (optional <c>document</c>, else the active one)
+/// under <see cref="SilentOperationScope"/> (<c>silent</c>, default true). With a <c>path</c> it performs a Save-As to that
 /// location; without one it saves in place (failing with <c>INVALID_ARGUMENT</c> if the document was
 /// never saved and therefore has no path).
 /// </summary>
@@ -23,12 +24,14 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         var app = (Application)ctx.Application!;
 
         global::Inventor.Document? doc;
-        try { doc = app.ActiveDocument; } catch { doc = null; }
+        doc = ActiveDocumentSupport.ResolveTarget(ctx, p, out var targetFailure);
+        if (targetFailure != null) return targetFailure;
         if (doc is null)
             return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
 
         string path = (p["path"]?.Type == JTokenType.String) ? (string)p["path"]! : "";
 
+        var silent = SilentOperationScope.Enter(app, p);
         try
         {
             if (!string.IsNullOrWhiteSpace(path))
@@ -49,6 +52,10 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         {
             return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to save document: " + ex.Message);
         }
+        finally
+        {
+            silent.Dispose();
+        }
 
         string? saved = null;
         try { saved = doc.FullFileName; } catch { /* ignore */ }
@@ -58,6 +65,7 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
             ["title"] = doc.DisplayName,
             ["path"] = string.IsNullOrEmpty(saved) ? null : saved,
             ["saved"] = true,
+            ["silent"] = silent.Applied,
         });
     }
 }

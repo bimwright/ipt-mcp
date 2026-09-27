@@ -32,19 +32,19 @@ public sealed class QueryTools
         => Call("list_open_documents", new JObject(), ct);
 
     [McpServerTool(Name = "inventor_get_document_info"),
-     Description("Get the active Inventor document's title, full path, and document type.")]
-    public Task<string> GetDocumentInfo(CancellationToken ct = default)
-        => Call("get_document_info", new JObject(), ct);
+     Description("Get a document's title, full path, document type and dirty flag — the active document, or document (full path or name of an open/loaded document; never opened automatically). references=true adds the direct file references [{path, missing}] (Document.File.ReferencedFileDescriptors).")]
+    public Task<string> GetDocumentInfo(string? document = null, bool references = false, CancellationToken ct = default)
+        => Call("get_document_info", new JObject { ["document"] = document, ["references"] = references }, ct);
 
     [McpServerTool(Name = "inventor_list_bodies"),
-     Description("List the active part's solid bodies: {id:'body:N', name, volume_mm3, bbox_mm{min,max}, face_count, created_by (producing feature name), visible} plus total/truncated. Use ids/names with extrude affected_bodies. max_items caps the list (default 200). Read-only.")]
-    public Task<string> ListBodies(int max_items = 200, CancellationToken ct = default)
-        => Call("list_bodies", new JObject { ["max_items"] = max_items }, ct);
+     Description("List the active part's solid bodies: {id:'body:N', name, volume_mm3, bbox_mm{min,max}, face_count, created_by (producing feature name), visible} plus total/truncated. Use ids/names with extrude affected_bodies. max_items caps the list (default 200). Read-only. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> ListBodies(int max_items = 200, string? document = null, CancellationToken ct = default)
+        => Call("list_bodies", new JObject { ["max_items"] = max_items, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_list_features"),
-     Description("List the active part's features in tree order: {name, type, health, suppressed, body_names[]} plus total/truncated. health is the Inventor health status (UpToDate, OutOfDate, InError, …) — check it before assuming a feature worked; include_health=false omits it. max_items caps the list (default 200). Read-only.")]
-    public Task<string> ListFeatures(int max_items = 200, bool include_health = true, CancellationToken ct = default)
-        => Call("list_features", new JObject { ["max_items"] = max_items, ["include_health"] = include_health }, ct);
+     Description("List the active part's features in tree order: {name, type, health, suppressed, body_names[]} plus total/truncated. health is the Inventor health status (UpToDate, OutOfDate, InError, …) — check it before assuming a feature worked; include_health=false omits it. max_items caps the list (default 200). Read-only. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> ListFeatures(int max_items = 200, bool include_health = true, string? document = null, CancellationToken ct = default)
+        => Call("list_features", new JObject { ["max_items"] = max_items, ["include_health"] = include_health, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_probe_brep"),
      Description("Survey the active part's B-rep for port mouths: planar faces carrying an inner-loop circular edge (hole/pipe openings). Reports per face: body, face_index, normal (unit vector corrected for IsParamReversed), center_mm, port_diameter_mm (2 × smallest inner-loop radius), and every full-circle edge on the face (radius_mm, center_mm, inner_loop) so concentric flange rims are visible — a face with several openings is one port; check circles[] for the rest. Full circles only (arcs/slots excluded); a cylindrical boss on a face looks identical and is also reported. body scopes to one body ('1'/'body:N'/name); min/max_diameter_mm filter; max_items caps (default 200), truncated reports overflow. Read-only.")]

@@ -87,13 +87,16 @@ public sealed class PluginClient
 
     private const int TransportGraceMs = 5000;
 
-    public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct, int? timeoutMs = null)
+    /// <param name="logParams">What the journal records instead of <paramref name="parameters"/> — send_code
+    /// passes its params with module bodies replaced by name+hash, so helper code is not re-logged on every call.</param>
+    public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct, int? timeoutMs = null,
+        JObject? logParams = null)
     {
         // LogStart before target resolution so NO_TARGET calls still leave a journal entry (spec F1-R1).
         var requestId = Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
         var @params = parameters as JObject ?? JObject.FromObject(parameters);
-        ServerLogger.LogStart(requestId, command, @params);
+        ServerLogger.LogStart(requestId, command, logParams ?? @params);
         var ok = false;
         string? err = null;
         string? errCode = null;

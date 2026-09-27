@@ -9,7 +9,8 @@ using Inventor;
 namespace Bimwright.Ipt.Shared.Handlers.Document;
 
 /// <summary>
-/// <c>close_document</c> — closes the active document. <c>save=true</c> saves before closing;
+/// <c>close_document</c> — closes the target document (optional <c>document</c>, else the active one)
+/// under <see cref="SilentOperationScope"/>. <c>save=true</c> saves before closing;
 /// <c>save=false</c> (default) discards unsaved changes (Close with SkipSave).
 /// </summary>
 public sealed class CloseDocumentHandler : HandlerBase, IInventorCommand
@@ -22,13 +23,15 @@ public sealed class CloseDocumentHandler : HandlerBase, IInventorCommand
         var app = (Application)ctx.Application!;
 
         global::Inventor.Document? doc;
-        try { doc = app.ActiveDocument; } catch { doc = null; }
+        doc = ActiveDocumentSupport.ResolveTarget(ctx, p, out var targetFailure);
+        if (targetFailure != null) return targetFailure;
         if (doc is null)
             return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
 
         bool save = p["save"]?.Type == JTokenType.Boolean && (bool)p["save"]!;
         string title = doc.DisplayName;
 
+        var silent = SilentOperationScope.Enter(app, p);
         try
         {
             if (save)
@@ -50,8 +53,12 @@ public sealed class CloseDocumentHandler : HandlerBase, IInventorCommand
         {
             return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to close document: " + ex.Message);
         }
+        finally
+        {
+            silent.Dispose();
+        }
 
-        return Ok(ctx, new JObject { ["title"] = title, ["closed"] = true, ["saved"] = save });
+        return Ok(ctx, new JObject { ["title"] = title, ["closed"] = true, ["saved"] = save, ["silent"] = silent.Applied });
     }
 }
 #endif

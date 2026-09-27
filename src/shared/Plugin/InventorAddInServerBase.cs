@@ -53,6 +53,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     {
         _app = site.Application;                    // stable API entry point (spec)
         _sta = new InventorStaDispatcher();         // created on the STA thread
+        try { ModalDialogProbe.MainWindow = new IntPtr(_app.MainFrameHWND); } catch { }   // S1.1: STA-free dialog probe
 
         _year = InventorVersion.Year;
         var enableSendCode = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE");
@@ -231,13 +232,15 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
                     $"send_code exceeded {env.TimeoutMs} ms. The script MAY STILL BE RUNNING on Inventor's STA thread " +
                     "and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; " +
-                    "do not resend the same script.", meta));
+                    "do not resend the same script." + ModalDialogProbe.TimeoutSuffix(), meta));
                 RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
                     $"Script still running after {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
             else
             {
-                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT, "STA dispatch timed out", meta));
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
+                    $"{env.Command} did not finish within {env.TimeoutMs} ms; it may still complete on Inventor's STA thread." +
+                    ModalDialogProbe.TimeoutSuffix(), meta));
                 RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
                     $"Inventor did not answer within {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
@@ -467,6 +470,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             // as HealthHandler) so this reports *other* work backed up on the STA thread.
             ["pending_commands"] = Math.Max(0, (_sta?.Stats.PendingCommands ?? 0) - 1),
             ["answered_without_sta"] = true,
+            ["modal_dialog"] = ModalDialogProbe.Probe(),
         };
 
     /// <summary>Reads the active document's display name and full path (best effort) off the STA thread.</summary>

@@ -23,7 +23,7 @@ public sealed class ListBodiesHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        if (!ActiveDocumentSupport.TryGetActivePart(ctx, "list_bodies", out var app, out var part, out var failure))
+        if (!ActiveDocumentSupport.TryGetPart(ctx, p, "list_bodies", out var app, out var part, out var failure))
             return failure!;
 
         int maxItems = (int?)p["max_items"] ?? 200;

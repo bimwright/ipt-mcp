@@ -10,7 +10,8 @@ using Inventor;
 namespace Bimwright.Ipt.Shared.Handlers.Document;
 
 /// <summary>
-/// <c>open_document</c> — opens an existing document from a full file path and makes it active.
+/// <c>open_document</c> — opens an existing document from a full file path and makes it active
+/// (<c>visible=false</c> loads it without a window). Runs under <see cref="SilentOperationScope"/>.
 /// </summary>
 public sealed class OpenDocumentHandler : HandlerBase, IInventorCommand
 {
@@ -27,14 +28,20 @@ public sealed class OpenDocumentHandler : HandlerBase, IInventorCommand
         if (!System.IO.File.Exists(path))
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "file does not exist: " + path);
 
+        var visible = !(p["visible"]?.Type == JTokenType.Boolean && !(bool)p["visible"]!);
         global::Inventor.Document doc;
+        var silent = SilentOperationScope.Enter(app, p);
         try
         {
-            doc = app.Documents.Open(path, true);
+            doc = app.Documents.Open(path, visible);
         }
         catch (Exception ex)
         {
             return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to open document: " + ex.Message);
+        }
+        finally
+        {
+            silent.Dispose();
         }
 
         string? fullPath = null;
@@ -45,6 +52,8 @@ public sealed class OpenDocumentHandler : HandlerBase, IInventorCommand
             ["title"] = doc.DisplayName,
             ["path"] = string.IsNullOrEmpty(fullPath) ? path : fullPath,
             ["document_type"] = doc.DocumentType.ToString(),
+            ["visible"] = visible,
+            ["silent"] = silent.Applied,
         });
     }
 }

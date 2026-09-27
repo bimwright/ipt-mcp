@@ -38,6 +38,7 @@ public sealed class HealthHandler : IInventorCommand
             ["document_type"] = doc != null ? doc.DocumentType.ToString() : null,
             ["sta_busy"] = pendingOthers > 0,
             ["pending_commands"] = pendingOthers,
+            ["modal_dialog"] = Bimwright.Ipt.Shared.Plugin.ModalDialogProbe.Probe(),
         };
         return InventorCommandResult.Success(Guid.Empty, data, meta);
     }

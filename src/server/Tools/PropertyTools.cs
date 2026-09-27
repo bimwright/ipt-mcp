@@ -19,24 +19,24 @@ public sealed class PropertyTools
     public PropertyTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_get_iproperty"),
-     Description("Get an iProperty value. set_name is the property set (e.g. \"Inventor Summary Information\", \"Design Tracking Properties\" — the \"Inventor \" prefix is optional); prop_name is the property (e.g. \"Title\", \"Author\", \"Part Number\"). Use inventor_list_iproperty_sets to discover set and property names.")]
-    public Task<string> GetIProperty(string setName, string propName, CancellationToken ct = default)
-        => Call("get_iproperty", new JObject { ["set_name"] = setName, ["prop_name"] = propName }, ct);
+     Description("Get an iProperty value. set_name is the property set (e.g. \"Inventor Summary Information\", \"Design Tracking Properties\" — the \"Inventor \" prefix is optional); prop_name is the property (e.g. \"Title\", \"Author\", \"Part Number\"). Use inventor_list_iproperty_sets to discover set and property names. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> GetIProperty(string setName, string propName, string? document = null, CancellationToken ct = default)
+        => Call("get_iproperty", new JObject { ["set_name"] = setName, ["prop_name"] = propName, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_set_iproperty"),
-     Description("Set an iProperty value. set_name is the property set (\"Inventor \" prefix optional, same as get_iproperty), prop_name the property, value the new value (string).")]
-    public Task<string> SetIProperty(string setName, string propName, string value, CancellationToken ct = default)
-        => Call("set_iproperty", new JObject { ["set_name"] = setName, ["prop_name"] = propName, ["value"] = value }, ct);
+     Description("Set an iProperty value. set_name is the property set (\"Inventor \" prefix optional, same as get_iproperty), prop_name the property, value the new value (string). Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> SetIProperty(string setName, string propName, string value, string? document = null, CancellationToken ct = default)
+        => Call("set_iproperty", new JObject { ["set_name"] = setName, ["prop_name"] = propName, ["value"] = value, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_list_iproperty_sets"),
-     Description("List the iProperty sets of the active document: each set's name, internal_name and property names. include_values (default false) also returns each property's current value as a string (truncated at 200 chars). max_items (default 200) caps the total properties emitted across all sets — truncated responses carry truncated:true and per-set properties_omitted counts. Read-only — use it to discover set_name/prop_name for get/set_iproperty.")]
-    public Task<string> ListIPropertySets(bool include_values = false, int max_items = 200, CancellationToken ct = default)
-        => Call("list_iproperty_sets", new JObject { ["include_values"] = include_values, ["max_items"] = max_items }, ct);
+     Description("List the iProperty sets of the active document: each set's name, internal_name and property names. include_values (default false) also returns each property's current value as a string (truncated at 200 chars). max_items (default 200) caps the total properties emitted across all sets — truncated responses carry truncated:true and per-set properties_omitted counts. Read-only — use it to discover set_name/prop_name for get/set_iproperty. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> ListIPropertySets(bool include_values = false, int max_items = 200, string? document = null, CancellationToken ct = default)
+        => Call("list_iproperty_sets", new JObject { ["include_values"] = include_values, ["max_items"] = max_items, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_get_mass_properties"),
-     Description("Get mass properties of the active part or assembly document: mass (g), volume (mm^3), surface area (mm^2), centre of mass (mm), and bounding box (mm).")]
-    public Task<string> GetMassProperties(CancellationToken ct = default)
-        => Call("get_mass_properties", new JObject(), ct);
+     Description("Get mass properties of the active part or assembly document: mass (g), volume (mm^3), surface area (mm^2), centre of mass (mm), and bounding box (mm). Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> GetMassProperties(string? document = null, CancellationToken ct = default)
+        => Call("get_mass_properties", new JObject { ["document"] = document }, ct);
 
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {

@@ -152,6 +152,33 @@ public sealed class ResponseSpillWriter
         catch { /* keep full results inline */ }
     }
 
+    /// <summary>
+    /// Same policy for a script's single <c>result</c> value (send_code): above the threshold the
+    /// JSON goes to a spill file and the response carries <c>result: null</c> plus
+    /// <c>result_truncated</c>/<c>result_file</c>/<c>result_preview</c>, instead of tripping
+    /// RESPONSE_TOO_LARGE after the script already ran. A failed spill keeps the result inline.
+    /// </summary>
+    public static void AttachResult(string commandName, Newtonsoft.Json.Linq.JObject data, Newtonsoft.Json.Linq.JToken? result,
+        ResponseSpillWriter? writer = null)
+    {
+        data["result"] = result ?? Newtonsoft.Json.Linq.JValue.CreateNull();
+        if (result is null) return;
+        // Size on the raw payload (what would travel inline); the masked form is what reaches disk.
+        var raw = result.ToString(Newtonsoft.Json.Formatting.None);
+        if (!ShouldSpill(raw)) return;
+        var serialized = SecretMasker.Mask(raw);
+        try
+        {
+            var file = (writer ?? new ResponseSpillWriter()).Write(commandName + "-result", ".json", serialized);
+            data["result"] = Newtonsoft.Json.Linq.JValue.CreateNull();
+            data["result_truncated"] = true;
+            data["result_file"] = file;
+            data["result_bytes"] = Encoding.UTF8.GetByteCount(raw);
+            data["result_preview"] = Utf8Prefix(serialized, InlineKeepBytes);
+        }
+        catch { /* keep full result inline */ }
+    }
+
     private static string SanitizeName(string commandName)
     {
         var chars = commandName

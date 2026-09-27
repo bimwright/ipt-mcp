@@ -1,6 +1,7 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
 using Inventor;
+using Bimwright.Ipt.Shared.Handlers;
 
 namespace Bimwright.Ipt.Shared.Handlers.Export;
 
@@ -64,7 +65,8 @@ internal static class ExportSupport
         // callers must never see exported:true for a file that does not exist.
         var dir = System.IO.Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-        translator.SaveCopyAs(source, context, options, medium);
+        using (SilentOperationScope.Enter(app, on: true))   // translators may prompt; never block the STA
+            translator.SaveCopyAs(source, context, options, medium);
         if (!System.IO.File.Exists(outputPath))
             throw new InvalidOperationException(
                 $"translator completed but produced no file at '{outputPath}' (silent export failure)");

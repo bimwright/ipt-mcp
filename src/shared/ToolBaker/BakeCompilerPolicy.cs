@@ -23,6 +23,12 @@ public sealed class BakePolicyResult
 /// *invoke or load* code (GetMethod/GetProperty/…, Invoke/DynamicInvoke/BeginInvoke,
 /// Activator, Assembly.Load, CreateDelegate) stays blocked.
 ///
+/// Pure path-string helpers are allowed in exactly one shape: a fully-qualified call
+/// <c>System.IO.Path.{GetFileName, GetFileNameWithoutExtension, GetExtension, GetDirectoryName,
+/// Combine, ChangeExtension}(…)</c>. They only transform strings; anything that touches the file
+/// system (<c>File.</c>, <c>Directory.</c>, <c>GetTempFileName</c>, <c>GetFullPath</c>, …),
+/// <c>using System.IO;</c> and aliases stay blocked.
+///
 /// Best-effort gate, not a sandbox: Inventor-API file writes
 /// (SaveAs/SaveCopyAs/translators) are intentionally not restricted (spec F2-d).
 /// </summary>
@@ -61,6 +67,30 @@ public static class BakeCompilerPolicy
         ("Bimwright.Ipt.Shared.ToolBaker", @"\bBimwright\s*\.\s*Ipt\s*\.\s*Shared\s*\.\s*ToolBaker\b"),
     };
 
+    // Declared before Hints: static initializers run in textual order.
+    internal static readonly string[] AllowedPathMethods =
+    {
+        "GetFileNameWithoutExtension", "GetFileName", "GetExtension", "GetDirectoryName", "Combine", "ChangeExtension",
+    };
+
+    // Extra guidance appended to the rejection for tokens agents commonly hit by accident.
+    private static readonly System.Collections.Generic.Dictionary<string, string> Hints = new()
+    {
+        ["File."] = " (System.IO file access is blocked. If you meant Inventor's Document.File, read referenced "
+                  + "file paths with inventor_get_document_info(references=true) instead.)",
+        // Spelled with a bracket so the long method name survives SecretMasker on the way out.
+        ["System.IO"] = " (only fully-qualified System.IO.Path.GetFileName[WithoutExtension] / GetExtension / "
+                      + "GetDirectoryName / Combine / ChangeExtension(…) string helpers are allowed; no `using System.IO;` or aliases.)",
+    };
+
+    // Fully-qualified pure Path call → neutral token before the forbidden scan. The look-behind
+    // stops `Foo.System.IO.Path…` from matching; the trailing `(` requires an actual call (a
+    // method group or `using static` stays blocked).
+    private static readonly Regex AllowedPathCall = new(
+        @"(?<![\w.])(?:global\s*::\s*)?System\s*\.\s*IO\s*\.\s*Path\s*\.\s*(?:"
+        + string.Join("|", AllowedPathMethods) + @")\s*\(",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly Regex[] ForbiddenPatterns = BuildPatterns();
 
     private static Regex[] BuildPatterns()
@@ -77,7 +107,7 @@ public static class BakeCompilerPolicy
     /// </summary>
     public static BakePolicyResult ValidateSource(string source, string contextLabel = "Baked tool")
     {
-        var stripped = StripLiteralsAndComments(source ?? string.Empty);
+        var stripped = AllowedPathCall.Replace(StripLiteralsAndComments(source ?? string.Empty), "__AllowedPathCall(");
         for (var i = 0; i < ForbiddenPatterns.Length; i++)
         {
             if (ForbiddenPatterns[i].IsMatch(stripped))
@@ -86,6 +116,7 @@ public static class BakeCompilerPolicy
                 {
                     Ok = false,
                     Error = contextLabel + " source uses forbidden token: " + Forbidden[i].Token
+                            + (Hints.TryGetValue(Forbidden[i].Token, out var hint) ? hint : "")
                 };
             }
         }

@@ -18,24 +18,24 @@ public sealed class ParameterTools
     public ParameterTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_list_parameters"),
-     Description("List the active part document's parameters (model + user): name, expression, evaluated value, unit, and kind.")]
-    public Task<string> ListParameters(CancellationToken ct = default)
-        => Call("list_parameters", new JObject(), ct);
+     Description("List the active part document's parameters (model + user): name, expression, evaluated value, unit, and kind. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> ListParameters(string? document = null, CancellationToken ct = default)
+        => Call("list_parameters", new JObject { ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_get_parameter"),
-     Description("Get a single parameter of the active part document by name: expression, evaluated value, and unit.")]
-    public Task<string> GetParameter(string name, CancellationToken ct = default)
-        => Call("get_parameter", new JObject { ["name"] = name }, ct);
+     Description("Get a single parameter of the active part document by name: expression, evaluated value, and unit. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> GetParameter(string name, string? document = null, CancellationToken ct = default)
+        => Call("get_parameter", new JObject { ["name"] = name, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_set_parameter"),
-     Description("Set an existing parameter's expression/value by name (e.g. value=\"25 mm\" or a numeric expression). Then updates the document.")]
-    public Task<string> SetParameter(string name, string value, CancellationToken ct = default)
-        => Call("set_parameter", new JObject { ["name"] = name, ["value"] = value }, ct);
+     Description("Set an existing parameter's expression/value by name (e.g. value=\"25 mm\" or a numeric expression). Then updates the document. Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> SetParameter(string name, string value, string? document = null, CancellationToken ct = default)
+        => Call("set_parameter", new JObject { ["name"] = name, ["value"] = value, ["document"] = document }, ct);
 
     [McpServerTool(Name = "inventor_create_parameter"),
-     Description("Create a new user parameter on the active part document: name, expression, and unit (e.g. unit=mm, expression=\"10\").")]
-    public Task<string> CreateParameter(string name, string expression, string unit, CancellationToken ct = default)
-        => Call("create_parameter", new JObject { ["name"] = name, ["expression"] = expression, ["unit"] = unit }, ct);
+     Description("Create a new user parameter on the active part document: name, expression, and unit (e.g. unit=mm, expression=\"10\"). Optional document: full path or name of a document already open or loaded in Inventor (e.g. a part referenced by the open assembly) — never opened or activated; omit for the active document.")]
+    public Task<string> CreateParameter(string name, string expression, string unit, string? document = null, CancellationToken ct = default)
+        => Call("create_parameter", new JObject { ["name"] = name, ["expression"] = expression, ["unit"] = unit, ["document"] = document }, ct);
 
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
