@@ -26,11 +26,22 @@ public sealed class ListOpenDocumentsHandler : HandlerBase, IInventorCommand
         string? activeName = null;
         try { activeName = app.ActiveDocument?.DisplayName; } catch { /* none */ }
 
+        var filter = (string?)p["filter"];
+        var dirtyOnly = p["dirty_only"]?.Type == JTokenType.Boolean && (bool)p["dirty_only"]!;
         var docs = new JArray();
         foreach (global::Inventor.Document doc in app.Documents)
         {
             string? path = null;
             try { path = doc.FullFileName; } catch { /* unsaved */ }
+            if (!string.IsNullOrEmpty(filter)
+                && (path ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0
+                && (doc.DisplayName ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+            bool dirty = false;
+            try { dirty = doc.Dirty; } catch { }
+            if (dirtyOnly && !dirty) continue;
+            bool visible = false;
+            try { visible = doc.Views.Count > 0; } catch { }
 
             bool isActive = (!string.IsNullOrEmpty(path) && path == activePath)
                             || (string.IsNullOrEmpty(path) && doc.DisplayName == activeName && activePath == null);
@@ -41,6 +52,8 @@ public sealed class ListOpenDocumentsHandler : HandlerBase, IInventorCommand
                 ["path"] = string.IsNullOrEmpty(path) ? null : path,
                 ["document_type"] = doc.DocumentType.ToString(),
                 ["is_active"] = isActive,
+                ["dirty"] = dirty,
+                ["visible"] = visible,
             });
         }
 

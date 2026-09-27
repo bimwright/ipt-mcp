@@ -62,23 +62,38 @@ public sealed class SetViewStateHandler : HandlerBase, IInventorCommand
                 var create = p["design_view_create"]?.Type == JTokenType.Boolean && (bool)p["design_view_create"]!;
                 var reps = Representations(doc);
                 if (reps is null) return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE, "design views need a part or assembly document");
-                DesignViewRepresentation? rep = null;
+                var matches = new List<DesignViewRepresentation>();
                 var names = new List<string>();
                 foreach (DesignViewRepresentation r in reps)
                 {
-                    names.Add(r.Name);
-                    if (string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) rep = r;
+                    if (!names.Contains(r.Name)) names.Add(r.Name);
+                    if (string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) matches.Add(r);
                 }
-                if (rep is null)
+                string? active = null;
+                try { active = ActiveRepresentation(doc)?.Name; } catch { }
+                if (matches.Count == 0)
                 {
                     if (!create)
                         return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT,
                             $"design view '{name}' not found. Available: {string.Join(", ", names)}. Pass design_view_create=true to create it.");
-                    rep = reps.Add(name);
+                    var created = reps.Add(name);
+                    created.Activate();
                     applied["design_view_created"] = true;
                 }
-                rep.Activate();
-                applied["design_view"] = rep.Name;
+                else if (!string.Equals(active, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Several representations can share a name (a locked master "[Primary]" next to a
+                    // transient one); try each until one activates.
+                    Exception? last = null;
+                    var done = false;
+                    foreach (var m in matches)
+                    {
+                        try { m.Activate(); done = true; break; }
+                        catch (Exception ex) { last = ex; }
+                    }
+                    if (!done) throw last ?? new InvalidOperationException("design view could not be activated");
+                }
+                applied["design_view"] = name;
             }
 
             if (p["object_visibility"] is { Type: not JTokenType.Null } ovt)
@@ -134,6 +149,13 @@ public sealed class SetViewStateHandler : HandlerBase, IInventorCommand
     {
         AssemblyDocument a => a.ComponentDefinition.RepresentationsManager.DesignViewRepresentations,
         PartDocument pd => pd.ComponentDefinition.RepresentationsManager.DesignViewRepresentations,
+        _ => null,
+    };
+
+    private static DesignViewRepresentation? ActiveRepresentation(global::Inventor.Document doc) => doc switch
+    {
+        AssemblyDocument a => a.ComponentDefinition.RepresentationsManager.ActiveDesignViewRepresentation,
+        PartDocument pd => pd.ComponentDefinition.RepresentationsManager.ActiveDesignViewRepresentation,
         _ => null,
     };
 

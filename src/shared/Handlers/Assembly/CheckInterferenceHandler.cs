@@ -87,28 +87,53 @@ public sealed class CheckInterferenceHandler : HandlerBase, IInventorCommand
             if (setA.Count == 0 || (setB != null && setB.Count == 0) || (setB == null && setA.Count < 2))
                 return Ok(context, Result(new Dictionary<(string, string), double>(), 0, 0, maxPairs, candidatesA, candidatesB, setA.Count, setB?.Count));
 
-            var collA = app.TransientObjects.CreateObjectCollection();
-            foreach (var o in setA) collA.Add(o);
+            // Inventor rejects A×B when the two sets share an occurrence (E_INVALIDARG). Overlapping
+            // sets are analysed as one union and the pairs filtered back to one-side-in-A, other-in-B.
+            HashSet<string>? pathsA = null, pathsB = null;
             InterferenceResults results;
             if (setB != null)
             {
-                var collB = app.TransientObjects.CreateObjectCollection();
-                foreach (var o in setB) collB.Add(o);
-                results = def.AnalyzeInterference(collA, collB);
+                pathsA = new HashSet<string>(setA.Select(o => PathOf(o)), StringComparer.OrdinalIgnoreCase);
+                pathsB = new HashSet<string>(setB.Select(o => PathOf(o)), StringComparer.OrdinalIgnoreCase);
+                if (pathsA.Overlaps(pathsB))
+                {
+                    var union = app.TransientObjects.CreateObjectCollection();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var o in setA.Concat(setB)) if (seen.Add(PathOf(o))) union.Add(o);
+                    results = def.AnalyzeInterference(union);
+                }
+                else
+                {
+                    var collA = app.TransientObjects.CreateObjectCollection();
+                    foreach (var o in setA) collA.Add(o);
+                    var collB = app.TransientObjects.CreateObjectCollection();
+                    foreach (var o in setB) collB.Add(o);
+                    results = def.AnalyzeInterference(collA, collB);
+                    pathsA = pathsB = null;   // disjoint: every result is already A×B
+                }
             }
             else
             {
+                var collA = app.TransientObjects.CreateObjectCollection();
+                foreach (var o in setA) collA.Add(o);
                 results = def.AnalyzeInterference(collA);
             }
 
             int rawBodies = results.Count;
+            int total = rawBodies;
             var aggregated = new Dictionary<(string, string), double>();
             double totalVolCm3 = 0;
-            for (int i = 1; i <= rawBodies; i++)
+            for (int i = 1; i <= total; i++)
             {
                 InterferenceResult res = results[i];
                 string name1 = PathOf(res.OccurrenceOne);
                 string name2 = PathOf(res.OccurrenceTwo);
+                if (pathsA != null && pathsB != null
+                    && !((pathsA.Contains(name1) && pathsB.Contains(name2)) || (pathsA.Contains(name2) && pathsB.Contains(name1))))
+                {
+                    rawBodies--;
+                    continue;
+                }
                 double volCm3 = res.Volume;
                 totalVolCm3 += volCm3;
 

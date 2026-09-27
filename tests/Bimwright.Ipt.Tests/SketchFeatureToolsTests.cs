@@ -9,7 +9,7 @@ namespace Bimwright.Ipt.Tests;
 
 /// <summary>
 /// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 10 sketch
-/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 15 feature tools, that every one
+/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 16 feature tools, that every one
 /// is a write tool (so all are dropped under <c>--read-only</c>), and that they register under the
 /// <c>sketch</c>/<c>feature</c> toolsets. Handler bodies are type-checked by the inv25 build, not here.
 /// </summary>
@@ -46,6 +46,7 @@ public sealed class SketchFeatureToolsTests
         "inventor_hole",
         "inventor_circular_pattern",
         "inventor_rectangular_pattern",
+        "inventor_create_part",
     };
 
     private static string[] ToolNamesOf(Type toolType)
@@ -73,7 +74,7 @@ public sealed class SketchFeatureToolsTests
     public void FeatureTools_exposes_exactly_the_fifteen_expected_tools()
     {
         var names = ToolNamesOf(typeof(FeatureTools));
-        Assert.Equal(15, names.Length);
+        Assert.Equal(16, names.Length);
         Assert.Equal(ExpectedFeatureTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 

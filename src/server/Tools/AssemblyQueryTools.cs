@@ -102,7 +102,7 @@ public sealed class AssemblyQueryTools
         => Call("list_constraints", new JObject(), ct);
 
     [McpServerTool(Name = "inventor_list_occurrences"),
-     Description("List an assembly's occurrences filtered by a selector — the typed replacement for scripts that walk occurrences, match names and read range boxes/transforms. fields picks columns (default name,path,depth,file,suppressed,visible,grounded,bbox_mm; also type, leaf, transform{origin_mm,x_axis,y_axis,z_axis}, material, appearance{name,source}, mass_g; or [\"all\"]). output=inline (auto-spills above 64 KiB) | file (rows written to a JSON file, path + 10-row preview returned). selector omitted = every occurrence (limit 1000). Read-only. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
+     Description("List an assembly's occurrences filtered by a selector — the typed replacement for scripts that walk occurrences, match names and read range boxes/transforms. fields picks columns (default name,path,depth,file,suppressed,visible,grounded,bbox_mm; also type, leaf, transform{origin_mm,x_axis,y_axis,z_axis}, material, appearance{name,source}, mass_g, volume_mm3; or [\"all\"]). output=inline (auto-spills above 64 KiB) | file (rows written to a JSON file, path + 10-row preview returned). selector omitted = every occurrence (limit 1000). Read-only. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
     public Task<string> ListOccurrences(System.Text.Json.JsonElement? selector = null, string[]? fields = null, string output = "inline",
         string? document = null, CancellationToken ct = default)
     {

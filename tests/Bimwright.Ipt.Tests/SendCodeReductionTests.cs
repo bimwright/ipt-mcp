@@ -279,6 +279,7 @@ public sealed class SendCodeReductionTests
     [InlineData("bolt", 3)]
     [InlineData("Part1", 4)]
     [InlineData("PLATE-10.ipt:2", 2)]
+    [InlineData("BOL", 3)]
     public void Document_matches_by_path_then_name(string query, int expected)
     {
         Assert.True(DocumentMatcher.TryMatch(query, Docs, out var i, out var error), error);
@@ -290,8 +291,8 @@ public sealed class SendCodeReductionTests
     {
         Assert.False(DocumentMatcher.TryMatch("PLATE-10", Docs, out _, out var error));
         Assert.Contains("ambiguous", error);
-        Assert.Contains(@"D:\p\parts\PLATE-10.ipt", error);
-        Assert.Contains(@"D:\p\old\PLATE-10.ipt", error);
+        Assert.Contains(@"parts\PLATE-10.ipt", error);
+        Assert.Contains(@"old\PLATE-10.ipt", error);
     }
 
     [Fact]

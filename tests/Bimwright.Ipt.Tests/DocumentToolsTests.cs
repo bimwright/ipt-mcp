@@ -33,6 +33,9 @@ public sealed class DocumentToolsTests
         "inventor_close_document",
         "inventor_set_units",
         "inventor_set_material",
+        "inventor_save_all",
+        "inventor_open_documents",
+        "inventor_close_documents",
     };
 
     private static string[] ToolNamesOf(Type t)

@@ -27,9 +27,9 @@ public sealed class QueryTools
         => Call("report_task_result", new JObject { ["task_id"] = task_id, ["outcome"] = outcome, ["summary"] = summary }, ct);
 
     [McpServerTool(Name = "inventor_list_open_documents"),
-     Description("List all open Inventor documents: title, full path, document type, and which one is active.")]
-    public Task<string> ListOpenDocuments(CancellationToken ct = default)
-        => Call("list_open_documents", new JObject(), ct);
+     Description("List the documents Inventor has in memory (open windows and documents loaded as assembly references): title, full path, document type, is_active, dirty (unsaved changes), visible (has a window). filter keeps documents whose path or title contains the text; dirty_only=true keeps only unsaved ones — e.g. before inventor_save_all.")]
+    public Task<string> ListOpenDocuments(string? filter = null, bool dirty_only = false, CancellationToken ct = default)
+        => Call("list_open_documents", new JObject { ["filter"] = filter, ["dirty_only"] = dirty_only }, ct);
 
     [McpServerTool(Name = "inventor_get_document_info"),
      Description("Get a document's title, full path, document type and dirty flag — the active document, or document (full path or name of an open/loaded document; never opened automatically). references=true adds the direct file references [{path, missing}] (Document.File.ReferencedFileDescriptors).")]

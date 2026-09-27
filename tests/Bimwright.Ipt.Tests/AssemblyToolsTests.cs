@@ -21,7 +21,9 @@ public sealed class AssemblyToolsTests
     public void AssemblyTools_exposes_exactly_the_three_write_tools()
     {
         var names = ToolNamesOf(typeof(AssemblyTools));
-        Assert.Equal(new[] { "inventor_add_constraint", "inventor_create_imate", "inventor_place_occurrence" },
+        Assert.Equal(new[] { "inventor_add_constraint", "inventor_create_imate", "inventor_delete_occurrences",
+                             "inventor_place_occurrence", "inventor_place_occurrences", "inventor_reset_appearance",
+                             "inventor_set_appearance", "inventor_set_occurrence_state" },
                      names.OrderBy(x => x).ToArray());
     }
 
@@ -31,7 +33,7 @@ public sealed class AssemblyToolsTests
         var names = ToolNamesOf(typeof(AssemblyQueryTools));
         Assert.Equal(new[] { "inventor_check_interference", "inventor_get_assembly_bom",
                              "inventor_list_constraints", "inventor_list_interfaces",
-                             "inventor_measure_min_distance" },
+                             "inventor_list_occurrences", "inventor_measure_min_distance" },
                      names.OrderBy(x => x).ToArray());
     }
 

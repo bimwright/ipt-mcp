@@ -9,11 +9,11 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Review-gate guard: locks the public tool count at exactly <b>74</b> MCP tools when
+/// Review-gate guard: locks the public tool count at exactly <b>88</b> MCP tools when
 /// every toolset is enabled (<c>--toolsets all --enable-send-code</c>) and pins the read-only subset.
-/// The 74 breaks down by toolset: meta 3 + query 7 (incl. report_task_result) +
-/// document 7 + parameters 4 + properties 4 + sketch 10 (incl. P3 draw_text) + feature 15 (incl. P2 loft/sweep + P3 work_point/bim_connector) + export 9 (incl. P2 derive_envelope) + code 1 +
-/// toolbaker 6 + assembly 3 + assembly_query 5 = 74. The read-only registration keeps only meta + query (QueryTools) +
+/// The 88 breaks down by toolset: meta 3 + query 7 (incl. report_task_result) +
+/// document 10 (incl. save_all/open_documents/close_documents) + parameters 4 + properties 4 + sketch 10 (incl. P3 draw_text) + feature 16 (incl. P2 loft/sweep + P3 work_point/bim_connector + create_part) + export 10 (incl. P2 derive_envelope + set_view_state) + code 4 (send_code + 3 module tools) +
+/// toolbaker 6 + assembly 8 + assembly_query 6 = 88. The read-only registration keeps only meta + query (QueryTools) +
 /// assembly_query (AssemblyQueryTools) + read-only ToolBaker, and drops every write/export/code/toolbaker_write type.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -39,7 +39,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_74_tools()
+    public void All_toolsets_with_send_code_register_exactly_88_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -47,11 +47,11 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(74, names.Length);
+        Assert.Equal(88, names.Length);
     }
 
     [Fact]
-    public void The_74_tools_match_the_frozen_surface()
+    public void The_88_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
@@ -64,6 +64,7 @@ public sealed class RegistrationCountTests
             "inventor_list_bodies", "inventor_list_features", "inventor_probe_brep",
             "inventor_new_part", "inventor_new_assembly", "inventor_open_document",
             "inventor_save_document", "inventor_close_document", "inventor_set_units", "inventor_set_material",
+            "inventor_save_all", "inventor_open_documents", "inventor_close_documents",
             // parameters (4)
             "inventor_list_parameters", "inventor_get_parameter", "inventor_set_parameter", "inventor_create_parameter",
             // properties (4)
@@ -77,26 +78,29 @@ public sealed class RegistrationCountTests
             "inventor_create_work_plane", "inventor_create_work_axis",
             "inventor_hole", "inventor_circular_pattern", "inventor_rectangular_pattern", "inventor_combine", "inventor_batch_execute",
             "inventor_loft", "inventor_sweep", "inventor_create_work_point", "inventor_create_bim_connector",
+            "inventor_create_part",
             // export (9)
             "inventor_capture_view", "inventor_export_step", "inventor_export_stl", "inventor_export_dxf",
             "inventor_view_fit", "inventor_set_view_orientation", "inventor_set_camera", "inventor_export_sat",
-            "inventor_derive_envelope",
+            "inventor_derive_envelope", "inventor_set_view_state",
             // code (1)
-            "inventor_send_code",
+            "inventor_send_code", "inventor_save_code_module", "inventor_list_code_modules", "inventor_delete_code_module",
             // toolbaker (6)
             "inventor_list_baked_tools", "inventor_list_bake_suggestions", "inventor_create_bake_issue_draft",
             "inventor_run_baked_tool", "inventor_accept_bake_suggestion", "inventor_dismiss_bake_suggestion",
             // assembly (3 write)
             "inventor_place_occurrence", "inventor_add_constraint", "inventor_create_imate",
+            "inventor_place_occurrences", "inventor_delete_occurrences", "inventor_set_occurrence_state",
+            "inventor_set_appearance", "inventor_reset_appearance",
             // assembly_query (5 read-only)
             "inventor_list_interfaces", "inventor_check_interference", "inventor_measure_min_distance",
-            "inventor_get_assembly_bom", "inventor_list_constraints",
+            "inventor_get_assembly_bom", "inventor_list_constraints", "inventor_list_occurrences",
         };
 
-        Assert.Equal(74, expected.Length);
+        Assert.Equal(88, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
-        // and nothing extra beyond the 74 expected
+        // and nothing extra beyond the 88 expected
         foreach (var n in names)
             Assert.True(expected.Contains(n), $"unexpected extra tool: {n}");
     }
@@ -148,11 +152,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_73_tools_without_send_code()
+    public void Default_config_registers_84_tools_without_send_code()
     {
-        // Default (no --enable-send-code) drops the single `code` tool, leaving 73.
+        // Default (no --enable-send-code) drops the 4 `code` tools (send_code + modules), leaving 84.
         var names = ToolNames(new InventorMcpConfig());
         Assert.False(names.Contains("inventor_send_code"), "send_code must be off by default");
-        Assert.Equal(73, names.Length);
+        Assert.Equal(84, names.Length);
     }
 }

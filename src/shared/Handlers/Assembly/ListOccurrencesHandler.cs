@@ -25,7 +25,7 @@ public sealed class ListOccurrencesHandler : HandlerBase, IInventorCommand
     public static readonly string[] AllFields =
     {
         "name", "path", "depth", "file", "type", "leaf", "suppressed", "visible", "grounded",
-        "bbox_mm", "transform", "material", "appearance", "mass_g",
+        "bbox_mm", "transform", "material", "appearance", "mass_g", "volume_mm3",
     };
 
     public static readonly string[] DefaultFields = { "name", "path", "depth", "file", "suppressed", "visible", "grounded", "bbox_mm" };
@@ -121,6 +121,7 @@ public sealed class ListOccurrencesHandler : HandlerBase, IInventorCommand
                         };
                         break;
                     case "mass_g": row["mass_g"] = it.Suppressed ? null : Math.Round(UnitConvert.KgToG(o.MassProperties.Mass), 3); break;
+                    case "volume_mm3": row["volume_mm3"] = it.Suppressed ? null : Math.Round(UnitConvert.Cm3ToMm3(o.MassProperties.Volume), 3); break;
                 }
             }
             catch (Exception ex)
