@@ -150,6 +150,57 @@ public sealed class AssemblyTools
         }, ct);
     }
 
+    [McpServerTool(Name = "inventor_place_occurrences"),
+     Description("Place many components into an assembly in one call and one undo step: items=[{path, name?, pose?, lock?}] (max 200). pose: {origin_mm:[x,y,z], rotation_deg:[rx,ry,rz]} (R = Rx*Ry*Rz) | {origin_mm, x_axis:[..], y_axis:[..]} (orthogonal; z = x cross y) | {matrix:[16 numbers, row-major, translation mm]}. lock=none (default, free) | grounded | workplanes - workplanes holds the pose with three hidden grounded fixed work planes flush-constrained to the component's origin planes (named IF_<name>_1..3; survives parent updates, unlike grounding) and returns constraint_health (expect UpToDate). Stops at the first failing item and rolls back unless continue_on_error. Returns per item {name, lock, bbox_mm}. " + JsonArg.DocumentDoc)]
+    public Task<string> PlaceOccurrences(System.Text.Json.JsonElement items, bool continue_on_error = false, string? document = null,
+        CancellationToken ct = default)
+        => Call("place_occurrences", new JObject { ["items"] = JsonArg.From(items), ["continue_on_error"] = continue_on_error, ["document"] = document }, ct);
+
+    [McpServerTool(Name = "inventor_delete_occurrences"),
+     Description("Delete the top-level occurrences a selector matches (one undo step), with their IF_<name>_* lock planes. The selector needs at least one criterion (never 'delete everything'); nested matches are refused. dry_run=true lists what would be deleted. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
+    public Task<string> DeleteOccurrences(System.Text.Json.JsonElement selector, bool dry_run = false, string? document = null,
+        CancellationToken ct = default)
+        => Call("delete_occurrences", new JObject { ["selector"] = JsonArg.From(selector), ["dry_run"] = dry_run, ["document"] = document }, ct);
+
+    [McpServerTool(Name = "inventor_set_occurrence_state"),
+     Description("Change every occurrence a selector matches in one undo step: visible (any depth, in the assembly's context), suppressed, grounded, pose, lock (none|grounded|workplanes) - the last four for top-level occurrences only. A pose change on a workplane-locked occurrence re-creates its lock at the new pose. dry_run=true only lists matches. suppressed=false automatically selects suppressed occurrences. pose: {origin_mm:[x,y,z], rotation_deg:[rx,ry,rz]} (R = Rx*Ry*Rz) | {origin_mm, x_axis:[..], y_axis:[..]} (orthogonal; z = x cross y) | {matrix:[16 numbers, row-major, translation mm]}. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
+    public Task<string> SetOccurrenceState(System.Text.Json.JsonElement selector, bool? visible = null, bool? suppressed = null,
+        bool? grounded = null, System.Text.Json.JsonElement? pose = null, string? @lock = null, bool dry_run = false, string? document = null,
+        CancellationToken ct = default)
+    {
+        var p = new JObject { ["selector"] = JsonArg.From(selector), ["dry_run"] = dry_run, ["document"] = document };
+        if (visible is { } v) p["visible"] = v;
+        if (suppressed is { } s) p["suppressed"] = s;
+        if (grounded is { } g) p["grounded"] = g;
+        if (JsonArg.From(pose) is { } ps) p["pose"] = ps;
+        if (@lock is not null) p["lock"] = @lock;
+        return Call("set_occurrence_state", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_set_appearance"),
+     Description("Apply a color or appearance in one undo step. Target: occurrences (selector, override in the assembly's context) OR a part (document, default active) optionally narrowed to bodies (names or 'body:N'). Appearance: rgb [r,g,b] 0..255 (+ opacity 0..1; creates/reuses a document appearance named MCP-RGB-r-g-b, or name) OR asset = an appearance display name from the document or the appearance libraries (copied into the document). " + JsonArg.SelectorDoc)]
+    public Task<string> SetAppearance(System.Text.Json.JsonElement? occurrences = null, string? document = null, string[]? bodies = null,
+        int[]? rgb = null, double? opacity = null, string? asset = null, string? name = null, CancellationToken ct = default)
+    {
+        var p = new JObject { ["document"] = document, ["asset"] = asset, ["name"] = name };
+        if (JsonArg.From(occurrences) is { } o) p["occurrences"] = o;
+        if (bodies is { Length: > 0 }) p["bodies"] = new JArray(bodies);
+        if (rgb is not null) p["rgb"] = new JArray(rgb);
+        if (opacity is { } op) p["opacity"] = op;
+        return Call("set_appearance", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_reset_appearance"),
+     Description("Remove appearance overrides so occurrences (selector) or a part / its bodies show their part or material appearance again. One undo step. " + JsonArg.SelectorDoc)]
+    public Task<string> ResetAppearance(System.Text.Json.JsonElement? occurrences = null, string? document = null, string[]? bodies = null,
+        CancellationToken ct = default)
+    {
+        var p = new JObject { ["document"] = document };
+        if (JsonArg.From(occurrences) is { } o) p["occurrences"] = o;
+        if (bodies is { Length: > 0 }) p["bodies"] = new JArray(bodies);
+        return Call("reset_appearance", p, ct);
+    }
+
     private static string Error(string code, string message)
         => ToolResponse.Error(code, message);
 

@@ -15,6 +15,7 @@ public static partial class InventorCommandRegistry
         add(new MeasureMinDistanceHandler());
         add(new GetAssemblyBomHandler());
         add(new ListConstraintsHandler());
+        add(new ListOccurrencesHandler());
     }
 }
 #endif

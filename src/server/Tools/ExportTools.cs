@@ -24,8 +24,13 @@ public sealed class ExportTools
     public ExportTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_capture_view"),
-     Description("Capture the active Inventor view as an image. Default: writes a PNG to <export-root>\\captures\\ (or output_path when given — absolute, under an allowed root, ending .png/.jpg/.jpeg/.bmp; output_path wins over inline) and returns only {path,width,height,bytes}. Pass inline=true for the legacy base64 response (rejected above 256 KiB — use file mode or reduce width/height). Optional width/height in pixels (clamped). Does not mutate the document.")]
-    public Task<string> CaptureView(int width = 1280, int height = 720, string? outputPath = null, bool inline = false, CancellationToken ct = default)
+     Description("Capture the active Inventor view as an image - optionally setting up the view in the same call. Default: writes a PNG to <export-root>\\captures\\ (or output_path when given - absolute, under an allowed root, ending .png/.jpg/.jpeg/.bmp; output_path wins over inline) and returns only {path,width,height,bytes}. Pass inline=true for the legacy base64 response (rejected above 256 KiB). Optional width/height in pixels (clamped). " +
+                 "Set-up keys (applied in this order before capturing): design_view (+ design_view_create), object_visibility, occurrence_visibility (same as inventor_set_view_state), then orientation (iso_top_right|front|top|...) or camera {eye,target,up,perspective,extents_mm} (same as inventor_set_camera), then fit. " +
+                 "shots=[{orientation? | camera?, fit?, output_path?}] (max 12) captures several views in one call and returns captures[]. Only the view-state keys change the document (design view / visibility); orientation and camera do not.")]
+    public Task<string> CaptureView(int width = 1280, int height = 720, string? outputPath = null, bool inline = false,
+        string? design_view = null, bool design_view_create = false, System.Text.Json.JsonElement? object_visibility = null,
+        System.Text.Json.JsonElement? occurrence_visibility = null, string? orientation = null, System.Text.Json.JsonElement? camera = null,
+        bool? fit = null, System.Text.Json.JsonElement? shots = null, CancellationToken ct = default)
     {
         var p = new JObject
         {
@@ -39,7 +44,36 @@ public sealed class ExportTools
             p["output_path"] = outputPath;
         }
         if (inline) p["inline"] = true;
+        if (!string.IsNullOrWhiteSpace(design_view)) p["design_view"] = design_view;
+        if (design_view_create) p["design_view_create"] = true;
+        if (JsonArg.From(object_visibility) is { } ov) p["object_visibility"] = ov;
+        if (JsonArg.From(occurrence_visibility) is { } occ) p["occurrence_visibility"] = occ;
+        if (!string.IsNullOrWhiteSpace(orientation)) p["orientation"] = orientation;
+        if (JsonArg.From(camera) is { } cam) p["camera"] = cam;
+        if (fit is { } f) p["fit"] = f;
+        if (JsonArg.From(shots) is { } sh)
+        {
+            if (sh is JArray arr)
+                foreach (var shot in arr)
+                    if (shot?["output_path"] is { Type: JTokenType.String } op && ExportPathPolicy.TryRejectPath((string)op!, out var shotRejection))
+                        return Task.FromResult(Error("INVALID_ARGUMENT", shotRejection));
+            p["shots"] = sh;
+        }
         return Call("capture_view", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_set_view_state"),
+     Description("Set the active document's display state in one call: design_view = design view representation name to activate (design_view_create=true creates it when missing); object_visibility = {all_work_features, origin_work_planes, origin_work_axes, origin_work_points, user_work_planes, user_work_axes, user_work_points, sketches, sketches_3d, sketch_dimensions, ucs_triads, annotations_3d, welds: bool}; occurrence_visibility = [{selector, visible}] (assembly; any depth). Changes display only (the design view / visibility is stored with the document). capture_view accepts the same keys. " + JsonArg.SelectorDoc)]
+    public Task<string> SetViewState(string? design_view = null, bool design_view_create = false,
+        System.Text.Json.JsonElement? object_visibility = null, System.Text.Json.JsonElement? occurrence_visibility = null,
+        CancellationToken ct = default)
+    {
+        var p = new JObject();
+        if (!string.IsNullOrWhiteSpace(design_view)) p["design_view"] = design_view;
+        if (design_view_create) p["design_view_create"] = true;
+        if (JsonArg.From(object_visibility) is { } ov) p["object_visibility"] = ov;
+        if (JsonArg.From(occurrence_visibility) is { } occ) p["occurrence_visibility"] = occ;
+        return Call("set_view_state", p, ct);
     }
 
     [McpServerTool(Name = "inventor_export_step"),

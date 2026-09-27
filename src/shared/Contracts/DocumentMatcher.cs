@@ -7,7 +7,7 @@ namespace Bimwright.Ipt.Shared.Contracts;
 /// <summary>
 /// Resolves the optional <c>document</c> tool parameter against the documents Inventor already has
 /// in memory (open windows AND documents loaded as assembly references). Tiers, first hit wins:
-/// full path → display name → file name → file name without extension; all case-insensitive, with
+/// full path → display name → file name → file name without extension → unique substring; all case-insensitive, with
 /// '/' and '\' treated alike. A tier with several hits is ambiguous (error lists them); nothing is
 /// opened or activated. API-agnostic so the rules are unit-tested without Inventor.
 /// </summary>
@@ -37,6 +37,8 @@ public static class DocumentMatcher
             d => Normalize(d.DisplayName) == q,
             d => FileName(d.FullPath) == q,
             d => StripExt(FileName(d.FullPath)) == q || StripExt(Normalize(d.DisplayName)) == q,
+            // last resort: a unique substring of the file/display name (ambiguity is still an error)
+            d => FileName(d.FullPath).Contains(q) || Normalize(d.DisplayName).Contains(q),
         };
         foreach (var tier in tiers)
         {
@@ -62,7 +64,14 @@ public static class DocumentMatcher
         return false;
     }
 
-    private static string Describe(Candidate d) => d.FullPath.Length > 0 ? d.FullPath : d.DisplayName;
+    // "folder\file.ipt" rather than the full path: error text is sanitized and drive-rooted paths
+    // would collapse to "<path>"; the parent folder is usually enough to disambiguate.
+    private static string Describe(Candidate d)
+    {
+        if (d.FullPath.Length == 0) return d.DisplayName;
+        var parts = d.FullPath.Replace('/', '\\').Split('\\');
+        return parts.Length >= 2 ? parts[parts.Length - 2] + "\\" + parts[parts.Length - 1] : d.FullPath;
+    }
 
     private static string Normalize(string? s) => (s ?? "").Trim().Replace('/', '\\').ToLowerInvariant();
 

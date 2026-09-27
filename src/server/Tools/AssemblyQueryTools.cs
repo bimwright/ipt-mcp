@@ -35,27 +35,60 @@ public sealed class AssemblyQueryTools
         => Call("list_interfaces", new JObject { ["occurrence"] = occurrence }, ct);
 
     [McpServerTool(Name = "inventor_check_interference"),
-     Description("Run Inventor's interference analysis over the active assembly. occurrences=null analyzes ALL top-level occurrences (a subassembly counts as one unit). Returns count (pairs), total_volume_mm3, bodies (raw result count) and pairs[{a,b,volume_mm3}] — volumes of multiple contact bodies of the same pair are summed. Expect count=0 for a sound design outside declared weld zones.")]
-    public Task<string> CheckInterference(string[]? occurrences = null, CancellationToken ct = default)
-        => Call("check_interference", new JObject
-        {
-            ["occurrences"] = occurrences is null ? null : new JArray(occurrences),
-        }, ct);
-
-    [McpServerTool(Name = "inventor_measure_min_distance"),
-     Description("Minimum 3D distance (mm) between two occurrences, or between two named refs (iMate/work/origin names, same resolution as inventor_add_constraint). Refs are optional — omit ref to measure the whole occurrence body. Expect 0 on mated faces.")]
-    public Task<string> MeasureMinDistance(
-        MeasureSideDto a,
-        MeasureSideDto b,
+     Description("Run Inventor's interference analysis over an assembly. Legacy: occurrences=[names] (null = ALL top-level occurrences; a subassembly counts as one unit) checked against each other. Set mode: set_a (+ optional set_b) occurrence selectors — e.g. set_a={file:'BEAM*', leaf:true}, set_b={names:['COL*']} — analyses A against B only (or A within itself); nested/leaf matches are analysed in the assembly's context and reported by path. bbox_prefilter (default true) skips members whose range box touches nothing on the other side. Returns count (pairs), total_volume_mm3, bodies, pairs[{a,b,volume_mm3}] sorted by volume and capped at max_pairs (default 200; pairs_total/truncated report the rest), and analysed counts. Expect count=0 for a sound design outside declared weld zones. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
+    public Task<string> CheckInterference(string[]? occurrences = null, System.Text.Json.JsonElement? set_a = null,
+        System.Text.Json.JsonElement? set_b = null, bool bbox_prefilter = true, int max_pairs = 200, string? document = null,
         CancellationToken ct = default)
     {
-        if (a is null) return Task.FromResult(Error("INVALID_ARGUMENT", "side a is required"));
-        if (b is null) return Task.FromResult(Error("INVALID_ARGUMENT", "side b is required"));
-        return Call("measure_min_distance", new JObject
+        var p = new JObject
         {
-            ["a_occurrence"] = a.Occurrence, ["a_ref"] = a.Ref,
-            ["b_occurrence"] = b.Occurrence, ["b_ref"] = b.Ref,
-        }, ct);
+            ["occurrences"] = occurrences is null ? null : new JArray(occurrences),
+            ["bbox_prefilter"] = bbox_prefilter,
+            ["max_pairs"] = max_pairs,
+            ["document"] = document,
+        };
+        if (JsonArg.From(set_a) is { } a) p["set_a"] = a;
+        if (JsonArg.From(set_b) is { } b) p["set_b"] = b;
+        return Call("check_interference", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_measure_min_distance"),
+     Description("Minimum 3D distance (mm). Single: a + b sides {occurrence, ref?} (ref = iMate/work/origin name, same resolution as inventor_add_constraint; omit ref for the whole occurrence body; expect 0 on mated faces). Batch: pairs=[{a, b, a_ref?, b_ref?}] (occurrence names), or set_a × set_b occurrence selectors (every pair once). threshold_mm reports only pairs at or below it (clearance checks) and lets set mode skip pairs whose range boxes are already farther apart. Batch returns results[{a,b,distance_mm}] sorted ascending (capped at max_results, default 200), min_distance_mm, measured, skipped_by_bbox. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
+    public Task<string> MeasureMinDistance(
+        MeasureSideDto? a = null,
+        MeasureSideDto? b = null,
+        System.Text.Json.JsonElement? pairs = null,
+        System.Text.Json.JsonElement? set_a = null,
+        System.Text.Json.JsonElement? set_b = null,
+        double? threshold_mm = null,
+        int max_results = 200,
+        string? document = null,
+        CancellationToken ct = default)
+    {
+        var pairsTok = JsonArg.From(pairs);
+        var setA = JsonArg.From(set_a);
+        if (pairsTok is null && setA is null)
+        {
+            if (a is null) return Task.FromResult(Error("INVALID_ARGUMENT", "side a is required (or pass pairs / set_a+set_b for a batch)"));
+            if (b is null) return Task.FromResult(Error("INVALID_ARGUMENT", "side b is required (or pass pairs / set_a+set_b for a batch)"));
+            return Call("measure_min_distance", new JObject
+            {
+                ["a_occurrence"] = a.Occurrence, ["a_ref"] = a.Ref,
+                ["b_occurrence"] = b.Occurrence, ["b_ref"] = b.Ref,
+                ["document"] = document,
+            }, ct);
+        }
+        if (a is not null || b is not null)
+            return Task.FromResult(Error("INVALID_ARGUMENT", "use either a/b (single) or pairs / set_a+set_b (batch)"));
+        var p = new JObject { ["max_results"] = max_results, ["document"] = document };
+        if (pairsTok is not null) p["pairs"] = pairsTok;
+        if (setA is not null)
+        {
+            p["set_a"] = setA;
+            p["set_b"] = JsonArg.From(set_b) ?? setA.DeepClone();
+        }
+        if (threshold_mm is { } t) p["threshold_mm"] = t;
+        return Call("measure_min_distance", p, ct);
     }
 
     [McpServerTool(Name = "inventor_get_assembly_bom"),
@@ -67,6 +100,17 @@ public sealed class AssemblyQueryTools
      Description("Read back the assembly's relationship graph: every constraint with name, type (mate|flush|insert|angle|other), health (up_to_date expected), suppressed flag and the two occurrence names. Run after building to audit that no constraint is sick.")]
     public Task<string> ListConstraints(CancellationToken ct = default)
         => Call("list_constraints", new JObject(), ct);
+
+    [McpServerTool(Name = "inventor_list_occurrences"),
+     Description("List an assembly's occurrences filtered by a selector — the typed replacement for scripts that walk occurrences, match names and read range boxes/transforms. fields picks columns (default name,path,depth,file,suppressed,visible,grounded,bbox_mm; also type, leaf, transform{origin_mm,x_axis,y_axis,z_axis}, material, appearance{name,source}, mass_g; or [\"all\"]). output=inline (auto-spills above 64 KiB) | file (rows written to a JSON file, path + 10-row preview returned). selector omitted = every occurrence (limit 1000). Read-only. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
+    public Task<string> ListOccurrences(System.Text.Json.JsonElement? selector = null, string[]? fields = null, string output = "inline",
+        string? document = null, CancellationToken ct = default)
+    {
+        var p = new JObject { ["output"] = output, ["document"] = document };
+        if (JsonArg.From(selector) is { } s) p["selector"] = s;
+        if (fields is { Length: > 0 }) p["fields"] = new JArray(fields);
+        return Call("list_occurrences", p, ct);
+    }
 
     private static string Error(string code, string message)
         => ToolResponse.Error(code, message);

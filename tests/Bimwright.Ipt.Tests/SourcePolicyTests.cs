@@ -165,10 +165,10 @@ public sealed class SourcePolicyTests
     public void CompilerPolicy_message_carries_the_calling_context_label()
     {
         var sendCode = BakeCompilerPolicy.ValidateSource("System.IO.File.Delete(\"x\");", "send_code");
-        Assert.Equal("send_code source uses forbidden token: System.IO", sendCode.Error);
+        Assert.StartsWith("send_code source uses forbidden token: System.IO", sendCode.Error);
 
         var baked = BakeCompilerPolicy.ValidateSource("System.IO.File.Delete(\"x\");");
-        Assert.Equal("Baked tool source uses forbidden token: System.IO", baked.Error);
+        Assert.StartsWith("Baked tool source uses forbidden token: System.IO", baked.Error);
     }
 
     [Fact]

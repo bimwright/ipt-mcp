@@ -335,6 +335,18 @@ public sealed class FeatureTools
         }, ct);
     }
 
+    [McpServerTool(Name = "inventor_create_part"),
+     Description("Build a complete part from a JSON recipe in ONE call (new part -> parameters -> sketches -> extrude/hole/fillet/chamfer -> material + iProperties -> silent save_as), instead of a C# script. Any failing step closes the new part unsaved and names the recipe path (e.g. features[2].extrude.distance). dry_run=true validates and returns the step plan without touching Inventor. " +
+                 "recipe = {template?, save_as? (absolute .ipt; overwrite?:false), close_after?, material?, iproperties?: {\"Part Number\": \"...\", \"Description\": \"...\", \"Set:Prop\": \"...\"}, parameters?: [{name, expression, unit?='mm'}], features: [ " +
+                 "{sketch: {name?, plane: 'XY'|'XZ'|'YZ'|<work plane name>|{origin_mm, x_axis, y_axis}, profile: shape | [shape...]}}, " +
+                 "{extrude: {sketch? (default: last sketch), distance: mm | 'expression', direction?: positive|negative|symmetric, operation?: join|cut|intersect|new_body, name?}}, " +
+                 "{hole: {face: {normal: +X|-X|+Y|-Y|+Z|-Z, extreme?: max|min, near_mm?}, at: [[x,y,z]...] on that face, diameter, through: true | depth, kind?: drilled}}, " +
+                 "{fillet: {radius, edges: [ids] | selector}}, {chamfer: {distance, edges: [ids]}} ]}. " +
+                 "shape = {rect: {w, h, center?:[x,y]} | {from:[x,y], to:[x,y]} | [w,h]} | {circle: {d | r, center?}} | {polyline: [[x,y] | [x,y,bulge]...]} (auto-closed; bulge = tan(arc sweep/4) on the segment leaving that vertex, + = counter-clockwise), each with optional inner: [shape...] for voids. " +
+                 "Sketch coordinates are the plane's local x/y in mm. Returns title, path, volume_mm3, mass_g, bbox, bodies, per-feature results and unhealthy_features (should be absent). Out of scope: revolve/loft/sweep/patterns/sheet metal - use send_code with modules for those.")]
+    public Task<string> CreatePart(System.Text.Json.JsonElement recipe, bool dry_run = false, int? timeout_ms = null, CancellationToken ct = default)
+        => Call("create_part", new JObject { ["recipe"] = JsonArg.From(recipe), ["dry_run"] = dry_run }, ct, timeout_ms);
+
     private static string Err(string message)
         => ToolResponse.Error("INVALID_ARGUMENT", message);
 

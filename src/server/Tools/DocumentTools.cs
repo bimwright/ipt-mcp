@@ -52,6 +52,26 @@ public sealed class DocumentTools
     public Task<string> SetMaterial(string materialName, string? document = null, CancellationToken ct = default)
         => Call("set_material", new JObject { ["material_name"] = materialName, ["document"] = document }, ct);
 
+    [McpServerTool(Name = "inventor_save_all"),
+     Description("Update a root document (default active; root = path or name of an open document) and save it together with every dirty document it references, silently (no hidden 'Save' dialog can block the call). Reports each file that is not clean: saved | read_only | error, plus counts. update=false skips the rebuild; dry_run=true lists what would be saved.")]
+    public Task<string> SaveAll(string? root = null, bool update = true, bool dry_run = false, bool silent = true, CancellationToken ct = default)
+        => Call("save_all", new JObject { ["root"] = root, ["update"] = update, ["dry_run"] = dry_run, ["silent"] = silent }, ct);
+
+    [McpServerTool(Name = "inventor_open_documents"),
+     Description("Open several documents in one call, silently. visible=false (default) loads them without windows so other tools can target them with their document parameter; visible=true opens windows. Reports opened | already_open | error per path (max 200).")]
+    public Task<string> OpenDocuments(string[] paths, bool visible = false, bool silent = true, CancellationToken ct = default)
+        => Call("open_documents", new JObject { ["paths"] = new JArray(paths), ["visible"] = visible, ["silent"] = silent }, ct);
+
+    [McpServerTool(Name = "inventor_close_documents"),
+     Description("Close documents by path/name (documents=[...]) or every visible document (all=true; keep_active=true keeps the active one). save=true saves each first; save=false discards changes. Silent. Reports closed | saved_closed | error per document.")]
+    public Task<string> CloseDocuments(string[]? documents = null, bool all = false, bool keep_active = true, bool save = false,
+        bool silent = true, CancellationToken ct = default)
+        => Call("close_documents", new JObject
+        {
+            ["documents"] = documents is null ? null : new JArray(documents), ["all"] = all, ["keep_active"] = keep_active,
+            ["save"] = save, ["silent"] = silent,
+        }, ct);
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try

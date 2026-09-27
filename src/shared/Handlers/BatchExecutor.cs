@@ -30,6 +30,8 @@ public static class BatchExecutor
         // (rolled_back would lie) or fail End/Abort by invalidating the current transaction.
         "new_part", "new_assembly", "open_document", "close_document", "save_document",
         "derive_envelope",  // also creates + activates a new document mid-transaction
+        "create_part",      // creates, saves and may close a new part
+        "save_all", "open_documents", "close_documents",
     };
 
     public sealed class Outcome
