@@ -28,9 +28,9 @@ public sealed class ExportTools
                  "Set-up keys (applied in this order before capturing): design_view (+ design_view_create), object_visibility, occurrence_visibility (same as inventor_set_view_state), then orientation (iso_top_right|front|top|...) or camera {eye,target,up,perspective,extents_mm} (same as inventor_set_camera), then fit. " +
                  "shots=[{orientation? | camera?, fit?, output_path?}] (max 12) captures several views in one call and returns captures[]. Only the view-state keys change the document (design view / visibility); orientation and camera do not.")]
     public Task<string> CaptureView(int width = 1280, int height = 720, string? outputPath = null, bool inline = false,
-        string? design_view = null, bool design_view_create = false, System.Text.Json.JsonElement? object_visibility = null,
-        System.Text.Json.JsonElement? occurrence_visibility = null, string? orientation = null, System.Text.Json.JsonElement? camera = null,
-        bool? fit = null, System.Text.Json.JsonElement? shots = null, CancellationToken ct = default)
+        string? design_view = null, bool design_view_create = false, [Description("JSON object of booleans, e.g. {all_work_features:false, sketches:false}.")] System.Text.Json.JsonElement? object_visibility = null,
+        [Description("JSON array of {selector, visible} rules (or one such object).")] System.Text.Json.JsonElement? occurrence_visibility = null, string? orientation = null, [Description("JSON object {eye, target, up?, perspective?, extents_mm?} (mm).")] System.Text.Json.JsonElement? camera = null,
+        bool? fit = null, [Description("JSON array of {orientation? | camera?, fit?, output_path?} objects (max 12).")] System.Text.Json.JsonElement? shots = null, CancellationToken ct = default)
     {
         var p = new JObject
         {
@@ -65,7 +65,7 @@ public sealed class ExportTools
     [McpServerTool(Name = "inventor_set_view_state"),
      Description("Set the active document's display state in one call: design_view = design view representation name to activate (design_view_create=true creates it when missing); object_visibility = {all_work_features, origin_work_planes, origin_work_axes, origin_work_points, user_work_planes, user_work_axes, user_work_points, sketches, sketches_3d, sketch_dimensions, ucs_triads, annotations_3d, welds: bool}; occurrence_visibility = [{selector, visible}] (assembly; any depth). Changes display only (the design view / visibility is stored with the document). capture_view accepts the same keys. " + JsonArg.SelectorDoc)]
     public Task<string> SetViewState(string? design_view = null, bool design_view_create = false,
-        System.Text.Json.JsonElement? object_visibility = null, System.Text.Json.JsonElement? occurrence_visibility = null,
+        [Description("JSON object of booleans, e.g. {all_work_features:false, sketches:false}.")] System.Text.Json.JsonElement? object_visibility = null, [Description("JSON array of {selector, visible} rules (or one such object).")] System.Text.Json.JsonElement? occurrence_visibility = null,
         CancellationToken ct = default)
     {
         var p = new JObject();

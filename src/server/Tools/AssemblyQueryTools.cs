@@ -36,8 +36,8 @@ public sealed class AssemblyQueryTools
 
     [McpServerTool(Name = "inventor_check_interference"),
      Description("Run Inventor's interference analysis over an assembly. Legacy: occurrences=[names] (null = ALL top-level occurrences; a subassembly counts as one unit) checked against each other. Set mode: set_a (+ optional set_b) occurrence selectors — e.g. set_a={file:'BEAM*', leaf:true}, set_b={names:['COL*']} — analyses A against B only (or A within itself); nested/leaf matches are analysed in the assembly's context and reported by path. bbox_prefilter (default true) skips members whose range box touches nothing on the other side. Returns count (pairs), total_volume_mm3, bodies, pairs[{a,b,volume_mm3}] sorted by volume and capped at max_pairs (default 200; pairs_total/truncated report the rest), and analysed counts. Expect count=0 for a sound design outside declared weld zones. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
-    public Task<string> CheckInterference(string[]? occurrences = null, System.Text.Json.JsonElement? set_a = null,
-        System.Text.Json.JsonElement? set_b = null, bool bbox_prefilter = true, int max_pairs = 200, string? document = null,
+    public Task<string> CheckInterference(string[]? occurrences = null, [Description("Occurrence selector for side A (JSON object, name or array of names).")] System.Text.Json.JsonElement? set_a = null,
+        [Description("Occurrence selector for side B (JSON object, name or array of names).")] System.Text.Json.JsonElement? set_b = null, bool bbox_prefilter = true, int max_pairs = 200, string? document = null,
         CancellationToken ct = default)
     {
         var p = new JObject
@@ -57,9 +57,9 @@ public sealed class AssemblyQueryTools
     public Task<string> MeasureMinDistance(
         MeasureSideDto? a = null,
         MeasureSideDto? b = null,
-        System.Text.Json.JsonElement? pairs = null,
-        System.Text.Json.JsonElement? set_a = null,
-        System.Text.Json.JsonElement? set_b = null,
+        [Description("JSON array of {a, b, a_ref?, b_ref?} occurrence-name pairs.")] System.Text.Json.JsonElement? pairs = null,
+        [Description("Occurrence selector for side A (JSON object, name or array of names).")] System.Text.Json.JsonElement? set_a = null,
+        [Description("Occurrence selector for side B (JSON object, name or array of names).")] System.Text.Json.JsonElement? set_b = null,
         double? threshold_mm = null,
         int max_results = 200,
         string? document = null,
@@ -103,7 +103,7 @@ public sealed class AssemblyQueryTools
 
     [McpServerTool(Name = "inventor_list_occurrences"),
      Description("List an assembly's occurrences filtered by a selector — the typed replacement for scripts that walk occurrences, match names and read range boxes/transforms. fields picks columns (default name,path,depth,file,suppressed,visible,grounded,bbox_mm; also type, leaf, transform{origin_mm,x_axis,y_axis,z_axis}, material, appearance{name,source}, mass_g, volume_mm3; or [\"all\"]). output=inline (auto-spills above 64 KiB) | file (rows written to a JSON file, path + 10-row preview returned). selector omitted = every occurrence (limit 1000). Read-only. " + JsonArg.SelectorDoc + " " + JsonArg.DocumentDoc)]
-    public Task<string> ListOccurrences(System.Text.Json.JsonElement? selector = null, string[]? fields = null, string output = "inline",
+    public Task<string> ListOccurrences([Description("Occurrence selector: JSON object {names?, regex?, file?, path_contains?, leaf?, max_depth?, include_suppressed?, limit?}, a name string, or an array of names.")] System.Text.Json.JsonElement? selector = null, string[]? fields = null, string output = "inline",
         string? document = null, CancellationToken ct = default)
     {
         var p = new JObject { ["output"] = output, ["document"] = document };

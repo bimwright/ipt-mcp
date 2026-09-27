@@ -344,7 +344,7 @@ public sealed class FeatureTools
                  "{fillet: {radius, edges: [ids] | selector}}, {chamfer: {distance, edges: [ids]}} ]}. " +
                  "shape = {rect: {w, h, center?:[x,y]} | {from:[x,y], to:[x,y]} | [w,h]} | {circle: {d | r, center?}} | {polyline: [[x,y] | [x,y,bulge]...]} (auto-closed; bulge = tan(arc sweep/4) on the segment leaving that vertex, + = counter-clockwise), each with optional inner: [shape...] for voids. " +
                  "Sketch coordinates are the plane's local x/y in mm. Returns title, path, volume_mm3, mass_g, bbox, bodies, per-feature results and unhealthy_features (should be absent). Out of scope: revolve/loft/sweep/patterns/sheet metal - use send_code with modules for those.")]
-    public Task<string> CreatePart(System.Text.Json.JsonElement recipe, bool dry_run = false, int? timeout_ms = null, CancellationToken ct = default)
+    public Task<string> CreatePart([Description("JSON object: the part recipe {features:[...], save_as?, material?, iproperties?, parameters?, template?, overwrite?, close_after?}.")] System.Text.Json.JsonElement recipe, bool dry_run = false, int? timeout_ms = null, CancellationToken ct = default)
         => Call("create_part", new JObject { ["recipe"] = JsonArg.From(recipe), ["dry_run"] = dry_run }, ct, timeout_ms);
 
     private static string Err(string message)
