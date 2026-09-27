@@ -87,8 +87,15 @@ layer. Type-metadata reads (`typeof`, `GetType`) are allowed:
 ToolBaker (toolsets `toolbaker` read-only + `toolbaker_write`) turns repeated `send_code` /
 macro workflows into governed, named, reusable tools, so agents stop re-running raw C#. It is
 enabled by default (disable with `--disable-toolbaker` or
-`BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0`). Adaptive bake-suggestion generation is opt-in
-(`--enable-adaptive-bake` or `BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE=1`).
+`BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0`).
+
+> **Current status — adaptive suggestions are not wired in ipt-mcp.** The `--enable-adaptive-bake` /
+> `BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE=1` flag is parsed but nothing reads it: the server does not
+> record usage events and does not run clustering, so `inventor_list_bake_suggestions` only returns
+> suggestions that were inserted into the bake database by other means. The registry path
+> (`inventor_accept_bake_suggestion` → `inventor_run_baked_tool`) works. For reusing helper code
+> across `send_code` calls, use **code modules** (below) — they reuse functions, which is where the
+> repetition in real sessions is, rather than whole scripts.
 
 ### The six ToolBaker tools
 
@@ -114,7 +121,7 @@ database state, not the Inventor model.
 
 ### Bake lifecycle
 
-1. **Suggest** — adaptive clustering of recurring workflows produces suggestions
+1. **Suggest** — suggestions in the bake database (adaptive clustering is not wired yet, see above)
    (`inventor_list_bake_suggestions`). Each suggestion carries an id, title, source, score, and
    a JSON payload.
 2. **Accept** — `inventor_accept_bake_suggestion(suggestionId, desiredName)`:
@@ -193,3 +200,22 @@ per-instance `inventor-<year>-<pid>.json` discovery files.
 | `--enable-send-code` + add-in opt-in | exposed | exposed | exposed |
 | `--read-only` | hidden | exposed | hidden |
 | `--disable-toolbaker` | per send-code gate | hidden | hidden |
+
+---
+
+## Code modules (reusable send_code helpers)
+
+When `send_code` is enabled, three more tools in the `code` toolset keep helper functions on the
+server so scripts stop re-sending them:
+
+| Tool | Purpose |
+|---|---|
+| `inventor_save_code_module(name, code, description?, requires?)` | Store a module of declarations (static methods, classes, constants — no top-level statements). It passes `BakeCompilerPolicy`, is dry-compiled in the add-in (`send_code` with `compile_only`), and only then is written to `%LOCALAPPDATA%\Bimwright\ipt-mcp\modules\<name>.csx` + `index.json`. `requires` names other modules it calls. |
+| `inventor_list_code_modules(include_code?)` | Name, hash, description, requires, size and the declared signatures. |
+| `inventor_delete_code_module(name)` | Remove a module; refused while another module requires it. |
+
+`inventor_send_code(code, modules: [...])` expands the listed modules and their `requires`
+(dependencies first), compiles them in front of the script as one submission and echoes
+`modules: [{name, hash}]` for provenance. Each part is tagged with a `#line` directive, so compile
+diagnostics and runtime failures point at `module:<name>` or `script` plus the line. The journal
+records module names and hashes, not their code.

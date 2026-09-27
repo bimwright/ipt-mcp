@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -54,7 +54,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 - Inventor 从 2025 起把桌面 add-in 开发从 .NET Framework 上移开：**2025/2026 用 .NET 8，2027 用 .NET 10**。 （.NET 8 add-in 在 2027 上仍二进制兼容，但 net10 是原生目标。）
 - 全程使用**4-digit calendar years**（2022..2027）—— 永远不要使用 legacy 版本号。
 
-> **状态：已验证。** Phase 1-3 已完成且全绿（默认 73 个 MCP tools，启用 send_code 时为 74 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
+> **状态：已验证。** Phase 1-3 已完成且全绿（默认 84 个 MCP tools，启用 send_code 时为 88 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
 
 ---
 
@@ -94,7 +94,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **73 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **74 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **84 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 send_code toolset 时为 **88 个**（`inventor_send_code` + 3 个 code module tools）。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -121,7 +121,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_list_features` | 按 tree 顺序列出 part 的 features：name、type、health、suppressed、body_names。 |
 | `inventor_probe_brep` | 调查 part 的 B-rep 端口：带 inner-loop 圆形边的平面 — normal（已按 IsParamReversed 校正）、center_mm、port_diameter_mm、面上所有圆。 |
 
-### document (7) —— document 生命周期（write）
+### document (10) —— document 生命周期（write）
 
 | Tool | 描述 |
 |---|---|
@@ -132,6 +132,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_close_document` | 关闭 active document；`save=true` 会先保存。 |
 | `inventor_set_units` | 设置 active document 的长度单位（mm、cm、m、in、ft）。 |
 | `inventor_set_material` | 按名称给 active part 分配一个 material。 |
+| `inventor_save_all` | 更新根文档并静默保存它及所有有改动的被引用文档；逐文件报告 saved / read_only / error；支持 `dry_run`。 |
+| `inventor_open_documents` | 一次打开多个文档（默认不开窗口）。 |
+| `inventor_close_documents` | 按路径/名称关闭文档，或关闭所有可见文档（`keep_active`）；可先保存。 |
 
 ### parameters (4) —— model 与 user parameters（write）
 
@@ -166,7 +169,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_draw_text` | 添加一个 fitted 文本框（position mm，可选 font_size_mm；rotation_deg 仅支持 90 的倍数）。 |
 | `inventor_close_sketch` | 结束草图编辑（退出 sketch edit 模式）。 |
 
-### feature (15) —— 实体与工作特征（write）
+### feature (16) —— 实体与工作特征（write）
 
 | Tool | 描述 |
 |---|---|
@@ -185,8 +188,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_loft` | 按有序 sketch profiles（'SketchName' 或 'SketchName:N'）做 loft；可选 centerline sketch、closed/merge-tangent-faces。 |
 | `inventor_sweep` | 把 sketch profile 沿 sketch path 扫掠（相连段自动串链）；orientation normal_to_path\|parallel。 |
 | `inventor_create_bim_connector` | 在圆形 port edge 上创建 BIM pipe connector（ref 来自 inventor_probe_brep 的 `circles[].edge`）；kind=pipe，可选 system/flow/connection 元数据。 |
+| `inventor_create_part` | 用 JSON recipe 一次调用建完整零件：草图（矩形 / 圆 / 带 bulge 圆弧的多段线、内部孔洞）→ 拉伸 / 孔 / 圆角 / 倒角 → 材料 + iProperties → 静默另存为。错误指出 recipe 路径，失败时零件不保存直接关闭；支持 `dry_run`。 |
 
-### export (9) —— 视图捕获与几何导出（write）
+### export (10) —— 视图捕获与几何导出（write）
 
 > `output_path` 必须位于允许的根目录下：user profile、`%TEMP%`，或自行添加的根目录 —— 例如在运行 Inventor 的机器上设置 `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports`（设置后需重启 Inventor 和 MCP 客户端/服务器会话）。
 
@@ -201,18 +205,24 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_view_fit` | 把 active view 缩放适配到 model extents（捕获前运行）。 |
 | `inventor_set_view_orientation` | 设置一个标准相机方向（iso/front/top 等），用于多角度捕获。 |
 | `inventor_set_camera` | 显式设置相机（eye/target mm、up、perspective、extents_mm、fit）—— 标准方向不合适时在 capture_view 前使用。 |
+| `inventor_set_view_state` | 激活/创建设计视图、切换对象可见性（工作特征、草图等）、按 selector 显示/隐藏 occurrence。`inventor_capture_view` 也接受这些键以及 orientation/camera/fit 和多个 `shots`。 |
 
 > 导出路径必须是绝对路径，且位于允许的 output root 之下（用户 profile 或 temp）。
 
-### assembly (3, write) —— 通过关系（而非坐标）组合装配体
+### assembly (8, write) —— 组合与编辑装配体
 
 | Tool | 描述 |
 |---|---|
 | `inventor_place_occurrence` | 把一个 component（.ipt/.iam）放入 active assembly；可选初始 pose + grounded。 |
 | `inventor_add_constraint` | 约束两个命名引用（mate/flush/insert/angle）；response 携带 `health` —— 务必检查它。 |
 | `inventor_create_imate` | 使用确定性面选择器在 active part 上编写一个命名 iMate。 |
+| `inventor_place_occurrences` | 在一个撤销步骤中放置多个组件；姿态为原点+旋转、坐标轴或 4×4 矩阵；`lock` = none / grounded / workplanes。 |
+| `inventor_delete_occurrences` | 删除 selector 匹配的顶层 occurrence（`dry_run`）。 |
+| `inventor_set_occurrence_state` | 批量设置可见 / 抑制 / 固定 / 姿态 / 锁定。 |
+| `inventor_set_appearance` | 为 occurrence 或零件实体设置 RGB 颜色或库外观。 |
+| `inventor_reset_appearance` | 移除外观覆盖。 |
 
-### assembly_query (5, read-only) —— 数值自检一组；在 `--read-only` 下存活
+### assembly_query (6, read-only) —— 数值自检一组；在 `--read-only` 下存活
 
 | Tool | 描述 |
 |---|---|
@@ -221,12 +231,16 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_measure_min_distance` | 两个 occurrences 或命名引用之间的最小 3D 距离（mm）。 |
 | `inventor_get_assembly_bom` | BOM + occurrence 树，带 grounded 标志以及 translation/rotation 自由度。 |
 | `inventor_list_constraints` | 读回每个约束的 type、`health`、suppressed 标志以及两个 occurrence 名称。 |
+| `inventor_list_occurrences` | 按 selector 列出 occurrence 及所选字段（path、file、bbox_mm、transform、可见性、材料、外观、质量、体积）。`check_interference` 支持 `set_a` × `set_b`，`measure_min_distance` 支持 `pairs[]` 或集合×集合 + `threshold_mm`。 |
 
-### code (1) —— opt-in 的 escape hatch（默认关闭）
+### code (4) —— opt-in 的 escape hatch（默认关闭）
 
 | Tool | 描述 |
 |---|---|
 | `inventor_send_code` | **危险，仅 opt-in。** 在进程内针对 `Inventor.Application` 执行一段 C# 代码片段。除非 server 和 add-in 都 opt-in，否则禁用（否则返回 `SEND_CODE_DISABLED`）；被禁的 API（file/process/network/environment）会被拒绝。 |
+| `inventor_save_code_module` | 保存可复用的 C# helper module（仅声明；保存前做策略检查和 dry-compile）。 |
+| `inventor_list_code_modules` | 列出已保存的 module 及其签名。 |
+| `inventor_delete_code_module` | 删除 module。 |
 
 ### toolbaker (3, read-only) —— 纯粹操作 server-side 的 bake 数据库
 

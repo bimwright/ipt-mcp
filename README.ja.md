@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **73** MCP ツール、`send_code` 有効時 **74**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **84** MCP ツール、`send_code` 有効時 **88**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
 
 ---
 
@@ -90,7 +90,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **73 ツール**です（inventor_send_code が有効な場合は **74 ツール**）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **84 ツール**です（send_code ツールセットが有効な場合は **88 ツール**：`inventor_send_code` と 3 つのコードモジュールツール）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -117,7 +117,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_list_features` | パートのフィーチャをツリー順に一覧: 名前、種類、health、suppressed、body_names。 |
 | `inventor_probe_brep` | パートの B-rep をポート口で調査: 内側ループ円エッジを持つ平面 — normal（IsParamReversed 補正済み）、center_mm、port_diameter_mm、面上の全円。 |
 
-### document (7) — ドキュメントライフサイクル（書き込み）
+### document (10) — ドキュメントライフサイクル（書き込み）
 
 | ツール | 説明 |
 |---|---|
@@ -128,6 +128,9 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_close_document` | アクティブドキュメントを閉じる。`save=true` で先に保存。 |
 | `inventor_set_units` | アクティブドキュメントの長さ単位を設定（mm、cm、m、in、ft）。 |
 | `inventor_set_material` | アクティブパーツに名前でマテリアルを割り当て。 |
+| `inventor_save_all` | ルートドキュメントを更新し、変更のある参照ドキュメントと一緒にサイレント保存。ファイルごとに saved / read_only / error を報告。`dry_run` 対応。 |
+| `inventor_open_documents` | 複数のドキュメントを一度に開く（既定はウィンドウなし）。 |
+| `inventor_close_documents` | パス/名前指定、または表示中の全ドキュメントを閉じる（`keep_active`）。保存も可。 |
 
 ### parameters (4) — モデルパラメータとユーザーパラメータ（書き込み）
 
@@ -162,7 +165,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_draw_text` | フィットテキストボックスを追加（position mm、任意の font_size_mm。rotation_deg は 90 の倍数のみ）。 |
 | `inventor_close_sketch` | スケッチの編集を終了（スケッチ編集モードを終了）。 |
 
-### feature (15) — ソリッドフィーチャと作業フィーチャ（書き込み）
+### feature (16) — ソリッドフィーチャと作業フィーチャ（書き込み）
 
 | ツール | 説明 |
 |---|---|
@@ -181,8 +184,9 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_loft` | 順序付きスケッチプロファイル群（'SketchName' または 'SketchName:N'）をロフト。オプションでセンターラインスケッチ、closed/merge-tangent-faces。 |
 | `inventor_sweep` | スケッチプロファイルをスケッチパスに沿ってスイープ（接続セグメントは自動チェーン）。orientation normal_to_path\|parallel。 |
 | `inventor_create_bim_connector` | 円形ポートエッジ上に BIM パイプコネクタを作成（ref は inventor_probe_brep の `circles[].edge`）。kind=pipe、任意で system/flow/connection メタデータ。 |
+| `inventor_create_part` | JSON レシピから部品を 1 回の呼び出しで作成：スケッチ（矩形 / 円 / バルジ付きポリライン、内側の穴）→ 押し出し / 穴 / フィレット / 面取り → 材料 + iProperty → サイレント Save-As。エラーはレシピのパスを示し、失敗時は部品を保存せず閉じる。`dry_run` 対応。 |
 
-### export (9) — ビューキャプチャと形状エクスポート（書き込み）
+### export (10) — ビューキャプチャと形状エクスポート（書き込み）
 
 > `output_path` は許可されたルート配下に置く必要があります：ユーザープロファイル、`%TEMP%`、または追加したルート — 例: Inventor マシンで `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` を設定（設定後に Inventor と MCP クライアント/サーバーセッションを再起動）。
 
@@ -197,18 +201,24 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_view_fit` | アクティブビューをモデル範囲にズームフィット（キャプチャ前に実行）。 |
 | `inventor_set_view_orientation` | 標準カメラ方向（iso/front/top/…）を設定し、マルチアングルキャプチャに対応。 |
 | `inventor_set_camera` | カメラを明示的に配置（eye/target mm、up、perspective、extents_mm、fit）— 標準方向が合わない場合に capture_view の前に使用。 |
+| `inventor_set_view_state` | デザインビューの有効化/作成、オブジェクト表示（作業フィーチャ等）、セレクタによるオカレンス表示切替。`inventor_capture_view` も同じキーと orientation/camera/fit、複数の `shots` を受け付ける。 |
 
 > エクスポートパスは絶対パスで、許可された出力ルート（ユーザープロファイルまたは temp）の下にある必要があります。
 
-### assembly (3、書き込み) — 座標ではなく関係によってアセンブリを構成
+### assembly (8、書き込み) — アセンブリの構成と編集
 
 | ツール | 説明 |
 |---|---|
 | `inventor_place_occurrence` | コンポーネント（.ipt/.iam）をアクティブアセンブリに配置。初期姿勢と接地はオプション。 |
 | `inventor_add_constraint` | 2 つの名前付き参照を拘束（mate/flush/insert/angle）。応答には `health` が含まれるため、常に確認してください。 |
 | `inventor_create_imate` | 決定論的面セレクターを使用して、アクティブパーツに名前付き iMate を作成。 |
+| `inventor_place_occurrences` | 複数コンポーネントを 1 つの元に戻す単位で配置。姿勢は原点+回転、軸、または 4×4 行列。`lock` = none / grounded / workplanes。 |
+| `inventor_delete_occurrences` | セレクタに一致するトップレベルのオカレンスを削除（`dry_run`）。 |
+| `inventor_set_occurrence_state` | 表示 / 抑制 / 固定 / 姿勢 / ロックを一括設定。 |
+| `inventor_set_appearance` | オカレンスまたはボディに RGB 色やライブラリの外観を適用。 |
+| `inventor_reset_appearance` | 外観の上書きを解除。 |
 
-### assembly_query (5、読み取り専用) — 数値セルフチェックバッテリー。`--read-only` でも存続
+### assembly_query (6、読み取り専用) — 数値セルフチェックバッテリー。`--read-only` でも存続
 
 | ツール | 説明 |
 |---|---|
@@ -217,12 +227,16 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 | `inventor_measure_min_distance` | 2 つのオカレンスまたは名前付き参照間の最小 3D 距離（mm）。 |
 | `inventor_get_assembly_bom` | BOM + オカレンスツリー（接地フラグと並進/回転の自由度を含む）。 |
 | `inventor_list_constraints` | すべての拘束をタイプ、`health`、抑制フラグ、2 つのオカレンス名とともに読み取り。 |
+| `inventor_list_occurrences` | セレクタで絞ったオカレンス一覧（path、file、bbox_mm、transform、表示、材料、外観、質量、体積）。`check_interference` は `set_a` × `set_b`、`measure_min_distance` は `pairs[]` や集合×集合 + `threshold_mm` に対応。 |
 
-### code (1) — オプトイン脱出ハッチ（デフォルトで OFF）
+### code (4) — オプトイン脱出ハッチ（デフォルトで OFF）
 
 | ツール | 説明 |
 |---|---|
 | `inventor_send_code` | **危険、オプトインのみ。** C# スニペットをインプロセスで `Inventor.Application` に対して実行。サーバーとアドインの両方がオプトインしない限り無効（それ以外の場合は `SEND_CODE_DISABLED`）。禁止 API（ファイル/プロセス/ネットワーク/環境）は拒否。 |
+| `inventor_save_code_module` | 再利用可能な C# ヘルパーモジュールを保存（宣言のみ、保存前にポリシー検査とドライコンパイル）。 |
+| `inventor_list_code_modules` | 保存済みモジュールとシグネチャを一覧。 |
+| `inventor_delete_code_module` | モジュールを削除。 |
 
 ### toolbaker (3、読み取り専用) — サーバーサイドのベイクデータベースのみを操作
 

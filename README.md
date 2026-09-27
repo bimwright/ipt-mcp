@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: verified.** Phases 1-3 are complete and green (73 MCP tools by default, or 74 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
+> **Status: verified.** Phases 1-3 are complete and green (84 MCP tools by default, or 88 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
 
 ---
 
@@ -109,12 +109,18 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **73 tools** by default when all platform toolsets are enabled, or **74 tools** when inventor_send_code is enabled (opt-in). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **84 tools** by default when all platform toolsets are enabled, or **88 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
 Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
+
+**Targeting a document.** Document-level tools (`get_document_info`, `list_bodies`, `list_features`, the iProperty, parameter, material and mass tools, `save_document`, `close_document`, and the assembly tools) take an optional `document`: a full path or a name of a document Inventor already has in memory — an open window *or* a part loaded as an assembly reference. It is matched by path, display name, file name, then a unique substring; it is never opened or activated automatically, and an ambiguous or unknown name returns the candidates. Omit it to act on the active document.
+
+**Occurrence selectors.** The bulk assembly tools pick occurrences with one shared selector: `{names?: [glob], regex?, file?: glob, path_contains?, leaf?: false, max_depth?, include_suppressed?: false, limit?}` (or just a name / array of names). Globs use `*`/`?`; a name glob containing `/` matches the occurrence path (`SUB:1/PART:2`). Zero matches or more than `limit` is an error that lists the closest names — results are never silently truncated.
+
+**Dialogs.** Save, open, close, export and the batch document tools run under `Application.SilentOperation` by default (`silent=true`), so Inventor answers its own prompts with their defaults instead of opening a hidden modal dialog that blocks the call. If a call still times out, the TIMEOUT message and `inventor_health` report `modal_dialog {open, title}` — probed without touching Inventor's main thread.
 
 ### meta (3) — server-side target tools, never round-trip to the add-in; stay exposed under `--read-only`
 
@@ -128,15 +134,15 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 | Tool | Description |
 |---|---|
-| `inventor_health` | Probe the active add-in: inventor_year, process_id, whether a document is open, active document type. |
+| `inventor_health` | Probe the active add-in: inventor_year, process_id, whether a document is open, active document type, STA queue, and `modal_dialog {open, title}` when a dialog is blocking Inventor. |
 | `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`. No model changes. |
-| `inventor_list_open_documents` | List all open documents: title, path, type, and which is active. |
-| `inventor_get_document_info` | Get the active document's title, full path, and document type. |
+| `inventor_list_open_documents` | List documents in memory: title, path, type, is_active, dirty, visible; optional `filter` / `dirty_only`. |
+| `inventor_get_document_info` | Title, full path, type and dirty flag of the active or a targeted document; `references=true` adds its file references (with missing flags). |
 | `inventor_list_bodies` | List the part's solid bodies: id (`body:N`), name, volume_mm3, bbox_mm, face_count, created_by feature, visible. |
 | `inventor_list_features` | List the part's features in tree order: name, type, health, suppressed, body_names. |
 | `inventor_probe_brep` | Survey the part's B-rep for port mouths: planar faces with inner-loop circular edges — normal (IsParamReversed-corrected), center_mm, port_diameter_mm, all circles on the face. |
 
-### document (7) — document lifecycle (write)
+### document (10) — document lifecycle (write)
 
 | Tool | Description |
 |---|---|
@@ -147,6 +153,9 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_close_document` | Close the active document; `save=true` saves first. |
 | `inventor_set_units` | Set the active document's length unit (mm, cm, m, in, ft). |
 | `inventor_set_material` | Assign a material to the active part by name. |
+| `inventor_save_all` | Update a root document and save it with every dirty referenced document, silently; per-file saved / read_only / error; `dry_run`. |
+| `inventor_open_documents` | Open several documents in one call (default without windows, for `document`-targeted edits). |
+| `inventor_close_documents` | Close documents by path/name, or all visible ones (`keep_active`); optional save. |
 
 ### parameters (4) — model & user parameters (write)
 
@@ -181,10 +190,11 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_draw_text` | Add a fitted text box (position mm, optional font_size_mm; rotation_deg in multiples of 90). |
 | `inventor_close_sketch` | Finish editing a sketch (exit sketch edit mode). |
 
-### feature (15) — solid & work features (write)
+### feature (16) — solid & work features (write)
 
 | Tool | Description |
 |---|---|
+| `inventor_create_part` | Build a whole part from a JSON recipe in one call: sketches (rect / circle / polyline with arc bulges, inner voids, on origin or fixed planes) → extrude / hole / fillet / chamfer → material + iProperties → silent Save-As. Errors name the recipe path (`features[2].extrude.distance`); a failing build closes the part unsaved; `dry_run` validates only. |
 | `inventor_extrude` | Extrude a named sketch (distance, join/cut/intersect, direction). |
 | `inventor_revolve` | Revolve a named sketch about an axis (angle, operation). |
 | `inventor_combine` | Boolean solid bodies (base + tool bodies, join/cut/intersect, keep_tool_bodies). |
@@ -201,13 +211,14 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 | `inventor_sweep` | Sweep a sketch profile along a sketch path (connected segments chain); orientation normal_to_path\|parallel. |
 | `inventor_create_bim_connector` | Author a BIM pipe connector on a circular port edge (ref from inventor_probe_brep `circles[].edge`); kind=pipe, optional system/flow/connection metadata. |
 
-### export (9) — view capture & geometry export (write)
+### export (10) — view capture & geometry export (write)
 
 > `output_path` must sit under an allowed root: the user profile, `%TEMP%`, or a root you add — e.g. set `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` on the Inventor machine (restart Inventor and your MCP client/server session afterwards).
 
 | Tool | Description |
 |---|---|
-| `inventor_capture_view` | Capture the active view to a PNG file (under `<export-root>\captures\` or `output_path`); `inline=true` returns a bounded base64 PNG instead. |
+| `inventor_capture_view` | Capture the active view to a PNG file (under `<export-root>\captures\` or `output_path`); `inline=true` returns a bounded base64 PNG instead. Can set up the view in the same call (design view, object/occurrence visibility, orientation or camera, fit) and take several `shots` at once. |
+| `inventor_set_view_state` | Activate or create a design view, toggle object visibility (work features, sketches, …) and show/hide occurrences by selector. |
 | `inventor_export_step` | Export the active part/assembly to STEP (.stp/.step). |
 | `inventor_export_stl` | Export the active part/assembly to STL (.stl). |
 | `inventor_export_sat` | Export the active part/assembly to ACIS SAT (.sat) — the Revit interop format; acis_version defaults to 7 (the only supported value). |
@@ -219,29 +230,38 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 > Export paths must be absolute and under an allowed output root (user profile or temp).
 
-### assembly (3, write) — compose assemblies via relationships, not coordinates
+### assembly (8, write) — compose and edit assemblies
 
 | Tool | Description |
 |---|---|
 | `inventor_place_occurrence` | Place a component (.ipt/.iam) into the active assembly; optional initial pose + grounded. |
 | `inventor_add_constraint` | Constrain two named refs (mate/flush/insert/angle); response carries `health` — always check it. |
 | `inventor_create_imate` | Author a named iMate on the active part using a deterministic face selector. |
+| `inventor_place_occurrences` | Place many components in one undo step; pose as origin+rotation, axes or a 4×4 matrix; `lock` = none / grounded / workplanes (three hidden fixed work planes flush-constrained to the part's origin planes). |
+| `inventor_delete_occurrences` | Delete the top-level occurrences a selector matches (with their lock planes); `dry_run`. |
+| `inventor_set_occurrence_state` | Set visible / suppressed / grounded / pose / lock on every selector match in one undo step; `dry_run`. |
+| `inventor_set_appearance` | Colour occurrences (selector) or part bodies by RGB, or apply a library appearance by name. |
+| `inventor_reset_appearance` | Remove appearance overrides from occurrences or part bodies. |
 
-### assembly_query (5, read-only) — numeric self-check battery; survives `--read-only`
+### assembly_query (6, read-only) — numeric self-check battery; survives `--read-only`
 
 | Tool | Description |
 |---|---|
 | `inventor_list_interfaces` | List named interfaces (iMates, work features, origin geometry) of the doc or one occurrence. |
-| `inventor_check_interference` | Run interference analysis; returns pair count and total/per-pair volumes. |
-| `inventor_measure_min_distance` | Minimum 3D distance (mm) between two occurrences or named refs. |
+| `inventor_list_occurrences` | Selector-filtered occurrence report with chosen fields (path, file, bbox_mm, transform, visibility, grounded, material, appearance, mass, volume); inline or to a file. |
+| `inventor_check_interference` | Run interference analysis — legacy occurrence names, or `set_a` × `set_b` selectors with a bounding-box prefilter; pairs sorted by volume, capped by `max_pairs`. |
+| `inventor_measure_min_distance` | Minimum 3D distance (mm) between two occurrences or named refs — or a batch: `pairs[]` or `set_a` × `set_b` with `threshold_mm` (clearance checks). |
 | `inventor_get_assembly_bom` | BOM + occurrence tree with grounded flag and translation/rotation degrees of freedom. |
 | `inventor_list_constraints` | Read back every constraint with type, `health`, suppressed flag and the two occurrence names. |
 
-### code (1) — opt-in escape hatch (OFF by default)
+### code (4) — opt-in escape hatch (OFF by default)
 
 | Tool | Description |
 |---|---|
-| `inventor_send_code` | **Dangerous, opt-in only.** Execute a C# snippet in-process against `Inventor.Application`. Disabled unless both server and add-in opt in (else `SEND_CODE_DISABLED`); banned APIs are rejected. Returns the script's `result` + captured `stdout`; `timeout_ms` overrides the per-call timeout. |
+| `inventor_send_code` | **Dangerous, opt-in only.** Execute a C# snippet in-process against `Inventor.Application`. Disabled unless both server and add-in opt in (else `SEND_CODE_DISABLED`); banned APIs are rejected (fully-qualified `System.IO.Path` string helpers are allowed). Returns the script's `result` (spilled to a file above 64 KiB) + captured `stdout`; `modules` loads saved helper modules; `silent=true` runs under SilentOperation; `timeout_ms` overrides the per-call timeout. Failures carry `diagnostics[{source, line, code, message, hint}]` or a runtime `location` + `hint`. |
+| `inventor_save_code_module` | Save a reusable C# helper module (declarations only); policy-checked and dry-compiled in the add-in before it is stored; `requires` other modules. |
+| `inventor_list_code_modules` | List saved modules with hash, description and declared signatures. |
+| `inventor_delete_code_module` | Delete a saved module (refused while another module requires it). |
 
 ### toolbaker (3, read-only) — operate purely on the server-side bake database
 

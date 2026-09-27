@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-73%20or%2074%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (73 MCP tools mặc định, hoặc 74 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
+> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (84 MCP tools mặc định, hoặc 88 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
 
 ---
 
@@ -90,7 +90,9 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **73 công cụ** khi bật mọi platform toolset mặc định, hoặc **74 công cụ** khi bật inventor_send_code (opt-in). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **84 công cụ** khi bật mọi platform toolset mặc định, hoặc **88 công cụ** khi bật toolset send_code (opt-in: `inventor_send_code` + 3 tool code module). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+
+**Chọn document & occurrence.** Các tool cấp document nhận `document` tuỳ chọn (đường dẫn hoặc tên của document Inventor đang giữ trong bộ nhớ — cả part được assembly tham chiếu); không bao giờ tự mở/activate. Các tool assembly theo lô dùng chung selector `{names?: [glob], regex?, file?, path_contains?, leaf?, max_depth?, include_suppressed?, limit?}`; không khớp hoặc vượt `limit` là lỗi kèm gợi ý tên gần giống. Save/open/close/export chạy dưới `SilentOperation` mặc định để dialog ẩn không làm treo call; nếu vẫn timeout, `inventor_health` báo `modal_dialog {open, title}`.
 
 Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
@@ -117,7 +119,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_list_features` | List các feature của part theo thứ tự tree: name, type, health, suppressed, body_names. |
 | `inventor_probe_brep` | Survey B-rep của part tìm miệng port: mặt phẳng có cạnh tròn inner-loop — normal (đã hiệu chỉnh IsParamReversed), center_mm, port_diameter_mm, mọi đường tròn trên mặt. |
 
-### document (7) — vòng đời document (write)
+### document (10) — vòng đời document (write)
 
 | Tool | Mô tả |
 |---|---|
@@ -128,6 +130,9 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_close_document` | Đóng document active; `save=true` lưu trước. |
 | `inventor_set_units` | Đặt đơn vị độ dài của document (mm, cm, m, in, ft). |
 | `inventor_set_material` | Gán material cho part active theo tên. |
+| `inventor_save_all` | Update document gốc rồi lưu cùng mọi document tham chiếu đang dirty, chạy silent; báo từng file saved / read_only / error; có `dry_run`. |
+| `inventor_open_documents` | Mở nhiều document trong một call (mặc định không mở cửa sổ, để sửa qua tham số `document`). |
+| `inventor_close_documents` | Đóng document theo path/tên, hoặc mọi document đang hiển thị (`keep_active`); tuỳ chọn lưu trước. |
 
 ### parameters (4) — model & user parameters (write)
 
@@ -162,7 +167,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_draw_text` | Thêm text box fitted (position mm, tùy chọn font_size_mm; rotation_deg theo bội số 90). |
 | `inventor_close_sketch` | Kết thúc chỉnh sketch (thoát chế độ edit sketch). |
 
-### feature (15) — solid & work feature (write)
+### feature (16) — solid & work feature (write)
 
 | Tool | Mô tả |
 |---|---|
@@ -181,8 +186,9 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_loft` | Loft một danh sách sketch profile có thứ tự ('SketchName' hoặc 'SketchName:N'), tùy chọn sketch centerline, closed/merge-tangent-faces. |
 | `inventor_sweep` | Sweep một sketch profile dọc theo một sketch path (các đoạn liền kề tự nối chuỗi); orientation normal_to_path\|parallel. |
 | `inventor_create_bim_connector` | Author một BIM pipe connector trên một circular port edge (ref từ `circles[].edge` của inventor_probe_brep); kind=pipe, tùy chọn metadata system/flow/connection. |
+| `inventor_create_part` | Dựng cả part từ recipe JSON trong một call: sketch (rect / circle / polyline có cung bulge, vòng rỗng, trên plane gốc hoặc plane cố định) → extrude / hole / fillet / chamfer → material + iProperty → Save-As silent. Lỗi chỉ đúng đường dẫn trong recipe; hỏng thì part bị đóng không lưu; có `dry_run`. |
 
-### export (9) — capture view & export geometry (write)
+### export (10) — capture view & export geometry (write)
 
 > `output_path` phải nằm dưới root được phép: user profile, `%TEMP%`, hoặc root bạn thêm — ví dụ đặt `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` trên máy chạy Inventor (rồi khởi động lại Inventor và cả MCP client/server session).
 
@@ -197,18 +203,24 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_view_fit` | Zoom-fit view active vào model extents (chạy trước khi capture). |
 | `inventor_set_view_orientation` | Đặt một camera orientation chuẩn (iso/front/top/…) cho multi-angle capture. |
 | `inventor_set_camera` | Đặt camera tường minh (eye/target mm, up, perspective, extents_mm, fit) — dùng trước capture_view khi orientation chuẩn không khớp. |
+| `inventor_set_view_state` | Kích hoạt / tạo design view, bật tắt object visibility (work feature, sketch, …) và ẩn/hiện occurrence theo selector. `inventor_capture_view` nhận cùng các khoá này, cộng orientation/camera/fit và `shots` để chụp nhiều góc trong một call. |
 
 > Đường dẫn export phải là absolute và nằm dưới một output root được phép (user profile hoặc temp).
 
-### assembly (3, write) — compose assembly qua relationships, không phải coordinates
+### assembly (8, write) — dựng và sửa assembly
 
 | Tool | Mô tả |
 |---|---|
 | `inventor_place_occurrence` | Đặt một component (.ipt/.iam) vào assembly active; tùy chọn pose ban đầu + grounded. |
 | `inventor_add_constraint` | Constrain hai ref theo tên (mate/flush/insert/angle); response mang `health` — luôn kiểm tra. |
 | `inventor_create_imate` | Author một iMate theo tên trên part active dùng một face selector xác định. |
+| `inventor_place_occurrences` | Đặt nhiều component trong một bước undo; pose = origin+rotation, trục hoặc ma trận 4×4; `lock` = none / grounded / workplanes (3 fixed work plane ẩn flush với origin plane của part). |
+| `inventor_delete_occurrences` | Xoá các occurrence cấp top khớp selector (kèm lock plane); có `dry_run`. |
+| `inventor_set_occurrence_state` | Đặt visible / suppressed / grounded / pose / lock cho mọi occurrence khớp selector trong một bước undo. |
+| `inventor_set_appearance` | Tô màu RGB hoặc gán appearance thư viện cho occurrence (selector) hoặc body của part. |
+| `inventor_reset_appearance` | Gỡ appearance override. |
 
-### assembly_query (5, read-only) — bộ pin self-check số; sống sót dưới `--read-only`
+### assembly_query (6, read-only) — bộ pin self-check số; sống sót dưới `--read-only`
 
 | Tool | Mô tả |
 |---|---|
@@ -217,12 +229,16 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 | `inventor_measure_min_distance` | Khoảng cách 3D nhỏ nhất (mm) giữa hai occurrence hoặc named ref. |
 | `inventor_get_assembly_bom` | BOM + occurrence tree với grounded flag và translation/rotation degrees of freedom. |
 | `inventor_list_constraints` | Đọc lại mọi constraint với type, `health`, suppressed flag và hai occurrence name. |
+| `inventor_list_occurrences` | Liệt kê occurrence theo selector với cột tuỳ chọn (path, file, bbox_mm, transform, visibility, material, appearance, mass, volume); inline hoặc ra file. `check_interference` nhận `set_a` × `set_b`; `measure_min_distance` nhận `pairs[]` hoặc tập × tập + `threshold_mm`. |
 
-### code (1) — escape hatch opt-in (TẮT mặc định)
+### code (4) — escape hatch opt-in (TẮT mặc định)
 
 | Tool | Mô tả |
 |---|---|
 | `inventor_send_code` | **Nguy hiểm, chỉ opt-in.** Thực thi đoạn C# in-process trên `Inventor.Application`. Tắt trừ khi cả server và add-in đều opt-in (nếu không trả `SEND_CODE_DISABLED`); API bị cấm (file/process/network/environment) bị reject. |
+| `inventor_save_code_module` | Lưu module C# helper dùng lại (chỉ khai báo); kiểm policy + dry-compile trong add-in trước khi lưu; có `requires`. |
+| `inventor_list_code_modules` | Liệt kê module đã lưu: hash, mô tả, chữ ký hàm. |
+| `inventor_delete_code_module` | Xoá module (bị từ chối nếu module khác đang require). |
 
 ### toolbaker (3, read-only) — thao tác hoàn toàn trên bake database phía server
 
