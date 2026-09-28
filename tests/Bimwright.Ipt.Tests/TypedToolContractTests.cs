@@ -221,6 +221,8 @@ public sealed class TypedToolContractTests
     [InlineData("{\"features\":[{\"sketch\":{\"plane\":{\"origin_mm\":[0,0,0]},\"profile\":{\"rect\":[10,10]}}},{\"extrude\":{\"distance\":5}}]}", "features[0].sketch.plane")]
     [InlineData("{\"features\":[{\"sketch\":{\"profile\":{\"rect\":[10,10]}}},{\"extrude\":{\"distance\":5,\"operation\":\"add\"}}]}", "features[1].extrude.operation")]
     [InlineData("{\"feature\":[]}", "unknown key 'feature'")]
+    [InlineData("{\"features\":[{\"sketch\":{\"name\":\"PLATE\",\"profile\":{\"rect\":[10,10]}}},{\"extrude\":{\"distance\":5,\"name\":\"PLATE\"}}]}", "features[1].extrude.name")]
+    [InlineData("{\"features\":[{\"sketch\":{\"profile\":{\"rect\":[10,10]}}},{\"extrude\":{\"distance\":5,\"name\":\"BODY\"}},{\"sketch\":{\"name\":\"BODY\",\"profile\":{\"rect\":[5,5]}}},{\"extrude\":{\"distance\":2}}]}", "browser names must be unique")]
     public void Recipe_errors_name_their_json_path(string json, string expected)
     {
         Assert.False(PartRecipe.TryParse(JToken.Parse(json), out _, out var error));

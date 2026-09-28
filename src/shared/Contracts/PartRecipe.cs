@@ -149,6 +149,9 @@ public sealed class PartRecipe
         if (fs.Count > MaxFeatures) throw new RecipeException("recipe.features", $"at most {MaxFeatures} features (got {fs.Count})");
         string? lastSketch = null;
         var sketchNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var featureNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static string BrowserNameClash(string n) =>
+            $"name '{n}' is already used by a sketch or feature in this recipe; Inventor browser names must be unique (e.g. '{n}_EXT')";
         var autoSketch = 0;
         for (var i = 0; i < fs.Count; i++)
         {
@@ -164,6 +167,7 @@ public sealed class PartRecipe
                 {
                     var s = ParseSketch(body, fpath);
                     s.Name ??= "MCP_Sketch" + (++autoSketch);
+                    if (featureNames.Contains(s.Name)) throw new RecipeException(fpath + ".name", BrowserNameClash(s.Name));
                     if (!sketchNames.Add(s.Name)) throw new RecipeException(fpath + ".name", $"duplicate sketch name '{s.Name}'");
                     lastSketch = s.Name;
                     Features.Add(s);
@@ -183,6 +187,10 @@ public sealed class PartRecipe
                     e.Direction = OneOf(body, "direction", fpath, "positive", "positive", "negative", "symmetric");
                     e.Operation = OneOf(body, "operation", fpath, "join", "join", "cut", "intersect", "new_body");
                     e.Name = OptString(body, "name", fpath);
+                    // Sketches and features share Inventor's browser namespace: a clash fails the
+                    // rename inside Inventor with a bare E_FAIL, so reject it here with the path.
+                    if (e.Name != null && (sketchNames.Contains(e.Name) || !featureNames.Add(e.Name)))
+                        throw new RecipeException(fpath + ".name", BrowserNameClash(e.Name));
                     Features.Add(e);
                     break;
                 }

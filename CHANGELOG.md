@@ -41,6 +41,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- `create_part` rejects a feature or sketch name that another sketch/feature in the recipe already uses (Inventor browser names are one namespace), naming the recipe path, instead of failing inside Inventor with a bare `E_FAIL`.
 - **Command History: the Summary column no longer leaks paths** — it is generated from the raw error before privacy filtering, so a failure like `cannot open D:\secret\model.ipt` still showed the full path even though the detail panel's error field was masked. `Summary` now passes through the same redaction as `ErrorMessage`/`ResultJson`.
 - **Command History: live count, cap, and clear no longer include loaded history** — Load past sessions merged historical rows into the same collection, so the 1000-entry cap evicted just-loaded rows, the ribbon badge counted them, and Clear Session left the badge stale until the next call. Live entries now keep their own counter and eviction scans past pinned historical rows, `History (N)` counts live calls only, and Clear raises a notification so the badge drops immediately.
 - **Command History: `send_code` re-run keeps its body under `BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`** — the re-run entry was created without `CodeSnippet`, so the new row looked redacted: no numbered code view and Re-run disabled (params hold `{code}`, not `{code_hash}`, so journal recovery found nothing). The executed body is now carried onto the entry, keeping the row re-runnable — exactly what the cache opt-in is for.
