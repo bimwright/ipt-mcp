@@ -49,7 +49,7 @@ public sealed class ToastLayoutTests
 
     [Fact]
     public void Sample_rect_is_card_sized()
-        => Assert.Equal(new PxRect(16, 150, 356, 230), ToastLayout.SampleRect(new PxPoint(16, 150), 96));
+        => Assert.Equal(new PxRect(16, 150, 332, 230), ToastLayout.SampleRect(new PxPoint(16, 150), 96));
 
     [Fact]
     public void Strip_is_just_right_of_the_stack()

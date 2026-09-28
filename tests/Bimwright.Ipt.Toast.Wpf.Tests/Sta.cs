@@ -17,10 +17,11 @@ internal static class Sta
         {
             try { body(); }
             catch (Exception e) { error = e; }
+            finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
         }) { IsBackground = true };
         t.SetApartmentState(ApartmentState.STA);
         t.Start();
-        t.Join();
+        if (!t.Join(TimeSpan.FromSeconds(30))) throw new TimeoutException("WPF test STA did not finish.");
         if (error != null) ExceptionDispatchInfo.Capture(error).Throw();
     }
 
@@ -29,9 +30,10 @@ internal static class Sta
     {
         var frame = new DispatcherFrame();
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
-        timer.Tick += (_, _) => frame.Continue = false;
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
         timer.Start();
-        Dispatcher.PushFrame(frame);
+        try { Dispatcher.PushFrame(frame); }
+        finally { timer.Stop(); }
     }
 
     /// <summary>Pump until the condition holds or the budget is spent; returns whether it held.</summary>

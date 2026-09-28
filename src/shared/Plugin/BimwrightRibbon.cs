@@ -21,6 +21,7 @@ internal sealed class BimwrightRibbon
     private const string PanelId = "Bimwright_Ipt_Panel";
     private const string ToggleId = "Bimwright_Ipt_ToastToggle";
     private const string StatusId = "Bimwright_Ipt_Status";
+    private const string BrandId = "Bimwright_Ipt_ToastBrand";
     private const string HistoryId = "Bimwright_Ipt_History";
 
     private readonly InvApi.Application _app;
@@ -30,6 +31,9 @@ internal sealed class BimwrightRibbon
     private readonly Func<string> _statusText;
     private readonly Action _onHistory;
     private readonly Func<int> _historyCount;
+    private readonly Func<bool> _isBrandOn;
+    private readonly Action<bool> _setBrandOn;
+    private InvApi.ButtonDefinition? _brand;
     private InvApi.ButtonDefinition? _toggle;
     private InvApi.ButtonDefinition? _status;
     private InvApi.ButtonDefinition? _history;
@@ -38,7 +42,8 @@ internal sealed class BimwrightRibbon
     private InvApi.UserInterfaceEvents? _uiEvents;
 
     public BimwrightRibbon(InvApi.Application app, string clientId, Func<bool> isOn, Action<bool> setOn,
-        Func<string> statusText, Action onHistory, Func<int> historyCount)
+        Func<string> statusText, Action onHistory, Func<int> historyCount,
+        Func<bool> isBrandOn, Action<bool> setBrandOn)
     {
         _app = app;
         _clientId = clientId;
@@ -47,6 +52,8 @@ internal sealed class BimwrightRibbon
         _statusText = statusText;
         _onHistory = onHistory;
         _historyCount = historyCount;
+        _isBrandOn = isBrandOn;
+        _setBrandOn = setBrandOn;
     }
 
     /// <summary>Idempotent: also used after a ribbon reset.</summary>
@@ -58,11 +65,23 @@ internal sealed class BimwrightRibbon
             _toggle = Existing(defs, ToggleId) ?? defs.AddButtonDefinition(
                 "Toasts", ToggleId, InvApi.CommandTypesEnum.kQueryOnlyCmdType, _clientId,
                 "Show or hide Bimwright MCP activity toasts",
-                "Each MCP command the agent runs shows a short notification over the Inventor window.",
+                "One activity card counts Success, Failed and Capture results. Click it to open History.",
                 RibbonIcons.Letter('T', 16, Color.SteelBlue), RibbonIcons.Letter('T', 32, Color.SteelBlue),
                 InvApi.ButtonDisplayEnum.kAlwaysDisplayText);
             _toggle.OnExecute += OnToggle;
         }
+        if (_brand == null)
+        {
+            _brand = Existing(defs, BrandId) ?? defs.AddButtonDefinition(
+                "Toast Brand", BrandId, InvApi.CommandTypesEnum.kQueryOnlyCmdType, _clientId,
+                "Show the toast wordmark on hover (this session only)",
+                "Off by default, this session only. Disabled while toasts are off. A real hover reveals the BIMwright wordmark; the Inventor version stays visible either way.",
+                RibbonIcons.Letter('B', 16, Color.SeaGreen), RibbonIcons.Letter('B', 32, Color.SeaGreen),
+                InvApi.ButtonDisplayEnum.kAlwaysDisplayText);
+            _brand.OnExecute += OnBrand;
+        }
+        _brand.Pressed = _isBrandOn();
+        _brand.Enabled = _isOn();
         if (_status == null)
         {
             _status = Existing(defs, StatusId) ?? defs.AddButtonDefinition(
@@ -92,6 +111,7 @@ internal sealed class BimwrightRibbon
                 {
                     panel.CommandControls.AddButton(_toggle, true, true, "", false);
                     panel.CommandControls.AddButton(_status, true, true, "", false);
+                    panel.CommandControls.AddButton(_brand, false, true, "", false);
                     _historyControls.Add(panel.CommandControls.AddButton(_history, true, true, "", false));
                 }
             }
@@ -118,6 +138,8 @@ internal sealed class BimwrightRibbon
         try { if (_toggle != null) { _toggle.OnExecute -= OnToggle; _toggle.Delete(); } } catch { }
         try { if (_status != null) { _status.OnExecute -= OnStatus; _status.Delete(); } } catch { }
         try { if (_history != null) { _history.OnExecute -= OnHistory; _history.Delete(); } } catch { }
+        try { if (_brand != null) { _brand.OnExecute -= OnBrand; _brand.Delete(); } } catch { }
+        _brand = null;
         _toggle = null;
         _status = null;
         _history = null;
@@ -133,6 +155,18 @@ internal sealed class BimwrightRibbon
             var on = !_toggle!.Pressed;
             _toggle.Pressed = on;
             _setOn(on);
+            if (_brand != null) _brand.Enabled = on;
+        }
+        catch { }
+    }
+
+    private void OnBrand(InvApi.NameValueMap context)
+    {
+        try
+        {
+            var show = !_brand!.Pressed;
+            _brand.Pressed = show;
+            _setBrandOn(show);
         }
         catch { }
     }

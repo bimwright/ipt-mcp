@@ -18,13 +18,14 @@ public readonly record struct PxRect(int Left, int Top, int Right, int Bottom)
 /// </summary>
 public static class ToastLayout
 {
-    public const double CardWidthDip = 340;
+    // 300-DIP card plus 8-DIP shadow space on either side.
+    public const double CardWidthDip = 316;
     public const double EdgeDip = 16;
     public const double HomeTopDip = 150;
     public const double GapDip = 4;
     public const double MinViewHeightDip = 120;
     public const double SampleHeightDip = 80;
-    public const int MaxToasts = 3;
+    public const int MaxToasts = 1;
 
     public static int Px(double dip, uint dpi)
         => (int)Math.Round(dip * (dpi == 0 ? 96 : dpi) / 96.0, MidpointRounding.AwayFromZero);

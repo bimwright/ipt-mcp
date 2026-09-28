@@ -48,6 +48,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private BackdropHint? _hint;
     private string _configPath = "";
     private ConnectionWatch? _connectionWatch;
+    private System.Windows.Forms.Timer? _toastSnapshotTimer;
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
@@ -80,7 +81,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         // Toasts (Phase 1b): settings before the transport starts, so the first command already sees them.
         _configPath = ToastConfigStore.DefaultPath(_descriptorDir);
         _toastSettings = ToastConfigStore.Load(_configPath, Environment.GetEnvironmentVariable);
-        _toasts = new ToastNotifier(_toastSettings);
+        _toasts = new ToastNotifier(_toastSettings,
+            $"Inventor {_year}", ShowOrFocusHistoryWindow);
 
         // Start the transport and read back its bound endpoint into the descriptor.
         _server = TransportFactory.CreateStarted(
@@ -104,7 +106,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     /// <summary>Ribbon + Inventor events for toasts. Failures here never stop the MCP transport.</summary>
     private void StartToastUi()
     {
-        RefreshToastSnapshot();   // seed _ui now — a client can attach before the first command
+        RefreshToastWhenReady(); // Activate may precede app.Visible=true; retry on Inventor's STA.
         try
         {
             _ribbon = new BimwrightRibbon(
@@ -114,7 +116,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 SetToastsOn,
                 BuildStatusText,
                 ShowOrFocusHistoryWindow,
-                () => _sessionLog?.Count ?? 0);
+                () => _sessionLog?.Count ?? 0,
+                () => _toasts?.ShowBranding ?? false,
+                show => { if (_toasts != null) _toasts.ShowBranding = show; });
             _ribbon.Build();
         }
         catch
@@ -137,7 +141,39 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private void SetToastsOn(bool on)
     {
         if (_toasts != null) _toasts.Enabled = on;
-        ToastConfigStore.SaveEnableToast(_configPath, on);
+        RefreshToastSnapshot(force: true); // on/off confirmations need a fresh snapshot, even when now off
+        if (on) RefreshToastWhenReady();
+        else StopToastSnapshotTimer();
+        var persisted = ToastConfigStore.SaveEnableToast(_configPath, on);
+        _toasts?.NotifyToggle(persisted);
+    }
+
+    /// <summary>Retry readiness on the Inventor STA, slowing down if startup keeps the frame hidden.</summary>
+    private void RefreshToastWhenReady()
+    {
+        RefreshToastSnapshot();
+        if (_toasts == null || !_toasts.Enabled || _toasts.HasVisibleSnapshot || _toastSnapshotTimer != null) return;
+        var attempts = 0;
+        _toastSnapshotTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        _toastSnapshotTimer.Tick += (_, _) =>
+        {
+            RefreshToastSnapshot();
+            if (_toasts == null || !_toasts.Enabled || _toasts.HasVisibleSnapshot)
+            {
+                StopToastSnapshotTimer();
+                return;
+            }
+            if (attempts < 20 && ++attempts == 20)
+                _toastSnapshotTimer!.Interval = 2000;
+        };
+        _toastSnapshotTimer.Start();
+    }
+
+    private void StopToastSnapshotTimer()
+    {
+        _toastSnapshotTimer?.Stop();
+        _toastSnapshotTimer?.Dispose();
+        _toastSnapshotTimer = null;
     }
 
     private string BuildStatusText() => StatusText.Build(new StatusInfo(
@@ -350,7 +386,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         return result;
     }
 
-    /// <summary>Ribbon "History" button (Inventor STA): show-or-focus the window on the history thread.</summary>
+    /// <summary>Ribbon or toast callback (any thread): show-or-focus on the history dispatcher; no COM access.</summary>
     private void ShowOrFocusHistoryWindow()
     {
         var host = _historyHost;
@@ -410,10 +446,10 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     }
 
     /// <summary>STA only. Refreshes what the toast thread needs; skipped entirely while toasts are off.</summary>
-    private void RefreshToastSnapshot()
+    private void RefreshToastSnapshot(bool force = false)
     {
         var toasts = _toasts;
-        if (toasts is null || !toasts.Enabled) return;
+        if (toasts is null || (!force && !toasts.Enabled)) return;
         try
         {
             _hint ??= InventorUiSnapshotReader.ReadHint(_app);
@@ -495,6 +531,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
     public void Deactivate()
     {
+        StopToastSnapshotTimer();
         try { _connectionWatch?.Dispose(); } catch { }   // 0. stop the attach watch before the transport dies
         try { _server?.Dispose(); } catch { }            // 1. no new commands, so no new toasts
         try

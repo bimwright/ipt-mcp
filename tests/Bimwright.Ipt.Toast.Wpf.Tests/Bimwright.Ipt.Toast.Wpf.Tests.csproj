@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <TargetFrameworks>net48;net8.0-windows7.0;net10.0-windows7.0</TargetFrameworks>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -22,13 +23,15 @@
 
   <!--
     The real toast window, linked like a plugin shell would — the types live in this
-    assembly so internal seams (BrandWipeCount, _brandSweep) are directly testable.
+    assembly so internal rendering state and animation clocks are directly testable.
   -->
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Compile Include="..\..\src\shared\Infrastructure\IsExternalInitPolyfill.cs" LinkBase="Shared\Infrastructure" />
     <Compile Include="..\..\src\shared\Views\BrandAssets.cs" LinkBase="Shared\Views" />
-    <Compile Include="..\..\src\shared\Views\Toast\ToastNative.cs" LinkBase="Shared\Views\Toast" />
-    <Compile Include="..\..\src\shared\Views\Toast\ToastWindow.cs" LinkBase="Shared\Views\Toast" />
+    <Compile Include="..\..\src\shared\Views\Toast\*.cs" LinkBase="Shared\Views\Toast" />
     <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
   </ItemGroup>
 

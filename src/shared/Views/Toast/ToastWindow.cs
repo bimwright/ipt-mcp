@@ -1,170 +1,116 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
-using System.Diagnostics;
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
-using System.Windows.Input;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace Bimwright.Ipt.Shared.Views.Toast;
 
 /// <summary>
-/// One toast card. Built in code: the add-in can load in an Inventor AssemblyLoadContext where XAML
-/// resources and pack URIs don't resolve. Created, shown and closed on the toast thread only.
+/// RVT-style activity presentation on Inventor's dedicated toast STA. Code-only for the isolated
+/// Inventor 2027 load context; unowned/no-activate so a busy Inventor STA cannot stall creation.
+/// The feed owns lifetime. This window only renders and reports pointer/click/close events.
 /// </summary>
 internal sealed class ToastWindow : Window
 {
-    private readonly Action<ToastWindow> _closed;
     private readonly Border _card;
-    private readonly Border _stripe;
-    private readonly TextBlock _icon;
-    private readonly TextBlock _title;
-    internal readonly TextBlock _category;
-    internal readonly TextBlock _summary;
-    internal readonly TextBlock _detail;
-    internal readonly TextBlock _duration;
+    private readonly Border _outline;
     internal readonly Border _closeHost;
     private readonly TextBlock _closeGlyph;
-    private Brush _closeHover = Brushes.Transparent;
+    internal readonly TextBlock _title;
+    internal readonly TextBlock _summary;
+    private readonly TextBlock _icon;
+    internal readonly TextBlock _identity;
+    internal readonly Viewbox _counterRow;
+    internal readonly RollingToastNumber _successCount = new();
+    internal readonly RollingToastNumber _failedCount = new();
+    internal readonly RollingToastNumber _captureCount = new();
+    private readonly TextBlock[] _labels;
+    private readonly TextBlock[] _separators;
+    private readonly Grid _brandCell;
     private readonly TextBlock _brand;
-    internal readonly Run _brandBim;
-    internal readonly Run _brandWright;
-    private readonly TextBlock _brandShine;
-    internal readonly Run _shineBim;
-    internal readonly Run _shineWright;
-    internal readonly TranslateTransform _brandSweep = new(BrandMotion.SweepFrom, 0);
-    internal readonly TranslateTransform _shineSweep = new(BrandMotion.SweepFrom, 0);
-    private AnimationClock? _brandClock;
-    private AnimationClock? _shineClock;
-    private readonly Image _thumb;
-    private readonly DispatcherTimer _life;
-    private ToastCountdown _count;
-    private readonly Stopwatch _clock = new();
-    private PxPoint? _pos;
-    private bool _hidden;
-    private bool _closing;
+    private readonly TextBlock _shine;
+    private readonly Run _brandBim;
+    private readonly Run _brandWright;
+    private readonly Run _shineBim;
+    private readonly Run _shineWright;
+    internal readonly TranslateTransform _brandSweep = new(-0.75, 0);
+    internal readonly TranslateTransform _shineSweep = new(-0.75, 0);
+    private readonly TranslateTransform _slide = new(-24, 0);
+    private readonly ScaleTransform _scale = new(0.96, 0.96);
+    private readonly Func<Point> _cursor;
+    private readonly Func<bool> _motion;
+    private Action<ToastWindow>? _closed;
+    private Action<long>? _dismiss;
+    private Action<long>? _click;
+    private Action<long>? _enter;
+    private Action<long>? _leave;
+    private DispatcherTimer? _brandTimer;
+    private ToastCard _model;
+    private ToastPalette _palette;
+    private Point _lastPointer;
+    private bool _hasPointer;
+    private bool _pointerOver;
+    private bool _realHover;
+    private bool _brandRevealed;
+    private bool _brandHiding;
+    private bool _showBranding;
     private bool _done;
-    private bool _lifeRunning;
+    private int _brandGeneration;
+    private PxPoint? _position;
 
-    public ToastModel Model { get; private set; }
-    public bool IsClosing => _closing || _done;
+    public long CardId => _model.Id;
     public IntPtr Hwnd { get; private set; }
-    public bool IsShown { get; private set; }
-    /// <summary>Painted right now. A hidden card is not covering the backdrop the sampler reads.</summary>
-    public bool IsOnScreen => IsShown && !_hidden;
-    public int HeightPx => ToastNative.Rect(Hwnd)?.Height ?? 0;
+    public bool IsClosing { get; private set; }
 
-    public ToastWindow(ToastModel model, ToastPalette palette, Action<ToastWindow> closed)
+    public ToastWindow(ToastCard model, ToastPalette palette, string identity,
+        Action<ToastWindow> closed, Action<long> dismiss, Action<long> click,
+        Action<long> enter, Action<long> leave, Func<Point>? cursor = null, Func<bool>? motion = null)
     {
-        Model = model;
+        _model = model;
+        _palette = palette;
         _closed = closed;
-
+        _dismiss = dismiss;
+        _click = click;
+        _enter = enter;
+        _leave = leave;
+        _cursor = cursor ?? ToastNative.CursorPosition;
+        _motion = motion ?? (() => SystemParameters.ClientAreaAnimation);
+        Title = "IPT-MCP activity";
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
         ShowInTaskbar = false;
         Topmost = true;
+        ShowActivated = false;
         ResizeMode = ResizeMode.NoResize;
-        ShowActivated = false;   // spike 1a: mandatory, together with WS_EX_NOACTIVATE below
-        SizeToContent = SizeToContent.Height;
         Width = ToastLayout.CardWidthDip;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = -32000;
         Top = -32000;
         Opacity = 0;
-        FontFamily = new FontFamily("Segoe UI");
+        FontFamily = new FontFamily("Segoe UI, Noto Sans, Arial");
 
-        _icon = new TextBlock
-        {
-            FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 16,
-            Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Top,
-        };
-        _title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        _category = new TextBlock { FontSize = 10.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(24, 2, 0, 0) };
-        _duration = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
-        _summary = new TextBlock
-        {
-            FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(24, 4, 0, 0),
-            MaxHeight = 64, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        _detail = new TextBlock
-        {
-            FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(24, 2, 0, 0),
-            MaxHeight = 40, TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        _thumb = new Image { MaxHeight = 120, Margin = new Thickness(24, 6, 0, 0), Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
-        _brandBim = new Run(BrandAssets.WordmarkLeft);
-        _brandWright = new Run(BrandAssets.WordmarkRight);
-        _brand = new TextBlock
-        {
-            // Logo casing and colours. Brightness lives in the OpacityMask: it starts dimmed,
-            // then a lit front wipes left→right once after the reader's eye has had time to
-            // reach the toast (~1.3 s, WipeBrand). The front carries a full-alpha crest so the
-            // eye sees a wave pass; behind it the wordmark settles at BrandMotion.SettleOpacity.
-            FontSize = BrandMotion.FontSizeDip, FontWeight = FontWeights.SemiBold,
-            ToolTip = BrandAssets.ProductTag,
-            Inlines = { _brandBim, _brandWright },
-        };
-        var brandMask = new LinearGradientBrush
-        {
-            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
-            RelativeTransform = _brandSweep,
-        };
-        foreach (var (offset, alpha) in BrandMotion.BrandStops)
-            brandMask.GradientStops.Add(new GradientStop(Dim(alpha), offset));
-        _brand.OpacityMask = brandMask;
-        _shineBim = new Run(BrandAssets.WordmarkLeft);
-        _shineWright = new Run(BrandAssets.WordmarkRight);
-        _brandShine = new TextBlock
-        {
-            // The wordmark again in lighter tints, masked to a narrow band that sweeps with the
-            // wipe — the wave passes inside the letterforms instead of an object sliding under.
-            FontSize = BrandMotion.FontSizeDip, FontWeight = FontWeights.SemiBold, IsHitTestVisible = false,
-            Inlines = { _shineBim, _shineWright },
-        };
-        var shineMask = new LinearGradientBrush
-        {
-            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
-            RelativeTransform = _shineSweep,
-        };
-        // Band peak sits on the brand front's crest so the glint and the wipe arrive together.
-        foreach (var (offset, alpha) in BrandMotion.ShineStops)
-            shineMask.GradientStops.Add(new GradientStop(Dim(alpha), offset));
-        _brandShine.OpacityMask = shineMask;
-        var brandCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        brandCell.Children.Add(_brand);
-        brandCell.Children.Add(_brandShine);
-
-        _closeGlyph = new TextBlock
-        {
-            Text = "\uE711",   // ChromeClose — escaped, not literal (see ToastGlyph)
-            FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 10,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        };
-        _closeHost = new Border
-        {
-            Width = 22, Height = 22, CornerRadius = new CornerRadius(11),
-            Background = Brushes.Transparent, Cursor = Cursors.Hand,
-            VerticalAlignment = VerticalAlignment.Top,
-            ToolTip = "Close", Child = _closeGlyph,
-        };
+        _icon = new TextBlock { FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 16,
+            Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Top };
+        _closeGlyph = new TextBlock { Text = "\uE711", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 10,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _closeHost = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11),
+            Background = Brushes.Transparent, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Top,
+            ToolTip = "Close", Child = _closeGlyph };
         AutomationProperties.SetName(_closeHost, "Close");
-        _closeHost.MouseEnter += (_, _) => _closeHost.Background = _closeHover;
-        _closeHost.MouseLeave += (_, _) => _closeHost.Background = Brushes.Transparent;
-        _closeHost.MouseLeftButtonUp += (_, e) =>
-        {
-            e.Handled = true;   // only dismiss — the card's click-to-open must not see this
-            BeginClose();
-        };
-
+        _closeHost.MouseLeftButtonUp += OnCloseClick;
+        _title = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center };
         var header = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(_icon, Dock.Left);
         DockPanel.SetDock(_closeHost, Dock.Right);
@@ -172,302 +118,358 @@ internal sealed class ToastWindow : Window
         header.Children.Add(_closeHost);
         header.Children.Add(_title);
 
-        var footer = new DockPanel { Margin = new Thickness(24, 6, 0, 0) };
-        DockPanel.SetDock(brandCell, Dock.Right);
-        footer.Children.Add(brandCell);
-        footer.Children.Add(_duration);
-
-        var body = new StackPanel { Margin = new Thickness(10, 10, 12, 10) };
-        body.Children.Add(header);
-        body.Children.Add(_category);
+        var counters = new StackPanel { Orientation = Orientation.Horizontal };
+        _labels = new[] { Label("Success"), Label("Failed"), Label("Capture") };
+        _separators = new[] { Separator(), Separator() };
+        counters.Children.Add(_successCount);
+        counters.Children.Add(_labels[0]);
+        counters.Children.Add(_separators[0]);
+        counters.Children.Add(_failedCount);
+        counters.Children.Add(_labels[1]);
+        counters.Children.Add(_separators[1]);
+        counters.Children.Add(_captureCount);
+        counters.Children.Add(_labels[2]);
+        _counterRow = new Viewbox { Child = counters, Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left };
+        _summary = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var body = new Grid { Margin = new Thickness(24, 5, 0, 0) };
+        body.Children.Add(_counterRow);
         body.Children.Add(_summary);
-        body.Children.Add(_detail);
-        body.Children.Add(_thumb);
-        body.Children.Add(footer);
 
-        _stripe = new Border { CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(5, 0, 0, 0), Child = body };
-        _card = new Border
-        {
-            Margin = new Thickness(8), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Child = _stripe,
-            Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Opacity = 0.45, Color = Colors.Black },
-        };
-        Content = _card;
-        ApplyContent(model);   // before ApplyPalette: the accent depends on Model.Success/Kind
+        _brandBim = new Run(BrandAssets.WordmarkLeft);
+        _brandWright = new Run(BrandAssets.WordmarkRight);
+        _shineBim = new Run(BrandAssets.WordmarkLeft);
+        _shineWright = new Run(BrandAssets.WordmarkRight);
+        _brand = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold,
+            Inlines = { _brandBim, _brandWright }, ToolTip = BrandAssets.ProductTag };
+        _shine = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold,
+            Inlines = { _shineBim, _shineWright }, IsHitTestVisible = false };
+        _brandCell = new Grid { HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center };
+        _brandCell.Children.Add(_brand);
+        _brandCell.Children.Add(_shine);
+        // Identity never hides with branding. Separate columns prevent label/brand overlap.
+        var footer = new Grid { Margin = new Thickness(24, 5, 0, 0) };
+        footer.ColumnDefinitions.Add(new ColumnDefinition());
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _identity = new TextBlock { Text = identity, ToolTip = identity, FontSize = 9,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 8, 0) };
+        footer.Children.Add(_identity);
+        Grid.SetColumn(_brandCell, 1);
+        footer.Children.Add(_brandCell);
+        ParkBrand();
+
+        var content = new Grid { Margin = new Thickness(10, 10, 12, 10) };
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(28) });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.Children.Add(header);
+        Grid.SetRow(body, 1);
+        content.Children.Add(body);
+        Grid.SetRow(footer, 2);
+        content.Children.Add(footer);
+        _card = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(6, 0, 0, 0),
+            Child = content, Cursor = Cursors.Hand };
+        var transforms = new TransformGroup();
+        transforms.Children.Add(_scale);
+        transforms.Children.Add(_slide);
+        _outline = new Border { Margin = new Thickness(8), CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1), Child = _card, RenderTransform = transforms,
+            RenderTransformOrigin = new Point(0, 0.5),
+            Effect = new DropShadowEffect { BlurRadius = 16, ShadowDepth = 4, Opacity = 0.22, Color = Colors.Black } };
+        Content = _outline;
         ApplyPalette(palette);
-
-        // The timer restarts its whole interval on Start, so remaining visible time lives in _count.
-        _count = new ToastCountdown(model.LifetimeMs);
-        _clock.Start();
-        _life = new DispatcherTimer();
-        _life.Tick += (_, _) => BeginClose();
-        MouseEnter += (_, _) =>
-        {
-            PauseLife();
-            WipeBrand(BrandMotion.HoverDelayMs);   // the eye is already there — replay quickly
-        };
-        MouseLeave += (_, _) => ResumeLife();
-        MouseLeftButtonUp += (_, e) =>
-        {
-            // × already marked its click handled — never let it reach the card's open path.
-            if (ReferenceEquals(e.OriginalSource, _closeHost) || ReferenceEquals(e.OriginalSource, _closeGlyph)) return;
-            CardClickCount++;
-            if (Model.ThumbnailPath != null) OpenImage(Model.ThumbnailPath);
-            BeginClose();
-        };
-
-        SourceInitialized += (_, _) =>
-        {
-            Hwnd = new WindowInteropHelper(this).Handle;
-            ToastNative.MakeNoActivate(Hwnd);
-        };
+        MouseEnter += OnPointerEnter;
+        MouseMove += OnPointerMove;
+        MouseLeave += OnPointerLeave;
+        MouseLeftButtonUp += OnCardClick;
+        SourceInitialized += OnSourceInitialized;
+        Closed += OnClosed;
     }
 
-    /// <summary>Text and icon for the current model — shared by the constructor and UpdateModel.</summary>
-    private void ApplyContent(ToastModel model)
+    private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        Model = model;
-        _icon.Text = ToastGlyph.For(model.Icon);
-        _title.Text = model.Title;
-        _category.Text = model.Category;
-        _category.Visibility = model.Category.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        _summary.Text = model.Summary;
-        _detail.Text = model.Detail;
-        _detail.Visibility = model.Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        _duration.Text = model.DurationMs > 0 ? model.DurationMs + " ms" : "";
+        Hwnd = new WindowInteropHelper(this).Handle;
+        ToastNative.MakeNoActivate(Hwnd);
     }
 
-    public void ApplyPalette(ToastPalette p)
+    public void Appear(PxPoint position)
     {
-        _card.Background = Brush(p.Background);
-        _card.BorderBrush = Brush(p.Outline);
-        var accent = Brush(!Model.Success ? p.AccentError : Model.Kind == ToolActivityKind.Write ? p.AccentWrite : p.AccentRead);
-        _stripe.BorderBrush = accent;
-        _icon.Foreground = accent;
-        var white = new Rgb(255, 255, 255);
-        _shineBim.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandBim, white, BrandMotion.ShineBlendWeight));
-        _shineWright.Foreground = Brush(ToastPaletteChooser.Blend(p.BrandWright, white, BrandMotion.ShineBlendWeight));
-        _title.Foreground = Brush(p.Title);
-        _summary.Foreground = Brush(p.Title);
-        var body = Brush(p.Body);
-        _category.Foreground = body;
-        _detail.Foreground = body;
-        _duration.Foreground = body;
-        _closeGlyph.Foreground = body;
-        _closeHover = Brush(ToastPaletteChooser.Blend(p.Body, p.Background, 0.08));
-        _brandBim.Foreground = Brush(p.BrandBim);
-        _brandWright.Foreground = Brush(p.BrandWright);
-    }
-
-    /// <summary>Refresh a retained card without recreating its HWND or replaying its entrance fade.</summary>
-    public void UpdateModel(ToastModel model, ToastPalette palette)
-    {
-        if (IsClosing) return;
-        PauseLife();
-        ApplyContent(model);
-        _thumb.Source = null;
-        _thumb.Visibility = Visibility.Collapsed;
-        if (model.ThumbnailPath != null) SetThumbnail(ToastThumbnail.TryLoadBytes(model.ThumbnailPath));
-        ApplyPalette(palette);
-        _count = new ToastCountdown(model.LifetimeMs);
-        UpdateLayout(); // height changes must be visible to the stack's physical-pixel reflow
-        if (!IsMouseOver) ResumeLife();
-    }
-
-    public void SetThumbnail(byte[]? bytes)
-    {
-        if (bytes == null) return;
-        try
-        {
-            var img = new BitmapImage();
-            using (var ms = new MemoryStream(bytes))
-            {
-                img.BeginInit();
-                img.CacheOption = BitmapCacheOption.OnLoad;
-                img.DecodePixelWidth = 300;
-                img.StreamSource = ms;
-                img.EndInit();
-            }
-            img.Freeze();
-            _thumb.Source = img;
-            _thumb.Visibility = Visibility.Visible;
-        }
-        catch
-        {
-            // not a decodable image: text-only toast
-        }
-    }
-
-    /// <summary>First show: off-screen and transparent; the host moves it into the stack right after.</summary>
-    public void Appear()
-    {
-        if (IsShown || _done) return;
+        if (_done || IsVisible) return;
+        // Create the HWND while still hidden; position physically before Show/animation.
+        new WindowInteropHelper(this).EnsureHandle();
+        MoveTo(position);
+        _lastPointer = _cursor();
+        _hasPointer = ValidPoint(_lastPointer);
         Show();
-        IsShown = true;
-        if (MotionEnabled)
-            BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
-        else
+        if (!_motion())
+        {
+            _slide.X = 0;
+            _scale.ScaleX = _scale.ScaleY = 1;
             Opacity = 1;
-        WipeBrand();
-        if (!IsMouseOver) ResumeLife();
-    }
-
-    /// <summary>
-    /// Hidden while Inventor is minimized or a modal dialog is open; the lifetime pauses meanwhile.
-    /// Idempotent: the host calls it for every toast on every tracking tick.
-    /// </summary>
-    public void SetSuppressed(bool suppressed)
-    {
-        if (_done) return;
-        if (!IsShown)
-        {
-            if (!suppressed) Appear();   // created while suppressed: first show now
             return;
         }
-        if (suppressed == _hidden) return;
-        _hidden = suppressed;
-        if (suppressed)
-        {
-            PauseLife();
-            PauseBrand();   // a hidden sweep finishes unseen — freeze it, resume on restore
-            Hide();
-        }
-        else
-        {
-            Show();   // ShowActivated=false: shown without activation
-            ResumeBrand();
-            if (!IsMouseOver) ResumeLife();
-        }
+        var duration = TimeSpan.FromMilliseconds(280);
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-24, 0, duration) { EasingFunction = ease });
+        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.96, 1, duration) { EasingFunction = ease });
+        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1, duration) { EasingFunction = ease });
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration) { EasingFunction = ease });
     }
 
-    /// <summary>Brand reveal: a lit front wipes left→right once while a narrow band of lighter
-    /// letters sweeps through the wordmark in sync, then the wordmark stays lit. The pass starts
-    /// ~1.3 s after the card appears — the delay for a reader's eye to land on a fresh toast
-    /// (delayMs = EntranceDelayMs). Replayed quickly on hover (delayMs = HoverDelayMs).
-    /// Re-applying replaces the pending clock, so repeated hover never queues extra passes.
-    /// With Windows' "animate controls and elements" off, the wordmark settles directly —
-    /// same end state, no motion.</summary>
-    private void WipeBrand(int delayMs = BrandMotion.EntranceDelayMs)
+    public void MoveTo(PxPoint position)
     {
-        if (IsClosing || _hidden) return;
-        if (!MotionEnabled)
+        if (Hwnd == IntPtr.Zero || position == _position) return;
+        _position = position;
+        ToastNative.MoveNoActivate(Hwnd, position.X, position.Y);
+    }
+
+    public void Update(ToastCard model)
+    {
+        if (_done || IsClosing || model.Id != CardId || model == _model) return;
+        _model = model;
+        RenderContent(animate: IsVisible && _motion());
+    }
+
+    public void ApplyPalette(ToastPalette palette)
+    {
+        _palette = palette;
+        _outline.Background = _card.Background = Brush(palette.Background);
+        _outline.BorderBrush = Brush(palette.Outline);
+        _title.Foreground = _summary.Foreground = Brush(palette.Title);
+        _closeGlyph.Foreground = _identity.Foreground = Brush(palette.Body);
+        foreach (var label in _labels) label.Foreground = Brush(palette.Title);
+        foreach (var separator in _separators) separator.Foreground = Brush(palette.Outline);
+        _brandBim.Foreground = Brush(palette.BrandBim);
+        _brandWright.Foreground = Brush(palette.BrandWright);
+        var white = new Rgb(255, 255, 255);
+        _shineBim.Foreground = Brush(ToastPaletteChooser.Blend(palette.BrandBim, white, 0.55));
+        _shineWright.Foreground = Brush(ToastPaletteChooser.Blend(palette.BrandWright, white, 0.55));
+        RenderContent(animate: false);
+    }
+
+    private void RenderContent(bool animate)
+    {
+        var p = _palette;
+        var accent = _model.HasFailure ? p.AccentError : p.AccentRead; // blue includes writes, like RVT
+        var gradient = new LinearGradientBrush(Brush(ToastPaletteChooser.Blend(accent, new Rgb(255, 255, 255), 0.72)).Color,
+            Brush(accent).Color, new Point(0, 0), new Point(0, 1));
+        gradient.Freeze();
+        _card.BorderBrush = gradient;
+        _icon.Foreground = Brush(accent);
+        _icon.Text = ToastGlyph.For(!_model.LatestSuccess ? ToastIcon.Error
+            : _model.Outcome == "cancelled" ? ToastIcon.Neutral : ToastIcon.Success);
+        var activity = _model.Kind == ToastCardKind.Activity;
+        _title.Text = activity && _showBranding ? "IPT-MCP - " + _model.Title : _model.Title;
+        _title.ToolTip = _title.Text;
+        _counterRow.Visibility = activity ? Visibility.Visible : Visibility.Collapsed;
+        _summary.Visibility = activity ? Visibility.Collapsed : Visibility.Visible;
+        _summary.Text = _model.Body;
+        _summary.ToolTip = _counterRow.ToolTip = _model.Body;
+        _successCount.SetValue(_model.Succeeded, Brush(p.AccentRead), animate);
+        _failedCount.SetValue(_model.Failed, Brush(_model.Failed > 0 ? p.AccentError : p.Body), animate);
+        _captureCount.SetValue(_model.Captures, Brush(p.AccentRead), animate);
+        AutomationProperties.SetName(_counterRow, $"{_model.Succeeded} Success | {_model.Failed} Failed | {_model.Captures} Capture");
+    }
+
+    public void SetShowBranding(bool show)
+    {
+        if (_done || _showBranding == show) return;
+        _showBranding = show;
+        RenderContent(false);
+        if (!show) ParkBrand();
+        else if (_pointerOver && _realHover) ScheduleBrand();
+    }
+
+    private void OnPointerEnter(object sender, MouseEventArgs e)
+    {
+        _pointerOver = true;
+        if (!PointerMoved()) return; // Show under a stationary cursor is not a real hover.
+        EnterRealHover();
+    }
+    private void OnPointerMove(object sender, MouseEventArgs e)
+    {
+        if (!_pointerOver || !PointerMoved()) return;
+        EnterRealHover();
+    }
+    private void EnterRealHover()
+    {
+        if (_done || IsClosing) return;
+        if (!_realHover) _enter?.Invoke(CardId);
+        _realHover = true;
+        ScheduleBrand();
+    }
+    private void OnPointerLeave(object sender, MouseEventArgs e)
+    {
+        // The window can move away from a stationary cursor; that still ends a real hover.
+        PointerMoved();
+        if (_realHover) _leave?.Invoke(CardId);
+        _pointerOver = _realHover = false;
+        HideBrand();
+    }
+    private bool PointerMoved()
+    {
+        var point = _cursor();
+        if (!ValidPoint(point)) return false;
+        var moved = !_hasPointer || (int)point.X != (int)_lastPointer.X || (int)point.Y != (int)_lastPointer.Y;
+        _lastPointer = point;
+        _hasPointer = true;
+        return moved;
+    }
+    private static bool ValidPoint(Point p) => !double.IsNaN(p.X) && !double.IsNaN(p.Y)
+        && !double.IsInfinity(p.X) && !double.IsInfinity(p.Y);
+
+    private void ScheduleBrand()
+    {
+        if (!_showBranding || !_pointerOver || _done || IsClosing) return;
+        if (_brandRevealed && !_brandHiding) return;
+        if (_brandHiding) ParkBrand();
+        if (!_motion())
         {
-            _brandSweep.X = BrandMotion.SweepTo;
-            _shineSweep.X = BrandMotion.SweepTo;
+            ParkBrand();
+            _brandRevealed = true;
+            _brand.OpacityMask = new SolidColorBrush(Dim(0.8));
             return;
         }
-        BrandWipeCount++;
-        LastWipeDelayMs = delayMs;
-        var dur = TimeSpan.FromMilliseconds(BrandMotion.SweepMs);
-        var start = TimeSpan.FromMilliseconds(delayMs);
-        var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
-        var wipe = new DoubleAnimation(BrandMotion.SweepFrom, BrandMotion.SweepTo, dur) { BeginTime = start, EasingFunction = ease };
-        _brandClock = wipe.CreateClock();
-        _shineClock = wipe.CreateClock();
-        _brandSweep.ApplyAnimationClock(TranslateTransform.XProperty, _brandClock);
-        _shineSweep.ApplyAnimationClock(TranslateTransform.XProperty, _shineClock);   // same timeline, two clocks
+        if (_brandTimer != null) return;
+        _brandTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _brandTimer.Tick += OnBrandTimer;
+        _brandTimer.Start();
     }
-
-    /// <summary>Freeze the sweep while the card is hidden — a wipe that runs unseen is wasted.</summary>
-    private void PauseBrand()
+    private void OnBrandTimer(object? sender, EventArgs e)
     {
-        try { _brandClock?.Controller.Pause(); } catch { }
-        try { _shineClock?.Controller.Pause(); } catch { }
+        CancelBrandTimer();
+        if (!_showBranding || !_pointerOver || _done || IsClosing) return;
+        ParkBrand();
+        _brandRevealed = true;
+        var wipe = new DoubleAnimation(-0.75, 0.75, TimeSpan.FromMilliseconds(500))
+            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+        _brandSweep.BeginAnimation(TranslateTransform.XProperty, wipe);
+        _shineSweep.BeginAnimation(TranslateTransform.XProperty, wipe);
     }
-
-    private void ResumeBrand()
+    private void HideBrand()
     {
-        try { _brandClock?.Controller.Resume(); } catch { }
-        try { _shineClock?.Controller.Resume(); } catch { }
+        CancelBrandTimer();
+        // Preserve the currently painted letters while their cell fades. Removing the held
+        // sweep at its base (-0.75) would make the wordmark disappear before the fade starts.
+        var brandX = _brandSweep.X;
+        var shineX = _shineSweep.X;
+        StopBrandSweep();
+        _brandSweep.X = brandX;
+        _shineSweep.X = shineX;
+        if (!_motion() || !_brandRevealed) { ParkBrand(); return; }
+        _brandHiding = true;
+        var generation = ++_brandGeneration;
+        var fade = new DoubleAnimation(_brandCell.Opacity, 0, TimeSpan.FromMilliseconds(200))
+            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
+        fade.Completed += (_, _) => { if (generation == _brandGeneration && !_done) ParkBrand(); };
+        _brandCell.BeginAnimation(OpacityProperty, fade);
     }
-
-    /// <summary>Windows' "animate controls and elements" toggle — off means settle, not sweep.</summary>
-    private static bool MotionEnabled => MotionOverrideForTests ?? SystemParameters.ClientAreaAnimation;
-    internal static bool? MotionOverrideForTests;   // WPF-test seam: the OS setting can't flip per-test
-
-    /// <summary>WPF-test hook: scheduled wipes and the delay of the last one. UpdateModel,
-    /// retheme and reflow must not bump these — only Appear and hover replay may.</summary>
-    internal int BrandWipeCount { get; private set; }
-    internal int LastWipeDelayMs { get; private set; }
-
-    /// <summary>WPF-test hook: card-level clicks that reached the open/dismiss path.
-    /// A × click must leave this at zero — it dismisses without opening the thumbnail.</summary>
-    internal int CardClickCount { get; private set; }
-
-    private static Color Dim(double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), 0, 0, 0);
-
-    /// <summary>Freeze the visible-time slice. Idempotent while the timer is already stopped.</summary>
-    private void PauseLife()
+    private void ParkBrand()
     {
-        if (!_lifeRunning) return;
-        _life.Stop();
-        _lifeRunning = false;
-        _count.Pause(_clock.ElapsedMilliseconds);
+        _brandGeneration++;
+        _brandHiding = _brandRevealed = false;
+        CancelBrandTimer();
+        StopBrandSweep();
+        _brandCell.BeginAnimation(OpacityProperty, null);
+        _brandCell.Opacity = 1;
+        _brandSweep.X = _shineSweep.X = -0.75;
+        _brand.OpacityMask = BrandMask(_brandSweep, false);
+        _shine.OpacityMask = BrandMask(_shineSweep, true);
     }
-
-    /// <summary>Continue with whatever visible time is left. A full interval restart would add 3–9 s.</summary>
-    private void ResumeLife()
+    private void CancelBrandTimer()
     {
-        if (_lifeRunning || _closing || _done || _hidden || !IsShown) return;
-        if (_count.RemainingMs <= 0)
+        if (_brandTimer == null) return;
+        _brandTimer.Stop();
+        _brandTimer.Tick -= OnBrandTimer;
+        _brandTimer = null;
+    }
+    private void StopBrandSweep()
+    {
+        _brandSweep.BeginAnimation(TranslateTransform.XProperty, null);
+        _shineSweep.BeginAnimation(TranslateTransform.XProperty, null);
+    }
+    private static LinearGradientBrush BrandMask(TranslateTransform transform, bool shine) => new()
+    {
+        StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5), RelativeTransform = transform,
+        GradientStops =
         {
-            BeginClose();
-            return;
-        }
-        _count.Start(_clock.ElapsedMilliseconds);
-        _life.Interval = TimeSpan.FromMilliseconds(_count.RemainingMs);
-        _lifeRunning = true;
-        _life.Start();
-    }
+            new GradientStop(Dim(shine ? 0 : 0.8), 0),
+            new GradientStop(Dim(shine ? 0 : 0.8), 0.36),
+            new GradientStop(Dim(shine ? 1 : 0), 0.44),
+            new GradientStop(Dim(0), 0.52), new GradientStop(Dim(0), 1),
+        },
+    };
 
-    public void MoveTo(PxPoint p)
+    private void OnCloseClick(object sender, MouseButtonEventArgs e)
     {
-        if (Hwnd == IntPtr.Zero || _pos == p) return;
-        _pos = p;
-        ToastNative.MoveNoActivate(Hwnd, p.X, p.Y);
+        e.Handled = true;
+        if (!IsClosing && !_done) _dismiss?.Invoke(CardId);
     }
-
+    private void OnCardClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (!IsClosing && !_done) _click?.Invoke(CardId);
+    }
     public void BeginClose()
     {
-        if (_closing || _done) return;
-        _closing = true;
-        PauseLife();
-        if (!IsShown)
-        {
-            CloseNow();
-            return;
-        }
-        if (!MotionEnabled)
-        {
-            CloseNow();
-            return;
-        }
-        var fade = new DoubleAnimation(Opacity, 0, TimeSpan.FromMilliseconds(200));
+        if (IsClosing || _done) return;
+        IsClosing = true;
+        CancelBrandTimer();
+        if (!_motion() || !IsVisible) { CloseNow(); return; }
+        var fade = new DoubleAnimation(Opacity, 0, TimeSpan.FromMilliseconds(220))
+            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn } };
         fade.Completed += (_, _) => CloseNow();
         BeginAnimation(OpacityProperty, fade);
     }
-
     public void CloseNow()
     {
         if (_done) return;
-        _done = true;
-        _closing = true;
-        PauseLife();
-        try { Close(); } catch { }
-        _closed(this);
+        IsClosing = true;
+        try { Close(); }
+        finally { FinishClose(); }
     }
-
-    private static void OpenImage(string path)
+    private void OnClosed(object? sender, EventArgs e) => FinishClose();
+    private void FinishClose()
     {
-        var safe = ToastThumbnail.PathIfImage(path);
-        if (safe == null) return;
-        try { Process.Start(new ProcessStartInfo(safe) { UseShellExecute = true }); } catch { }
+        if (_done) return;
+        _done = IsClosing = true;
+        CancelBrandTimer();
+        _brandGeneration++;
+        StopBrandSweep();
+        _brandCell.BeginAnimation(OpacityProperty, null);
+        BeginAnimation(OpacityProperty, null);
+        _slide.BeginAnimation(TranslateTransform.XProperty, null);
+        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        _successCount.StopAnimation();
+        _failedCount.StopAnimation();
+        _captureCount.StopAnimation();
+        MouseEnter -= OnPointerEnter;
+        MouseMove -= OnPointerMove;
+        MouseLeave -= OnPointerLeave;
+        MouseLeftButtonUp -= OnCardClick;
+        _closeHost.MouseLeftButtonUp -= OnCloseClick;
+        SourceInitialized -= OnSourceInitialized;
+        Closed -= OnClosed;
+        var closed = _closed;
+        _closed = null;
+        _dismiss = _click = _enter = _leave = null;
+        closed?.Invoke(this);
     }
 
+    private static TextBlock Label(string text) => new() { Text = text, FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
+    private static TextBlock Separator() => new() { Text = "|", FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) };
+    private static Color Dim(double opacity) => Color.FromArgb((byte)Math.Round(opacity * 255), 0, 0, 0);
     private static SolidColorBrush Brush(Rgb c)
     {
-        var b = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
-        b.Freeze();
-        return b;
+        var brush = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+        brush.Freeze();
+        return brush;
     }
 }
 #endif

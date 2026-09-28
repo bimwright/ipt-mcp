@@ -1,6 +1,7 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
 using System.Runtime.InteropServices;
+using System.Windows;
 
 namespace Bimwright.Ipt.Shared.Views.Toast;
 
@@ -29,6 +30,11 @@ internal static class ToastNative
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT point);
+    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
+
+    public static Point CursorPosition() => GetCursorPos(out var point)
+        ? new Point(point.X, point.Y) : new Point(double.NaN, double.NaN);
 
     /// <summary>Spike 1a: without this the toast becomes the foreground window and takes Inventor's focus.</summary>
     public static void MakeNoActivate(IntPtr hwnd)

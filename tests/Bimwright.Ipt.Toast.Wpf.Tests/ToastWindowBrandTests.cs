@@ -1,453 +1,269 @@
-using System.Linq;
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Bimwright.Ipt.Shared.Views;
 using Bimwright.Ipt.Shared.Views.Toast;
 
 namespace Bimwright.Ipt.Toast.Wpf.Tests;
 
-/// <summary>
-/// IPT-03/04 on the real window: the brand wipe replays on hover, and nothing else
-/// (update, retheme, reflow, close) disturbs or re-triggers it. BrandWipeCount +
-/// LastWipeDelayMs are the deterministic seam; the sweep-transform assertions prove
-/// the clocks actually move.
-/// </summary>
 public sealed class ToastWindowBrandTests
 {
-    private static ToastModel Model() =>
-        new("extrude", "Extrude", "feature", "Extruded 2 bodies", "", null, ToolActivityKind.Write, true, 120);
-
-    private static void Hover(ToastWindow w) =>
-        w.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
-
-    private static void Leave(ToastWindow w) =>
-        w.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+    private static ToastCard Card(int success = 1, int failed = 0, int captures = 0) =>
+        new(1, ToastCardKind.Activity, "Extrude", "Latest result", success, failed, captures, true, failed > 0);
+    private static ToastWindow Window(ToastCard? card = null, Func<Point>? cursor = null, bool motion = true,
+        Action<long>? enter = null, Action<long>? leave = null, Action<long>? click = null, Action<long>? dismiss = null) =>
+        new(card ?? Card(), ToastPalette.LightElevated, "Inventor 2027", _ => { },
+            dismiss ?? (_ => { }), click ?? (_ => { }), enter ?? (_ => { }), leave ?? (_ => { }),
+            cursor ?? (() => new Point(-500, -500)), () => motion);
+    private static void Hover(ToastWindow w) => w.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+    private static void Move(ToastWindow w) => w.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseMoveEvent });
+    private static void Leave(ToastWindow w) => w.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+    private static void Click(UIElement w) => w.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseUpEvent });
 
     [Fact]
-    public void Appear_schedules_the_entrance_wipe()
+    public void One_compact_card_has_counts_identity_no_thumbnail_and_stable_height()
         => Sta.Run(() =>
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var w = Window();
             try
             {
-                w.Appear();
-
-                Assert.Equal(1, w.BrandWipeCount);
-                Assert.Equal(BrandMotion.EntranceDelayMs, w.LastWipeDelayMs);
+                w.Appear(new PxPoint(40, 160));
+                Sta.Pump(60);
+                var height = w.ActualHeight;
+                var hwnd = w.Hwnd;
+                Assert.Equal("Extrude", w._title.Text);
+                Assert.Equal("Inventor 2027", w._identity.Text);
+                Assert.Equal(Visibility.Visible, w._counterRow.Visibility);
+                Assert.Equal(Visibility.Collapsed, w._summary.Visibility);
+                Assert.Empty(Descendants(w).OfType<Image>());
+                for (var i = 2; i <= 100; i++) w.Update(Card(i, 3, 12) with { Title = new string('x', 200) });
+                w.UpdateLayout();
+                Assert.Equal(100, w._successCount.Value);
+                Assert.Equal(3, w._failedCount.Value);
+                Assert.Equal(12, w._captureCount.Value);
+                Assert.Equal(height, w.ActualHeight);
+                Assert.Equal(hwnd, w.Hwnd);
+                Assert.False(w.ShowActivated);
+                Assert.Null(w.Owner);
+                Assert.True(ToastNative.Rect(hwnd)!.Value.Left >= 0);
+                Assert.Equal(-0.75, w._brandSweep.X); // no entrance brand effect
             }
             finally { w.CloseNow(); }
         });
 
     [Fact]
-    public void Hover_replays_the_wipe_with_the_hover_delay()
+    public void Counters_roll_vertically_replace_bursts_and_release_clocks_on_close()
         => Sta.Run(() =>
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var w = Window();
             try
             {
-                w.Appear();
-
-                Hover(w);
-
-                Assert.Equal(2, w.BrandWipeCount);
-                Assert.Equal(BrandMotion.HoverDelayMs, w.LastWipeDelayMs);
+                w.Appear(new PxPoint(40, 160));
+                w.Update(Card(9));
+                var current = (TranslateTransform)((Viewbox)w._successCount.Children[1]).RenderTransform;
+                var outgoing = (TranslateTransform)((Viewbox)w._successCount.Children[0]).RenderTransform;
+                Assert.True(current.HasAnimatedProperties);
+                Sta.Pump(70);
+                Assert.InRange(current.Y, 0, RollingToastNumber.SlotHeight);
+                Assert.True(outgoing.Y < 0);
+                w.Update(Card(9999));
+                Assert.Equal(9999, w._successCount.Value);
+                Assert.Equal(25, w._successCount.Width);
+                Sta.Pump(350);
+                Assert.Equal(0, current.Y, 3);
+                w.CloseNow();
+                Assert.False(current.HasAnimatedProperties);
+                Assert.False(outgoing.HasAnimatedProperties);
             }
             finally { w.CloseNow(); }
         });
 
     [Fact]
-    public void Repeated_hover_replaces_the_clock_instead_of_queuing()
+    public void Stationary_enter_does_not_pause_but_first_real_move_inside_does()
         => Sta.Run(() =>
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var point = new Point(10, 10);
+            var enters = 0;
+            var leaves = 0;
+            var w = Window(cursor: () => point, enter: _ => enters++, leave: _ => leaves++);
             try
             {
-                w.Appear();
+                w.Appear(new PxPoint(40, 160));
                 Hover(w);
+                Assert.Equal(0, enters);
+                point = new Point(12, 10);
+                Move(w);
+                Assert.Equal(1, enters);
+                point = new Point(14, 10);
+                Move(w);
+                Assert.Equal(1, enters);
+                point = new Point(500, 500);
                 Leave(w);
+                Assert.Equal(1, leaves);
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void Stationary_leave_after_real_hover_rearms_idle_and_cancels_brand()
+        => Sta.Run(() =>
+        {
+            var now = TimeSpan.Zero;
+            var feed = new ToastFeed(now: () => now);
+            feed.Record(new ToastModel("extrude", "Extrude", "Feature", "Result", "", null,
+                ToolActivityKind.Write, true, 0), true);
+            var point = new Point(10, 10);
+            var w = Window(feed.TakeRender().Card, cursor: () => point,
+                enter: id => feed.PointerEntered(id), leave: feed.PointerLeft);
+            try
+            {
+                w.SetShowBranding(true);
+                w.Appear(new PxPoint(40, 160));
+                point = new Point(12, 10);
                 Hover(w);
+                now = TimeSpan.FromSeconds(60);
+                Assert.False(feed.Tick(true));
+                // Moving the window away raises MouseLeave without moving the screen cursor.
                 Leave(w);
+                Sta.Pump(250);
+                now += TimeSpan.FromSeconds(19);
+                Assert.False(feed.Tick(true));
+                now += TimeSpan.FromSeconds(1);
+                Assert.True(feed.Tick(true));
+                Assert.Equal(ToastPhase.Closing, feed.TakeRender().Phase);
+                Assert.False(w._brandSweep.HasAnimatedProperties);
+                Assert.Equal(-0.75, w._brandSweep.X);
+            }
+            finally { w.CloseNow(); }
+        });
+
+    [Fact]
+    public void Brand_is_opt_in_hover_revealed_then_fades_without_hiding_version()
+        => Sta.Run(() =>
+        {
+            var point = new Point(10, 10);
+            var w = Window(cursor: () => point);
+            try
+            {
+                w.Appear(new PxPoint(40, 160));
+                point = new Point(20, 20);
                 Hover(w);
-
-                // One wipe per enter, each on the same property: BeginAnimation replaces, never queues.
-                Assert.Equal(4, w.BrandWipeCount);
-                Assert.Equal(BrandMotion.HoverDelayMs, w.LastWipeDelayMs);
-            }
-            finally { w.CloseNow(); }
-        });
-
-    [Fact]
-    public void UpdateModel_does_not_replay_the_wipe()
-        => Sta.Run(() =>
-        {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-
-                w.UpdateModel(
-                    new ToastModel("fillet", "Fillet", "feature", "Updated summary", "", null, ToolActivityKind.Write, true, 40),
-                    ToastPalette.LightElevated);
-
-                Assert.Equal(1, w.BrandWipeCount);
-            }
-            finally { w.CloseNow(); }
-        });
-
-    [Fact]
-    public void Retheming_does_not_replay_the_wipe()
-        => Sta.Run(() =>
-        {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-
+                Sta.Pump(180);
+                Assert.False(w._brandSweep.HasAnimatedProperties);
+                w.SetShowBranding(true);
+                Assert.Equal("IPT-MCP - Extrude", w._title.Text);
+                Assert.True(Sta.PumpUntil(() => w._brandSweep.HasAnimatedProperties, 700));
+                Sta.Pump(600);
+                Assert.Equal(0.75, w._brandSweep.X, 3);
+                // Result updates, reflow and re-theme do not replay the wipe.
+                w.Update(Card(2));
                 w.ApplyPalette(ToastPalette.DarkElevated);
-                w.ApplyPalette(ToastPalette.LightElevated);
-
-                Assert.Equal(1, w.BrandWipeCount);
+                w.MoveTo(new PxPoint(50, 170));
+                Assert.Equal(0.75, w._brandSweep.X, 3);
+                point = new Point(600, 600);
+                Leave(w);
+                Sta.Pump(300);
+                Assert.Equal(-0.75, w._brandSweep.X, 3);
+                Assert.Equal(Visibility.Visible, w._identity.Visibility);
+                Assert.Equal("Inventor 2027", w._identity.Text);
+                w.SetShowBranding(false);
+                Assert.Equal("Extrude", w._title.Text);
             }
             finally { w.CloseNow(); }
         });
 
     [Fact]
-    public void Reflow_does_not_replay_the_wipe()
+    public void Quick_hover_pass_cancels_delayed_brand_reveal()
         => Sta.Run(() =>
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var point = new Point(1, 1);
+            var w = Window(cursor: () => point);
             try
             {
-                w.Appear();
-
-                w.MoveTo(new PxPoint(1700, 900));
-                w.MoveTo(new PxPoint(1700, 800));
-
-                Assert.Equal(1, w.BrandWipeCount);
+                w.SetShowBranding(true);
+                w.Appear(new PxPoint(40, 160));
+                point = new Point(2, 2);
+                Hover(w);
+                point = new Point(3, 3);
+                Leave(w);
+                Sta.Pump(200);
+                Assert.False(w._brandSweep.HasAnimatedProperties);
+                Assert.Equal(-0.75, w._brandSweep.X);
             }
             finally { w.CloseNow(); }
         });
 
     [Fact]
-    public void Hover_while_closing_starts_no_new_wipe()
+    public void Reduced_motion_settles_without_counter_brand_or_enter_clocks()
         => Sta.Run(() =>
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var point = new Point(1, 1);
+            var w = Window(cursor: () => point, motion: false);
             try
             {
-                w.Appear();
+                w.SetShowBranding(true);
+                w.Appear(new PxPoint(40, 160));
+                w.Update(Card(9));
+                point = new Point(2, 2);
+                Hover(w);
+                Assert.Equal(1, w.Opacity);
+                Assert.False(w.HasAnimatedProperties);
+                Assert.False(w._brandSweep.HasAnimatedProperties);
+                Assert.False(((TranslateTransform)((Viewbox)w._successCount.Children[1]).RenderTransform).HasAnimatedProperties);
                 w.BeginClose();
-
-                Hover(w);
-
-                Assert.Equal(1, w.BrandWipeCount);
-                Assert.True(w.IsClosing);
+                Assert.False(w.IsVisible);
             }
             finally { w.CloseNow(); }
         });
 
     [Fact]
-    public void Closing_mid_sweep_disposes_without_throwing()
+    public void Close_control_only_dismisses_while_card_click_routes_to_history_callback()
         => Sta.Run(() =>
         {
-            ToastWindow? closed = null;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, x => closed = x);
-            w.Appear();
-            Sta.Pump(100);               // the wipe clock is live; the fade is not
-            Hover(w);
-
-            w.BeginClose();
-            Sta.PumpUntil(() => closed == w, 2000);   // 200 ms fade-out → CloseNow
-
-            Assert.Same(w, closed);
-            Assert.True(w.IsClosing);
-        });
-
-    [Fact]
-    public void The_sweep_really_moves_the_mask_and_settles_at_the_end()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = true;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var dismissed = 0;
+            var clicked = 0;
+            var w = Window(dismiss: _ => dismissed++, click: _ => clicked++);
             try
             {
-                w.Appear();
-
-                // Before the entrance delay the mask still sits at its parked offset.
-                Sta.Pump(900);
-                Assert.True(w._brandSweep.X < BrandMotion.SweepTo,
-                    $"expected sweep not finished, X={w._brandSweep.X}");
-
-                // 1300 ms delay + 800 ms sweep — give the wall clock ample slack.
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X == BrandMotion.SweepTo, 4000),
-                    $"brand mask did not settle at {BrandMotion.SweepTo}, X={w._brandSweep.X}");
-                Assert.Equal(BrandMotion.SweepTo, w._shineSweep.X);
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    [Fact]
-    public void Hover_after_the_first_wipe_replays_and_settles_again()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = true;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X == BrandMotion.SweepTo, 4000));
-
-                Hover(w);
-
-                // The replacement clock parks the mask back at the parked offset during its delay.
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X < 0.5, 1000),
-                    $"hover did not re-arm the sweep, X={w._brandSweep.X}");
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X == BrandMotion.SweepTo, 3000),
-                    $"hover sweep did not settle, X={w._brandSweep.X}");
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    [Fact]
-    public void Suppression_mid_sweep_freezes_the_clock_and_restores_it()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = true;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X > BrandMotion.SweepFrom, 3000),
-                    "sweep never started");
-
-                w.SetSuppressed(true);
-                Sta.Pump(100);               // absorb the in-flight tick queued before Pause applied
-                var frozen = w._brandSweep.X;
-                Sta.Pump(500);
-                Assert.Equal(frozen, w._brandSweep.X);   // a hidden sweep must not advance unseen
-
-                w.SetSuppressed(false);
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X == BrandMotion.SweepTo, 3000),
-                    $"sweep did not finish after restore, X={w._brandSweep.X}");
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    [Fact]
-    public void Suppression_during_the_delay_never_runs_the_wipe_unseen()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = true;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-                Sta.Pump(300);               // still inside the 1300 ms entrance delay
-
-                w.SetSuppressed(true);
-                Sta.Pump(2200);              // longer than delay + sweep combined
-                Assert.Equal(BrandMotion.SweepFrom, w._brandSweep.X);   // nothing ran while hidden
-
-                w.SetSuppressed(false);
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X == BrandMotion.SweepTo, 4000),
-                    $"sweep did not run after restore, X={w._brandSweep.X}");
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    [Fact]
-    public void Hovering_a_suppressed_card_starts_no_wipe()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = true;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-                w.SetSuppressed(true);
-
-                Hover(w);   // a hidden HWND takes no real input — pin the guard anyway
-
-                Assert.Equal(1, w.BrandWipeCount);
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    [Fact]
-    public void Motion_disabled_settles_the_brand_without_a_clock()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = false;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-
-                Assert.Equal(BrandMotion.SweepTo, w._brandSweep.X);
-                Assert.Equal(BrandMotion.SweepTo, w._shineSweep.X);
-                Assert.Equal(1.0, w.Opacity);            // no entrance fade either
-                Assert.Equal(0, w.BrandWipeCount);
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    [Fact]
-    public void Motion_disabled_close_finishes_immediately()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = false;
-            ToastWindow? closed = null;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, x => closed = x);
-            w.Appear();
-
-            w.BeginClose();                  // no 200 ms fade — CloseNow runs inline
-
-            Assert.Same(w, closed);
-            Assert.True(w.IsClosing);
-            ToastWindow.MotionOverrideForTests = null;
-        });
-
-    [Fact]
-    public void Retheme_mid_sweep_swaps_both_layers_and_keeps_the_phase()
-        => Sta.Run(() =>
-        {
-            ToastWindow.MotionOverrideForTests = true;
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X > BrandMotion.SweepFrom, 3000),
-                    "sweep never started");
-
-                var dark = ToastPalette.DarkElevated;
-                var mid = w._brandSweep.X;
-                w.ApplyPalette(dark);
-
-                // Both layers recolour together, mid-flight.
-                var brandFg = Assert.IsAssignableFrom<SolidColorBrush>(w._brandBim.Foreground).Color;
-                var shineFg = Assert.IsAssignableFrom<SolidColorBrush>(w._shineBim.Foreground).Color;
-                Assert.Equal(Color.FromRgb(dark.BrandBim.R, dark.BrandBim.G, dark.BrandBim.B), brandFg);
-                var shine = ToastPaletteChooser.Blend(dark.BrandBim, new Rgb(255, 255, 255), BrandMotion.ShineBlendWeight);
-                Assert.Equal(Color.FromRgb(shine.R, shine.G, shine.B), shineFg);
-
-                // …and the in-progress sweep is untouched.
-                Assert.Equal(1, w.BrandWipeCount);
-                Assert.Equal(mid, w._brandSweep.X);
-                Assert.True(Sta.PumpUntil(() => w._brandSweep.X == BrandMotion.SweepTo, 3000),
-                    $"sweep did not finish after retheme, X={w._brandSweep.X}");
-            }
-            finally { w.CloseNow(); ToastWindow.MotionOverrideForTests = null; }
-        });
-
-    // ---- IPT-06: close button + RVT-style layout ----
-
-    private static void Click(FrameworkElement target, RoutedEvent routed) =>
-        target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-        {
-            RoutedEvent = routed,
-            Source = target,
-        });
-
-    [Fact]
-    public void Close_button_carries_a_tooltip_and_accessible_name()
-        => Sta.Run(() =>
-        {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                Assert.Equal("Close", AutomationProperties.GetName(w._closeHost));
-                Assert.Equal("Close", w._closeHost.ToolTip);
-                Assert.IsType<DockPanel>(w._closeHost.Parent);   // docked in the header
+                w.Appear(new PxPoint(40, 160));
+                Click((UIElement)w._closeHost.Child);
+                Assert.Equal(1, dismissed);
+                Assert.Equal(0, clicked);
+                Assert.Same(Brushes.Transparent, w._closeHost.Background);
+                Click(w._title);
+                Assert.Equal(1, clicked);
+                w.BeginClose();
+                Click(w._title);
+                Assert.Equal(1, clicked);
             }
             finally { w.CloseNow(); }
         });
 
-    [Fact]
-    public void Close_click_dismisses_without_reaching_the_card_click_path()
+    [Theory]
+    [InlineData(ToastCardKind.Status)]
+    [InlineData(ToastCardKind.TaskResult)]
+    public void Status_and_explicit_reports_use_the_same_card_body_slot(ToastCardKind kind)
         => Sta.Run(() =>
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
+            var w = Window(Card() with { Kind = kind, Title = "Task cancelled", Body = "Agent reported · Done", Outcome = "cancelled" });
             try
             {
-                w.Appear();
-
-                Click(w._closeHost, UIElement.MouseLeftButtonUpEvent);
-
-                Assert.True(w.IsClosing);
-                Assert.Equal(0, w.CardClickCount);   // the thumbnail-open/dismiss path never ran
+                Assert.Equal(Visibility.Collapsed, w._counterRow.Visibility);
+                Assert.Equal(Visibility.Visible, w._summary.Visibility);
+                Assert.Contains("Agent reported", w._summary.Text);
+                Assert.Equal("Task cancelled", w._title.Text);
+                Assert.Equal("Inventor 2027", w._identity.Text);
             }
             finally { w.CloseNow(); }
         });
 
-    [Fact]
-    public void Card_click_still_runs_the_dismiss_path_once()
-        => Sta.Run(() =>
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                w.Appear();
-
-                Click(w, Window.MouseLeftButtonUpEvent);
-
-                Assert.True(w.IsClosing);
-                Assert.Equal(1, w.CardClickCount);
-            }
-            finally { w.CloseNow(); }
-        });
-
-    [Fact]
-    public void Category_lives_on_its_own_row_and_duration_in_the_footer()
-        => Sta.Run(() =>
-        {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                // Category is a direct child of the vertical body stack, not glued to the title.
-                var categoryParent = Assert.IsType<StackPanel>(w._category.Parent);
-                Assert.Equal(Orientation.Vertical, categoryParent.Orientation);
-
-                // Duration shares the footer DockPanel with the right-docked brand cell.
-                var footer = Assert.IsType<DockPanel>(w._duration.Parent);
-                Assert.NotSame(w._closeHost.Parent, footer);
-                Assert.Contains(footer.Children.Cast<UIElement>(), c => c is Grid);   // the brand cell
-            }
-            finally { w.CloseNow(); }
-        });
-
-    [Fact]
-    public void Long_content_is_height_capped_with_ellipsis()
-        => Sta.Run(() =>
-        {
-            var w = new ToastWindow(Model(), ToastPalette.LightElevated, _ => { });
-            try
-            {
-                Assert.Equal(64, w._summary.MaxHeight);
-                Assert.Equal(40, w._detail.MaxHeight);
-                Assert.Equal(TextTrimming.CharacterEllipsis, w._summary.TextTrimming);
-                Assert.Equal(TextTrimming.CharacterEllipsis, w._detail.TextTrimming);
-                Assert.Equal(TextWrapping.Wrap, w._summary.TextWrapping);
-                Assert.Equal(TextWrapping.Wrap, w._detail.TextWrapping);
-            }
-            finally { w.CloseNow(); }
-        });
-
-    [Fact]
-    public void An_empty_category_collapses_instead_of_leaving_a_blank_row()
-        => Sta.Run(() =>
-        {
-            var w = new ToastWindow(Model() with { Category = "" }, ToastPalette.LightElevated, _ => { });
-            try
-            {
-                Assert.Equal(Visibility.Collapsed, w._category.Visibility);
-
-                w.UpdateModel(Model(), ToastPalette.LightElevated);   // back to a real category
-
-                Assert.Equal(Visibility.Visible, w._category.Visibility);
-            }
-            finally { w.CloseNow(); }
-        });
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var item in Descendants(child)) yield return item;
+        }
+    }
 }

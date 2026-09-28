@@ -89,10 +89,30 @@ public sealed class ToastSourcePolicyTests
         var text = ReadBase();
         var start = text.IndexOf("public void Deactivate()", StringComparison.Ordinal);
         Assert.True(start >= 0);
+        var snapshotTimer = text.IndexOf("StopToastSnapshotTimer()", start, StringComparison.Ordinal);
         var server = text.IndexOf("_server?.Dispose()", start, StringComparison.Ordinal);
         var toasts = text.IndexOf("_toasts?.Dispose()", start, StringComparison.Ordinal);
         var ribbon = text.IndexOf("_ribbon?.Remove()", start, StringComparison.Ordinal);
         Assert.True(server >= 0 && toasts > server && ribbon > toasts);
+        Assert.True(snapshotTimer >= 0 && snapshotTimer < server);
+    }
+
+    [Fact]
+    public void Startup_snapshot_retries_back_off_on_the_Inventor_STA_until_visible_or_disabled()
+    {
+        var text = ReadBase();
+        var start = text.IndexOf("private void RefreshToastWhenReady()", StringComparison.Ordinal);
+        var end = text.IndexOf("private void StopToastSnapshotTimer()", start, StringComparison.Ordinal);
+        var retry = text.Substring(start, end - start);
+        Assert.Contains("new System.Windows.Forms.Timer { Interval = 250 }", retry);
+        Assert.Matches(@"Tick \+= .*\s*\{\s*RefreshToastSnapshot\(\);", retry);
+        Assert.Matches(@"if \(_toasts == null \|\| !_toasts.Enabled \|\| _toasts.HasVisibleSnapshot\)\s*\{\s*StopToastSnapshotTimer\(\);\s*return;\s*\}", retry);
+        Assert.Matches(@"if \(attempts < 20 && \+\+attempts == 20\)\s*_toastSnapshotTimer!\.Interval = 2000;", retry);
+        Assert.Equal(1, retry.Split(new[] { "StopToastSnapshotTimer();" }, StringSplitOptions.None).Length - 1);
+        Assert.Contains("else StopToastSnapshotTimer();", text); // ribbon disable
+        Assert.Contains("_toastSnapshotTimer?.Stop();", text);
+        Assert.Contains("_toastSnapshotTimer?.Dispose();", text);
+        Assert.Contains("_toastSnapshotTimer = null;", text);
     }
 
     [Fact]

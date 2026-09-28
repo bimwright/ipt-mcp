@@ -262,13 +262,17 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## Toast 通知
 
-当 Inventor 可见时，结果合并为 **最多 3 张卡片**，**每秒最多更新 2 次**，不会为每次 tool 调用排队创建 toast。普通成功合并为显示操作数与最新 tool 的活动卡片；相同错误合并并显示次数。读操作蓝色、写操作绿色、失败红色（包含软失败和 rollback）。优先级为错误、显式任务总结、snapshot/export、普通活动。满额时替换同优先级的旧卡片，或丢弃优先级更低的新通知，不在稍后重放。截图保留可点击缩略图。最后一次显示更新数秒后卡片消失，悬停暂停计时。`inventor_health` 不产生 toast。
+当 Inventor 可见时，命令结果更新到 **一张紧凑的活动卡片**，显示最新 tool 和带数字滚动效果的 **Success / Failed / Capture** 计数器。Capture 是 Success 的子集，包含 `inventor_capture_view` 的 `inline=true` 调用，不应再加到操作总数中。Failed 包含软失败和 batch rollback。读写操作都使用蓝色强调色；记录过失败的卡片保持红色强调色。数值变化时布局保持稳定，没有缩略图卡片、优先级堆叠或逐 tool 的 toast 队列。计数仅覆盖当前 target 上该卡片的生命周期，不代表整个任务或特定 MCP client。`inventor_health` 不产生 toast。**Agent connected** 只是状态通知，不增加计数，也不替换保留中的活动卡片或任务报告。
 
-操作数按当前 target 的卡片保留期间统计，不代表某个 agent 的整项任务。agent 必须显式调用 `inventor_report_task_result` 报告工作结果：每项 agent/job 使用唯一 `task_id`（1–80 字符），`outcome` 为 `completed`/`failed`/`cancelled`，`summary` 为真实的单行总结（1–120 字符）。卡片标注 **Agent reported**，不会从空闲时间或单个 tool 成功推断任务完成。遵守 Toasts 开关，需同时更新 server 和 add-in。[验证状态](docs/testing/smart-toasts.md)。
+活动卡片在 **最后一个结果之后 20 秒**消失。由指针移动确认的真实悬停暂停计时，离开后重新开始完整的 20 秒。卡片出现在静止光标下不算悬停。点击卡片打开 **History** 并关闭卡片；**×** 只关闭卡片。页脚始终显示 **Inventor 年份**，不受 branding 开关影响。
 
-Toast 运行在专用 UI 线程上，从不抢占焦点，也从不阻塞命令——它们在响应返回后才投递。Inventor 最小化或有模态对话框打开时 toast 会隐藏；即使其他应用拥有焦点，toast 仍保持置顶（这正是目的：证明 agent 仍在运行）。卡片颜色使用自动调色板，对 toast 背后的像素采样；采样仅存在于内存中——不写盘、不记日志。
+agent 必须显式调用 `inventor_report_task_result` 报告工作结果：每项 agent/job 使用唯一 `task_id`（1–80 字符），`outcome` 为 `completed`/`failed`/`cancelled`，`summary` 为真实的单行总结（1–120 字符）。报告 **替换同一个共享卡位**，标注 **Agent reported**，显示时限为 **8 秒**；真实悬停暂停，离开后重新计时。报告不增加活动计数，下一个 tool 结果开始新的活动卡片。不会从空闲时间或单个 tool 成功推断任务完成。报告绕过 Inventor 命令队列，不调用 Inventor API，因此长时间 `send_code` 占用主线程时仍可接收。`toast_shown` 表示是否已保留卡片供显示，也包括等待 Inventor 取消最小化或关闭模态对话框的情况。报告遵守 Toasts 开关，需同时更新 server 和 add-in。
+
+Toast 使用 **专用 STA UI 线程上的纯代码 WPF**，窗口 **无 owner 且不激活（unowned / no-activate）**，独立于 Inventor 主 STA，toast 线程不调用 Inventor COM。命令结果通知在响应返回后投递。Toast 不抢焦点，Inventor 最小化或打开模态对话框时隐藏，**即使其他应用位于前台也保持置顶**。自动调色板从屏幕采样并避开已绘制的卡片自身；采样仅保留在内存中，不写盘、不记日志。
 
 通过功能区开关 toast：**Bimwright ▸ MCP → Toasts**（Status 打开诊断对话框）。该选择持久化到 `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` 的 `enableToast`；`toastTheme` 接受 `auto`（默认）、`light` 或 `dark`。环境变量 `BIMWRIGHT_INVENTOR_ENABLE_TOAST` 和 `BIMWRIGHT_INVENTOR_TOAST_THEME` 会覆盖 JSON 值。格式错误的配置文件不会被改动——开关拒绝覆盖它。
+
+同一功能区的 **Toast Brand** **默认关闭，仅当前会话有效**，不会持久化。启用后为活动标题添加 `IPT-MCP - ` 前缀，并在真实悬停时以擦拭动画显示 BIMwright 字标，离开时淡出。**卡片出现时不会自动播放字标擦拭动画**。动效遵守 Windows 动画设置。Toast UI 标签仍为英文；README 翻译不代表已实现 UI 本地化。
 
 ---
 

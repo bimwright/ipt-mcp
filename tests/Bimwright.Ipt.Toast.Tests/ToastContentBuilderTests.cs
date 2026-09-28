@@ -37,7 +37,7 @@ public sealed class ToastContentBuilderTests : IDisposable
     }
 
     [Fact]
-    public void Capture_in_file_mode_has_thumbnail_and_long_lifetime()
+    public void Capture_in_file_mode_has_safe_image_metadata_and_history_hint()
     {
         var png = Path.Combine(_dir, "capture-1.png");
         File.WriteAllBytes(png, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
@@ -45,10 +45,9 @@ public sealed class ToastContentBuilderTests : IDisposable
 
         Assert.True(m.Success);
         Assert.Equal("Saved capture-1.png · 1280×720", m.Summary);
-        Assert.Equal("Click to open", m.Detail);
+        Assert.Equal("Click to open History", m.Detail);
         Assert.Equal(Path.GetFullPath(png), m.ThumbnailPath);
         Assert.Equal("MCP · Snapshot", m.Category);
-        Assert.Equal(9000, m.LifetimeMs);
     }
 
     [Fact]
@@ -57,7 +56,6 @@ public sealed class ToastContentBuilderTests : IDisposable
         var m = Ok("capture_view", new JObject { ["output_path"] = Path.Combine(_dir, "gone.png"), ["width"] = 10, ["height"] = 10 });
         Assert.Null(m.ThumbnailPath);
         Assert.Equal("", m.Detail);
-        Assert.Equal(3000, m.LifetimeMs);
     }
 
     [Fact]
@@ -77,7 +75,6 @@ public sealed class ToastContentBuilderTests : IDisposable
         Assert.Equal("made 12 holes", m.Summary);
         Assert.Equal("C# script ran in Inventor", m.Detail);
         Assert.Equal("MCP · Script", m.Category);
-        Assert.Equal(6000, m.LifetimeMs);
     }
 
     [Fact]
@@ -111,7 +108,6 @@ public sealed class ToastContentBuilderTests : IDisposable
         Assert.Equal("MCP · Failed", m.Category);
         Assert.Equal("compile error: CS0103 name 'x' does not exist", m.Summary);
         Assert.Equal("Script error", m.Detail);
-        Assert.Equal(8000, m.LifetimeMs);
     }
 
     [Fact]

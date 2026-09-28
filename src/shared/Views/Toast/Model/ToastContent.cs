@@ -36,9 +36,6 @@ public sealed record ToastModel(
 
     /// <summary>A cancelled job ended on purpose: neutral, neither a tick nor an error mark.</summary>
     public ToastIcon Icon => !Success ? ToastIcon.Error : Outcome == "cancelled" ? ToastIcon.Neutral : ToastIcon.Success;
-
-    /// <summary>Auto-dismiss: error/task summary 8 s, thumbnail 9 s, write 6 s, read 3 s.</summary>
-    public int LifetimeMs => !Success || TaskId != null ? 8000 : ThumbnailPath != null ? 9000 : Kind == ToolActivityKind.Write ? 6000 : 3000;
 }
 
 public enum ToastIcon
@@ -169,7 +166,7 @@ public static class ToastContentBuilder
 
         var path = Str(data, "path") ?? Str(data, "output_path");
         var thumb = ToastThumbnail.PathIfImage(path);
-        return ("Saved " + FileName(path) + size, thumb != null ? "Click to open" : "", thumb);
+        return ("Saved " + FileName(path) + size, thumb != null ? "Click to open History" : "", thumb);
     }
 
     /// <summary>One short line from a result token, without serializing large arrays/objects.</summary>

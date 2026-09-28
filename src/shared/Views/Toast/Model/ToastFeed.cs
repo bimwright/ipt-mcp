@@ -1,116 +1,211 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
 
 namespace Bimwright.Ipt.Shared.Views.Toast;
 
-/// <summary>A retained card, not a queued notification. Id is stable across in-place updates.</summary>
-public sealed record ToastCard(long Id, long Revision, ToastModel Model, long Count);
+public enum ToastCardKind { Activity, Status, TaskResult }
+public enum ToastPhase { Hidden, Visible, Closing }
+
+/// <summary>Immutable rendering state of the single card. Counts belong to this card, not an inferred job.</summary>
+public sealed record ToastCard(long Id, ToastCardKind Kind, string Title, string Body,
+    int Succeeded, int Failed, int Captures, bool LatestSuccess, bool HasFailure, string? Outcome = null);
+public sealed record ToastRender(ToastPhase Phase, ToastCard? Card);
 
 /// <summary>
-/// Thread-safe producer/UI boundary. Producers replace at most three retained cards; the UI pulls
-/// snapshots at most twice a second, never one dispatcher operation per tool. Counts describe the
-/// retained activity window, NOT an inferred agent job. No Inventor, WPF or wall clock dependencies.
+/// Single-card activity state, matching the RVT idle/hover/counter contract without host dependencies.
+/// Mutators return whether the caller must post a render. A burst claims only one pending render.
+/// Pending cards retain their data without consuming their lifetime while the frame is unusable.
 /// </summary>
 public sealed class ToastFeed
 {
-    public const int RefreshIntervalMs = 500;
+    public const int DefaultIdleSeconds = 20;
+    private enum Phase { None, Pending, Visible, Closing }
     private readonly object _gate = new();
-    private readonly Dictionary<string, Entry> _cards = new(StringComparer.Ordinal);
-    private long _lastSnapshotMs = -RefreshIntervalMs;
+    private readonly Func<TimeSpan> _now;
+    private readonly Func<int> _idleSeconds;
+    private Phase _phase;
+    private ToastCard? _card;
     private long _nextId;
-    private bool _dirty;
+    private bool _renderPending;
+    private bool _hovering;
+    private int _statusSeconds;
+    private TimeSpan _deadline;
 
-    private sealed record Entry(int Priority, ToastCard Card);
-
-    /// <summary>True while a change is still waiting for the next throttled snapshot.</summary>
-    public bool HasPending { get { lock (_gate) return _dirty; } }
-
-    /// <summary>Raised when the feed first becomes dirty; the UI renders on its own thread.</summary>
-    public event Action? Changed;
-
-    /// <summary>False when a full stack of strictly higher-priority cards refuses a routine arrival.</summary>
-    public bool Publish(ToastModel model)
+    public ToastFeed(Func<int>? idleSeconds = null, Func<TimeSpan>? now = null)
     {
-        var notify = false;
+        var clock = Stopwatch.StartNew();
+        _now = now ?? (() => clock.Elapsed);
+        _idleSeconds = idleSeconds ?? (() => DefaultIdleSeconds);
+    }
+
+    /// <summary>The host must keep tracking even when Pending has no WPF window.</summary>
+    public bool HasWork { get { lock (_gate) return _phase != Phase.None; } }
+
+    public bool Record(ToastModel model, bool frameUsable)
+    {
         lock (_gate)
         {
-            var priority = !model.Success ? 3 : model.TaskId != null ? 2
-                : model.ThumbnailPath != null || model.Command == "capture_view" || model.Command.StartsWith("export_", StringComparison.Ordinal) ? 1 : 0;
-            var key = model.TaskId != null ? "task\0" + model.TaskId : priority == 3 ? "error\0" + model.Command + "\0" + model.Summary + "\0" + model.Detail
-                : priority == 1 ? "result\0" + model.Command : "activity";
-            _cards.TryGetValue(key, out var previous);
-            if (previous == null && _cards.Count >= ToastLayout.MaxToasts)
+            // Explicit agent reports replace the slot; they are not tool counts or inferred completion.
+            // Unlike a connection status they must not be silently refused by an open activity card.
+            if (model.TaskId != null)
             {
-                var victim = _cards.OrderBy(x => x.Value.Priority).ThenBy(x => x.Value.Card.Id).First();
-                // An explicit task report exists to be seen, so it may evict even the oldest error;
-                // routine arrivals keep the drop rule (never push an error out with reads).
-                if (victim.Value.Priority > priority && model.TaskId == null) return false;
-                _cards.Remove(victim.Key);
+                Start(ToastCardKind.TaskResult, frameUsable);
+                _statusSeconds = 8;
+                _card = _card! with { Title = model.Title, Body = "Agent reported · " + model.Summary + " · " + model.TaskId,
+                    LatestSuccess = model.Success, HasFailure = !model.Success, Outcome = model.Outcome };
             }
-
-            var count = (previous?.Card.Count ?? 0) + 1;
-            var display = model;
-            if (priority == 0 && count > 1)
+            else
             {
-                display = model with
+                if (_card?.Kind != ToastCardKind.Activity || (_phase != Phase.Visible && _phase != Phase.Pending))
+                    Start(ToastCardKind.Activity, frameUsable);
+                _card = _card! with
                 {
-                    Title = "Agent activity", Category = "MCP · Activity",
-                    Summary = count + " successful operations",
-                    Detail = "Latest: " + model.Title, DurationMs = 0,
-                    Kind = previous?.Card.Model.Kind == ToolActivityKind.Write ? ToolActivityKind.Write : model.Kind,
+                    Title = model.Title,
+                    Body = model.Summary + (model.Detail.Length == 0 ? "" : " · " + model.Detail),
+                    Succeeded = _card.Succeeded + (model.Success ? 1 : 0),
+                    Failed = _card.Failed + (model.Success ? 0 : 1),
+                    Captures = _card.Captures + (model.Success && (model.Command == "capture_view" || model.ThumbnailPath != null) ? 1 : 0),
+                    LatestSuccess = model.Success,
+                    HasFailure = _card.HasFailure || !model.Success,
                 };
             }
-            if (priority == 3 && count > 1 && model.TaskId == null)
-                display = model with { Detail = model.Detail + " · " + count + " occurrences" };
-            var card = new ToastCard(previous?.Card.Id ?? ++_nextId, count, display, count);
-            _cards[key] = new Entry(priority, card);
-            notify = !_dirty;
-            _dirty = true;
+            _phase = frameUsable ? Phase.Visible : Phase.Pending;
+            if (_phase == Phase.Visible) Rearm();
+            else _hovering = false;
+            return RequestRender();
         }
-        // Notify outside the lock: subscribers marshal to their own thread and must not re-enter here.
-        if (notify) Changed?.Invoke();
+    }
+
+    /// <summary>Connection status never replaces activity or an explicit task report, or changes counts.</summary>
+    public bool ShowStatus(string title, string body, int seconds, bool frameUsable)
+    {
+        lock (_gate)
+        {
+            if (_card?.Kind != ToastCardKind.Status && (_phase == Phase.Visible || _phase == Phase.Pending))
+                return false;
+            Start(ToastCardKind.Status, frameUsable);
+            _card = _card! with { Title = title, Body = body };
+            _statusSeconds = Math.Max(1, seconds);
+            if (frameUsable) Rearm();
+            return RequestRender();
+        }
+    }
+
+    /// <summary>Reset is atomic with notification toggle handling at the notifier boundary.</summary>
+    public bool Reset()
+    {
+        lock (_gate)
+        {
+            _phase = Phase.None;
+            _card = null;
+            _hovering = false;
+            return RequestRender();
+        }
+    }
+
+    /// <summary>Independent toast-thread tick: no Inventor Idling/COM needed to restore pending work.</summary>
+    public bool Tick(bool frameUsable)
+    {
+        lock (_gate)
+        {
+            if (_phase == Phase.Pending && frameUsable)
+            {
+                _phase = Phase.Visible;
+                _hovering = false;
+                Rearm();
+                return RequestRender();
+            }
+            if (_phase != Phase.Visible) return false;
+            if (!frameUsable)
+            {
+                _phase = Phase.Pending;
+                _hovering = false;
+                return RequestRender();
+            }
+            if (!Expired()) return false;
+            _phase = Phase.Closing;
+            return RequestRender();
+        }
+    }
+
+    public bool PointerEntered(long id)
+    {
+        lock (_gate)
+        {
+            if (!IsLive(id)) return false;
+            if (Expired())
+            {
+                _phase = Phase.Closing;
+                return RequestRender();
+            }
+            _hovering = true;
+            return false;
+        }
+    }
+
+    public void PointerLeft(long id)
+    {
+        lock (_gate)
+        {
+            if (!IsLive(id) || !_hovering) return;
+            _hovering = false;
+            Rearm();
+        }
+    }
+
+    public bool Dismiss(long id)
+    {
+        lock (_gate)
+        {
+            if (!IsLive(id)) return false;
+            _phase = Phase.Closing;
+            return RequestRender();
+        }
+    }
+
+    public void CardClosed(long id)
+    {
+        lock (_gate)
+        {
+            if (_card?.Id != id || (_phase != Phase.Visible && _phase != Phase.Closing)) return;
+            _phase = Phase.None;
+            _card = null;
+        }
+    }
+
+    public ToastRender TakeRender()
+    {
+        lock (_gate)
+        {
+            _renderPending = false;
+            if (_phase == Phase.Visible && Expired()) _phase = Phase.Closing;
+            return _phase switch
+            {
+                Phase.Visible => new ToastRender(ToastPhase.Visible, _card),
+                Phase.Closing => new ToastRender(ToastPhase.Closing, _card),
+                _ => new ToastRender(ToastPhase.Hidden, null),
+            };
+        }
+    }
+
+    private void Start(ToastCardKind kind, bool frameUsable)
+    {
+        _card = new ToastCard(++_nextId, kind, "", "", 0, 0, 0, true, false);
+        _phase = frameUsable ? Phase.Visible : Phase.Pending;
+        _hovering = false;
+    }
+    private bool IsLive(long id) => _card?.Id == id && _phase == Phase.Visible;
+    private bool Expired() => !_hovering && _now() >= _deadline;
+    private void Rearm()
+    {
+        if (_hovering) return;
+        var seconds = _card?.Kind == ToastCardKind.Activity ? _idleSeconds() : _statusSeconds;
+        _deadline = _now() + TimeSpan.FromSeconds(seconds > 0 ? seconds : DefaultIdleSeconds);
+    }
+    private bool RequestRender()
+    {
+        if (_renderPending) return false;
+        _renderPending = true;
         return true;
-    }
-
-    /// <summary>An old window finishing its fade must not discard a newer producer update.</summary>
-    public void Dismiss(long id, long revision)
-    {
-        var notify = false;
-        lock (_gate)
-        {
-            var match = _cards.FirstOrDefault(x => x.Value.Card.Id == id && x.Value.Card.Revision == revision);
-            if (match.Key == null) return;
-            _cards.Remove(match.Key);
-            notify = !_dirty;
-            _dirty = true;
-        }
-        if (notify) Changed?.Invoke();
-    }
-
-    public void Clear()
-    {
-        var notify = false;
-        lock (_gate)
-        {
-            if (_cards.Count == 0 && !_dirty) return;   // nothing to wake the UI for
-            _cards.Clear();
-            notify = !_dirty;
-            _dirty = true;
-        }
-        if (notify) Changed?.Invoke();
-    }
-
-    /// <summary>Null means no repaint; an empty snapshot means remove all cards.</summary>
-    public IReadOnlyList<ToastCard>? TakeSnapshot(long nowMs)
-    {
-        lock (_gate)
-        {
-            if (!_dirty || nowMs - _lastSnapshotMs < RefreshIntervalMs) return null;
-            _lastSnapshotMs = nowMs;
-            _dirty = false;
-            return _cards.Values.OrderByDescending(x => x.Priority).ThenByDescending(x => x.Card.Id)
-                .Select(x => x.Card).ToArray();
-        }
     }
 }
