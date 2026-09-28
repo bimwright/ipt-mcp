@@ -284,6 +284,7 @@ Ngắn gọn: model của bạn ở lại trên máy bạn, và các tool write/
 - **Error đã sanitize.** Error trả về model được sanitize để tránh leak absolute path/secret.
 - **Kiểm soát ToolBaker.** Mặc định ToolBaker được bật. Bạn có thể tắt hoàn toàn bằng cách truyền flag --disable-toolbaker lúc khởi động server hoặc set biến môi trường BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0.
 - **Đường dẫn export được phép.** Các công cụ xuất tệp kiểm tra để đảm bảo output_path nằm trong thư mục an toàn (User Profile hoặc Temp). Bạn có thể đăng ký thêm thư mục cho phép bằng cách cấu hình biến môi trường BIMWRIGHT_INVENTOR_EXPORT_ROOT.
+- **Che thông tin bí mật trong lỗi và nhật ký.** Cặp khóa–giá trị chứa thông tin đăng nhập và token `Bearer` luôn bị che. Một heuristic che thêm mọi chuỗi chữ-số dài từ 24 ký tự; mặc định **bật**. Trên máy tin cậy cần đọc rõ tên dài (tên kiểu COM, tên part), đặt `BIMWRIGHT_INVENTOR_MASK_LONG_TOKENS=0` trong biến môi trường người dùng (cả server và add-in đều đọc; khởi động lại Inventor và MCP client).
 
 **ToolBaker** biến workflow local lặp lại thành tool cá nhân đã verify: suggestion xuất hiện qua `inventor_list_bake_suggestions`, bạn chủ động accept bằng `inventor_accept_bake_suggestion` (validate → compile → apply → persist), và tool đã accept gọi được qua `inventor_list_baked_tools` / `inventor_run_baked_tool`. Bake database và audit log nằm local dưới `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\`. Xem [docs/toolbaker.md](docs/toolbaker.md) và [SECURITY.md](SECURITY.md).
 

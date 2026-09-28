@@ -323,6 +323,35 @@ public sealed class SendCodeReductionTests
         Assert.Equal(JTokenType.Null, ServerLogger.BuildFinishEntry("s", "r", "health", true, 1, null, null, null, null, null, null)["result"]!.Type);
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("1", true)]
+    [InlineData("0", false)]
+    [InlineData(" OFF ", false)]
+    [InlineData("false", false)]
+    [InlineData("no", false)]
+    public void Long_token_masking_is_on_unless_the_env_switch_turns_it_off(string? value, bool expected)
+        => Assert.Equal(expected, Bimwright.Ipt.Shared.Security.SecretMasker.LongTokenMaskingFromEnvironment(value));
+
+    [Fact]
+    public void Long_token_switch_keeps_names_but_never_credentials()
+    {
+        const string msg = "'ComponentOccurrencesEnumerator' lacks X; password=\"hunter2\" Bearer abcdefgh12345678";
+        var before = Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens;
+        try
+        {
+            Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = true;
+            Assert.DoesNotContain("ComponentOccurrencesEnumerator", Bimwright.Ipt.Shared.Security.SecretMasker.Mask(msg));
+            Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = false;
+            var off = Bimwright.Ipt.Shared.Security.SecretMasker.Mask(msg);
+            Assert.Contains("ComponentOccurrencesEnumerator", off);
+            Assert.DoesNotContain("hunter2", off);
+            Assert.DoesNotContain("abcdefgh12345678", off);
+        }
+        finally { Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = before; }
+    }
+
     [Fact]
     public void Oversized_result_is_truncated_not_dropped()
     {

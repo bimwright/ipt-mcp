@@ -286,6 +286,7 @@ Toast 使用 **专用 STA UI 线程上的纯代码 WPF**，窗口 **无 owner �
 - **Sanitized errors。** 返回给 model 的错误信息会被 sanitize，避免泄露绝对路径/密钥。
 - **ToolBaker 控制。** 默认启用 ToolBaker。你可以通过在启动 server 时传入 --disable-toolbaker 命令行标志，或者设置环境变量 BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0 来完全禁用它。
 - **允许的导出路径。** 文件导出工具会验证 output_path 是否指向安全文件夹（位于 User Profile 或 Temp 目录下）。你可以通过设置环境变量 BIMWRIGHT_INVENTOR_EXPORT_ROOT 来定义额外允许的根文件夹。
+- **错误与日志中的机密遮蔽。** 带引号的键值凭据和 `Bearer` 令牌始终会被遮蔽。另有一个启发式规则会把任何 24 个字符以上的字母数字串视为可能的机密并遮蔽，**默认开启**。在需要看清长标识符（COM 类型名、零件名）的可信机器上，可在用户环境变量中设置 `BIMWRIGHT_INVENTOR_MASK_LONG_TOKENS=0`（服务器和插件都会读取；需重启 Inventor 和 MCP 客户端）。
 
 **ToolBaker** 把重复的本地 workflow 变成个人、已验证的工具：建议通过 `inventor_list_bake_suggestions` 浮现，你用 `inventor_accept_bake_suggestion` 显式接受一个（validate → compile → apply → persist），accept 后的工具就可以通过 `inventor_list_baked_tools` / `inventor_run_baked_tool` 调用。Bake 数据库和 audit log 都位于本地 `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\`。见 [docs/toolbaker.md](docs/toolbaker.md) 和 [SECURITY.md](SECURITY.md)。
 

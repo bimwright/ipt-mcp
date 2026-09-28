@@ -282,6 +282,7 @@ Toast は **専用 STA UI スレッド上のコードのみで構築した WPF**
 - **サニタイズされたエラー。** モデルに返されるエラーメッセージは、絶対パスやシークレットの漏洩を防ぐためにサニタイズされています。
 - **ToolBaker の制御。** デフォルトで ToolBaker は有効化されています。サーバーの起動時に --disable-toolbaker コマンドラインフラグを渡すか、環境変数 BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0 を設定することで、完全に無効化できます。
 - **許可されたエクスポートパス。** ファイルエクスポートツールは、output_path が安全なフォルダー（User Profile または Temp ディレクトリ内）を指していることを検証します。環境変数 BIMWRIGHT_INVENTOR_EXPORT_ROOT を設定することで、許可されたルートフォルダーを追加定義できます。
+- **エラーとジャーナルの秘密情報マスク。** 引用符付きのキー/値形式の認証情報と `Bearer` トークンは常にマスクされます。さらに 24 文字以上の英数字の連続を秘密情報とみなしてマスクするヒューリスティックがあり、**既定で有効**です。長い識別子（COM 型名、パーツ名）を読める状態にしたい信頼済みマシンでは、ユーザー環境変数 `BIMWRIGHT_INVENTOR_MASK_LONG_TOKENS=0` を設定してください（サーバーとアドインの両方が読み取ります。Inventor と MCP クライアントを再起動）。
 
 **ToolBaker** は、繰り返しのローカルワークフローを個人用の検証済みツールに変換します。提案は `inventor_list_bake_suggestions` で表示され、`inventor_accept_bake_suggestion`（検証 → コンパイル → 適用 → 永続化）で明示的に受け入れると、`inventor_list_baked_tools` / `inventor_run_baked_tool` で呼び出し可能になります。ベイクデータベースと監査ログは `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\` にローカルに保存されます。詳細は [docs/toolbaker.md](docs/toolbaker.md) および [SECURITY.md](SECURITY.md) を参照してください。
 

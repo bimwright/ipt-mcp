@@ -33,6 +33,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- The long-token secret heuristic (any 24+ character alphanumeric run) can be turned off per machine with `BIMWRIGHT_INVENTOR_MASK_LONG_TOKENS=0`, so compile diagnostics and journals keep long COM type and part names readable. Masking stays on by default; key-value credentials and Bearer tokens are always masked.
 - `save_document`, `open_document`, `close_document`, the export translators and the new batch document tools run under `Application.SilentOperation` by default (`silent=false` opts out). A save that met Inventor's "Save" dependents dialog used to block the STA thread until the call timed out.
 - TIMEOUT responses and `inventor_health` report `modal_dialog {open, title}` from a Win32 probe that never touches the STA thread.
 - The send_code / ToolBaker source policy allows fully-qualified `System.IO.Path.{GetFileName, GetFileNameWithoutExtension, GetExtension, GetDirectoryName, Combine, ChangeExtension}(…)`; `using System.IO`, aliases and file-system calls stay blocked. The `File.` rejection now points to `get_document_info(references=true)`.
