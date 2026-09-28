@@ -312,4 +312,24 @@ public sealed class SendCodeReductionTests
         Assert.True(entry.ContainsKey("client_name"));
         Assert.True(entry.ContainsKey("client_version"));
     }
+
+    [Fact]
+    public void Finish_entry_records_masked_result()
+    {
+        var data = JObject.Parse("{\"ok\":true,\"result\":42,\"token\":\"abc\"}");
+        var entry = ServerLogger.BuildFinishEntry("s", "r", "send_code", true, 1, null, null, null, null, null, data);
+        Assert.Equal(42, entry["result"]!["result"]!.Value<int>());
+        Assert.Equal("***", entry["result"]!["token"]!.Value<string>());
+        Assert.Equal(JTokenType.Null, ServerLogger.BuildFinishEntry("s", "r", "health", true, 1, null, null, null, null, null, null)["result"]!.Type);
+    }
+
+    [Fact]
+    public void Oversized_result_is_truncated_not_dropped()
+    {
+        // Many short values: SecretMasker would collapse one long token-like string.
+        var data = new JObject { ["rows"] = new JArray(Enumerable.Range(0, ServerLogger.MaxResultChars / 8).Select(i => "row " + i)) };
+        var capped = ServerLogger.CapResult(data);
+        Assert.True(capped["truncated"]!.Value<bool>());
+        Assert.Equal(ServerLogger.MaxResultChars, capped["head"]!.Value<string>()!.Length);
+    }
 }

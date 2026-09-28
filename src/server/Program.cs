@@ -44,7 +44,25 @@ var mcp = builder.Services
         // Journal v3: stamp the calling client once it is known (initialize has completed by now).
         if (ServerLogger.ClientName is null && ctx.Server.ClientInfo is { } ci)
             ServerLogger.SetClient(ci.Name, ci.Version);
-        return await next(ctx, ct);
+        var journaled = ServerLogger.BeginCall();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        ModelContextProtocol.Protocol.CallToolResult? result = null;
+        string? thrown = null;
+        try
+        {
+            return result = await next(ctx, ct);
+        }
+        catch (Exception ex)
+        {
+            thrown = ex.Message;
+            throw;
+        }
+        finally
+        {
+            // Tools that never reach the add-in (code modules, ToolBaker DB, …) are journaled here.
+            if (!journaled.Value)
+                ServerLogger.LogServerOnlyCall(ctx.Params?.Name ?? "?", ctx.Params?.Arguments, result, thrown, sw.ElapsedMilliseconds);
+        }
     }));
 mcp = Program.RegisterToolsets(mcp, Program.ResolveToolTypesForRegistration(cfg));
 

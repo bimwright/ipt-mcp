@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -19,7 +21,8 @@ namespace Bimwright.Ipt.Server;
 /// shape for replay but embedded credentials do not persist to disk, per SECURITY.md). The
 /// finish line keeps <c>success</c> at envelope level and adds the script-level outcome
 /// (<c>data_ok</c>/<c>data_error</c>/<c>stdout_bytes</c>), response size, add-in duration and
-/// target; those keys are always present (null when n/a), with error strings masked too.
+/// target, and the returned data as <c>result</c> (masked, capped at 64 KiB); those keys are always present (null when n/a),
+/// with error strings masked too. Server-only tools are journaled by the call-tool filter via <see cref="LogServerOnlyCall"/>.
 /// </summary>
 internal static class ServerLogger
 {
@@ -92,6 +95,41 @@ internal static class ServerLogger
         }
         catch
         {
+        }
+    }
+
+    /// <summary>
+    /// Start + finish lines for a tool answered by the server alone. The result is the tool's text
+    /// content (parsed as JSON when it is JSON); success is false when the tool reported an error.
+    /// </summary>
+    public static void LogServerOnlyCall(string toolName, IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        ModelContextProtocol.Protocol.CallToolResult? result, string? thrown, long durationMs)
+    {
+        try
+        {
+            var requestId = Guid.NewGuid().ToString("N");
+            JObject? args = arguments is null ? null : JObject.Parse(System.Text.Json.JsonSerializer.Serialize(arguments));
+            LogStart(requestId, toolName, args);
+
+            JToken? data = null;
+            var text = result?.Content?.OfType<ModelContextProtocol.Protocol.TextContentBlock>().FirstOrDefault()?.Text;
+            if (text != null)
+            {
+                try { data = JToken.Parse(text); }
+                catch (JsonException) { data = new JValue(text); }
+            }
+            var obj = data as JObject;
+            var error = thrown ?? obj?["error"]?.ToString(Formatting.None);
+            var reportedFailure = obj != null
+                && ((obj["ok"] is { Type: JTokenType.Boolean } okToken && !okToken.Value<bool>())
+                    || obj["error"] is { Type: not JTokenType.Null });
+            var ok = thrown is null && result?.IsError != true && !reportedFailure;
+            WriteEntry(BuildFinishEntry(SessionId, requestId, toolName, ok, durationMs, ok ? null : error, null, null,
+                text is null ? null : Encoding.UTF8.GetByteCount(text), null, data));
+        }
+        catch
+        {
+            // Logging must never break a call.
         }
     }
 
@@ -197,7 +235,36 @@ internal static class ServerLogger
             ["stdout_bytes"] = stdoutBytes,
             ["client_name"] = NullableString(_clientName),
             ["client_version"] = NullableString(_clientVersion),
+            ["result"] = CapResult(data),
         };
+    }
+
+    internal const int MaxResultChars = 64 * 1024;
+
+    /// <summary>
+    /// The tool's returned data for the journal: masked like params; above <see cref="MaxResultChars"/>
+    /// serialized characters it is kept as a truncated string prefix (spilled payloads already carry
+    /// their file path inline). Null when there is no data.
+    /// </summary>
+    internal static JToken CapResult(JToken? data)
+    {
+        if (data is null || data.Type == JTokenType.Null) return JValue.CreateNull();
+        var masked = data.DeepClone();
+        MaskToken(masked);
+        var text = masked.ToString(Formatting.None);
+        if (text.Length <= MaxResultChars) return masked;
+        return new JObject { ["truncated"] = true, ["chars"] = text.Length, ["head"] = text.Substring(0, MaxResultChars) };
+    }
+
+    // Set by the call-tool filter for each MCP call; journaling code marks it so the filter can
+    // journal the server-only tools (code modules, ToolBaker DB) that never reach the add-in.
+    private static readonly System.Threading.AsyncLocal<StrongBox<bool>?> CallJournaled = new();
+
+    internal static StrongBox<bool> BeginCall() => CallJournaled.Value = new StrongBox<bool>(false);
+
+    private static void MarkJournaled()
+    {
+        if (CallJournaled.Value is { } box) box.Value = true;
     }
 
     // ErrorSanitizer turns null into "" — keep null as null so the stable-key contract holds.
@@ -208,6 +275,7 @@ internal static class ServerLogger
 
     private static void WriteEntry(object entry)
     {
+        MarkJournaled();
         var line = JsonConvert.SerializeObject(entry, Formatting.None);
         lock (Gate)
         {

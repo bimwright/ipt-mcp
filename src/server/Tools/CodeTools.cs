@@ -94,6 +94,7 @@ public sealed class CodeTools
         {
             ["compile_only"] = true,
             ["module"] = name,
+            ["code"] = code,
             ["modules"] = new JArray(ordered.Select(m => new JObject { ["name"] = m.Name, ["hash"] = SendCodeSource.Hash(m.Code) })),
         };
         JToken data;
