@@ -58,9 +58,7 @@ namespace Bimwright.Ipt.Shared.Logging
 
         /// <summary>The product log dir — the journal root for this add-in instance.</summary>
         internal static string LogDir =>
-            LocalAppDataOverride ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Bimwright", "ipt-mcp");
+            LocalAppDataOverride ?? Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot;
 
         public static void Initialize()
         {

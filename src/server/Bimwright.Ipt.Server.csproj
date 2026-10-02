@@ -33,6 +33,7 @@
     <Compile Include="..\shared\Contracts\*.cs" LinkBase="Shared\Contracts" />
     <Compile Include="..\shared\Security\*.cs" LinkBase="Shared\Security" />
     <Compile Include="..\shared\ToolBaker\*.cs" LinkBase="Shared\ToolBaker" />
+    <Compile Include="..\shared\Setup\*.cs" LinkBase="Shared\Setup" />
     <EmbeddedResource Include="..\shared\Contracts\send-code-hints.json" LogicalName="Bimwright.Ipt.SendCodeHints.json" />
   </ItemGroup>
 

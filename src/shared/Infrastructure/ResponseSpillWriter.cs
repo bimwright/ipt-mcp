@@ -46,8 +46,7 @@ public sealed class ResponseSpillWriter
     public static ResponseSpillWriter ForContext(InventorCommandContext ctx) => new(DefaultDirectory,ctx.SpillRetentionHours);
 
     public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Bimwright", "ipt-mcp", "spill");
+        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot, "spill");
 
     /// <summary>True when the payload is large enough to spill.</summary>
     public static bool ShouldSpill(string? text)

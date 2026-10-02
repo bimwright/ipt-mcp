@@ -278,17 +278,17 @@ Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server 
 
 ## Toast 通知
 
-Inventor の表示中、コマンド結果は **1 枚のコンパクトな活動カード**に集約され、最新ツールと、数字がロールする **Success / Failed / Capture** カウンターを表示します。Capture は Success の内数で、`inventor_capture_view` の `inline=true` も含みます。操作総数に別途加算する値ではありません。Failed はソフト失敗や batch rollback も含みます。読み取り・書き込みとも強調色は青で、失敗を記録したカードは赤を維持します。数値が変わってもレイアウトは安定し、サムネイルカード、優先順位付きスタック、ツールごとの toast キューはありません。件数はこの target 上でカードが保持される期間のもので、ジョブ全体や特定 MCP client の件数ではありません。`inventor_health` は toast を生成しません。**Agent connected** は状態通知で、カウンターを増やさず、保持中の活動カードやタスク報告を置き換えません。
+Inventor の表示中、コマンド結果は **1 枚のコンパクトな活動カード**に集約され、最新ツールと、数字がロールする **Success / Failed / Capture** カウンターを表示します。Capture は Success の内数で、`inventor_capture_view` の `inline=true` も含みます。操作総数に別途加算する値ではありません。Failed はソフト失敗や batch rollback も含みます。読み取り・書き込みとも強調色は青で、失敗を記録したカードは赤を維持します。このカードは rvt-mcp・dwg-mcp と同じもので、数値が変わってもレイアウトは安定し、優先順位付きスタックやツールごとの toast キューはありません。画像を保存できた capture が成功すると、その**サムネイル**が固定サイズの枠の中央に表示され、サムネイルをクリックするとファイルを開きます。件数はこの target 上でカードが保持される期間のもので、ジョブ全体や特定 MCP client の件数ではありません。`inventor_health` は toast を生成しません。**Agent connected** は状態通知で、カウンターを増やさず、保持中の活動カードやタスク報告を置き換えません。
 
-活動カードは **最後の結果から 20 秒**で消えます。ポインターの移動を伴う実際のホバーで期限を一時停止し、離れると 20 秒を最初から数え直します。静止したカーソルの下にカードが出現しただけではホバーと見なしません。カードをクリックすると **History** を開いてカードを閉じ、**×** はカードを閉じるだけです。フッターの **Inventor の年版** は branding の設定に関係なく常に表示されます。
+活動カードは **最後の結果から 20 秒**で消えます。ポインターの移動を伴う実際のホバーで期限を一時停止し、離れると 20 秒を最初から数え直します。静止したカーソルの下にカードが出現しただけではホバーと見なしません。カードをクリックすると **History** を開いてカードを閉じ、**×** はカードを閉じるだけです。カードのタイトルには、branding の設定に関係なくゲートウェイ名と **Inventor の年版**（`ipt-mcp 2027`）が常に表示されます。
 
 ジョブ結果は agent が `inventor_report_task_result` で明示的に送ります。agent/job ごとに一意な `task_id`（1–80 文字）、`outcome`（`completed`/`failed`/`cancelled`）、正確な 1 行の `summary`（1–120 文字）が必要です。報告は **同じ共有スロットを置き換え**、**Agent reported** と表示し、有効期間は **8 秒**です。実際のホバーで一時停止し、離れると数え直します。活動カウンターには加算せず、次のツール結果で新しい活動カードが始まります。無通信時間や単一ツールの成功から完了を推測しません。Inventor API を呼ばずコマンドキューを迂回するため、長い `send_code` がメインスレッドを占有していても報告を受け付けます。`toast_shown` は表示用にカードを保持したかを示し、最小化やモーダルダイアログの解除待ちも含みます。Toasts 設定に従い、server と add-in の両方の更新が必要です。
 
-Toast は **専用 STA UI スレッド上のコードのみで構築した WPF** を使用し、**所有者なし・非アクティブ化（unowned / no-activate）ウィンドウ**として動作します。Inventor のメイン STA から独立し、toast スレッドから Inventor COM を呼びません。コマンド結果の通知はレスポンス返却後に投稿します。フォーカスを奪わず、Inventor の最小化中やモーダルダイアログ表示中は隠れ、**他のアプリが前面でも最前面を維持**します。自動パレットは描画済みカード自体を避けて画面をサンプリングし、サンプルはメモリ内のみで、ディスクやログには書き込みません。
+Toast は **専用 STA UI スレッド上のコードのみで構築した WPF** を使用し、**所有者なし・非アクティブ化（unowned / no-activate）ウィンドウ**として動作します。Inventor のメイン STA から独立し、toast スレッドから Inventor COM を呼びません。コマンド結果の通知はレスポンス返却後に投稿します。フォーカスを奪わず、Inventor の最小化中やモーダルダイアログ表示中は隠れ、**他のアプリが前面でも最前面を維持**します。カードは rvt-mcp・dwg-mcp と同じ固定のライトスタイルで、テーマ設定はなく、カードの背後の画面を読み取ることもありません。
 
-リボンから toast を切り替え：**Bimwright ▸ MCP → Toasts**（Status で診断ダイアログを開きます）。選択は `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` の `enableToast` に永続化されます。`toastTheme` は `auto`（デフォルト）、`light`、`dark` を受け付けます。環境変数 `BIMWRIGHT_INVENTOR_ENABLE_TOAST` と `BIMWRIGHT_INVENTOR_TOAST_THEME` は JSON 値を上書きします。不正な形式の設定ファイルはそのまま残されます — トグルは上書きを拒否します。
+リボンから toast を切り替え：**Bimwright ▸ MCP → Toasts**（Status で診断ダイアログを開きます）。選択は `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` の `enableToast` に永続化されます。環境変数 `BIMWRIGHT_INVENTOR_ENABLE_TOAST` は JSON 値を上書きします。廃止された `toastTheme` キーと `BIMWRIGHT_INVENTOR_TOAST_THEME` は無視されます。不正な形式の設定ファイルはそのまま残されます — トグルは上書きを拒否します。
 
-同じリボンの **Toast Brand** は **デフォルト OFF、セッション限定**で、設定を永続化しません。有効にすると活動タイトルに `IPT-MCP - ` を付け、実際のホバーで BIMwright ワードマークをワイプ表示し、離れるとフェードアウトします。**カード出現時の自動ワードマークワイプはありません**。動きは Windows のアニメーション設定に従います。Toast UI のラベルは英語のままで、README の翻訳は UI のローカライズを意味しません。
+同じリボンの **Toast Brand** は **デフォルト OFF** です。選択は同じファイルの `showBranding` に保存され、次回の Inventor 起動時に復元されます。有効にするとカード下部にワードマーク用の行を確保し、実際のホバーでそこに BIMwright ワードマークをワイプ表示し、離れるとフェードアウトします。**カード出現時の自動ワードマークワイプはありません**。動きは Windows のアニメーション設定に従います。Toast UI のラベルは英語のままで、README の翻訳は UI のローカライズを意味しません。
 
 ---
 

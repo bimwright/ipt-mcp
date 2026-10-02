@@ -13,7 +13,6 @@ public sealed record StatusInfo(
     bool ReadOnly,
     ToastSettings Toast,
     bool ToastOnNow,
-    string? LastPaletteDecision,
     string ConfigPath);
 
 /// <summary>Copy for the ribbon Status dialog. Host-free so it is unit-tested.</summary>
@@ -32,13 +31,10 @@ public static class StatusText
         sb.AppendLine($"Toasts: {OnOff(s.ToastOnNow)} (startup value from {s.Toast.EnableSource})");
         if (s.Toast.EnableSource.StartsWith("env", StringComparison.Ordinal))
             sb.AppendLine($"  {ToastConfigStore.EnableEnv} is set: it wins over the ribbon choice at the next start.");
-        sb.AppendLine($"Toast theme: {s.Toast.Theme.ToString().ToLowerInvariant()} (from {s.Toast.ThemeSource})");
-        sb.AppendLine("  Last palette: " + (s.LastPaletteDecision ?? "no toast shown yet"));
         sb.AppendLine("Config file: " + s.ConfigPath);
         sb.AppendLine();
         sb.AppendLine("Privacy");
         sb.AppendLine("  Toasts show command names and short results on this screen only. Nothing is sent anywhere.");
-        sb.AppendLine("  Auto theme reads the screen colour behind a toast in memory. Pixels are never saved or logged.");
         sb.Append("  The MCP server keeps its own call journal (BIMWRIGHT_INVENTOR_CALL_LOG, default %LOCALAPPDATA%\\Bimwright\\ipt-mcp-calls.jsonl).");
         return sb.ToString();
     }

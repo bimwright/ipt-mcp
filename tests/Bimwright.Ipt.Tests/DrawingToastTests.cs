@@ -20,7 +20,7 @@ public sealed class DrawingToastTests
     {
         var model = ToastContentBuilder.Build(new ToastEvent("capture_sheet", true, new JObject { ["width"] = 1600, ["height"] = 1100, ["base64"] = "fixture" }, null, null, 12, false));
         Assert.Equal(ToolActivityKind.Write, model.Kind); Assert.Equal("MCP · Snapshot", model.Category); Assert.True(model.Success);
-        var feed = new ToastFeed(); feed.Record(model, true); var card = feed.TakeRender().Card!; Assert.Equal(1, card.Captures); Assert.Equal(1, card.Succeeded);
+        var feed = new ActivityAggregator(); feed.Record(model, true); var card = feed.TakeRender().Card!; Assert.Equal(1, card.Images); Assert.Equal(1, card.Succeeded);
     }
     [Fact]
     public void Rolled_back_drawing_batch_reports_the_actual_error_and_failed_category()

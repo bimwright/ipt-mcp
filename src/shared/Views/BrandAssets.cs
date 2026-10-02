@@ -31,6 +31,8 @@ namespace Bimwright.Ipt.Shared.Views
         public const string Wordmark = "BIMwright";
         /// <summary>Lowercase product tag used in tooltips.</summary>
         public const string ProductTag = "bimwright ipt-mcp";
+        /// <summary>Gateway name in the toast title, followed by the Inventor year.</summary>
+        public const string ProductName = "ipt-mcp";
     }
 }
 #endif

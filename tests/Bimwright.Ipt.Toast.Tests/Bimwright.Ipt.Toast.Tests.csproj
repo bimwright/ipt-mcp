@@ -1,26 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Allows the "?" annotations the shared model files use; the shared WPF files opt out with #nullable disable. -->
+    <Nullable>annotations</Nullable>
+    <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
+    <!-- The toast window and BrandAssets are guarded by the per-year plugin symbols. They never touch
+         the Inventor API, so any year compiles them. -->
+    <DefineConstants>$(DefineConstants);INVENTOR2027</DefineConstants>
   </PropertyGroup>
-
+  <!-- Real WPF windows on an STA dispatcher, independent of Inventor. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-    <PackageReference Include="xunit" Version="2.6.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.cs" Link="ActivityAggregator.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.Ipt.cs" Link="ActivityAggregator.Ipt.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/McpToastViewModel.cs" Link="McpToastViewModel.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastContent.cs" Link="ToastContent.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastThumbnail.cs" Link="ToastThumbnail.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToolActivity.cs" Link="ToolActivity.cs" />
+    <Compile Include="../../src/shared/Views/Toast/McpToastWindow.cs" Link="McpToastWindow.cs" />
+    <Compile Include="../../src/shared/Views/Toast/RollingToastNumber.cs" Link="RollingToastNumber.cs" />
+    <Compile Include="../../src/shared/Views/Toast/McpToastManager.cs" Link="McpToastManager.cs" />
+    <Compile Include="../../src/shared/Views/Toast/McpToastTheme.cs" Link="McpToastTheme.cs" />
+    <Compile Include="../../src/shared/Views/Toast/ToastThumbnailLoader.cs" Link="ToastThumbnailLoader.cs" />
+    <Compile Include="../../src/shared/Views/BrandAssets.cs" Link="BrandAssets.cs" />
+    <Compile Include="../../src/shared/Localization/L.cs" Link="Localization\L.cs" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
-
-  <!--
-    Only the host-free toast model files. The WPF / Win32 / Inventor toast code is plug-in-only and
-    is verified live (Phase 1b Task 11). No Inventor, no WPF needed to run these tests.
-  -->
-  <ItemGroup>
-    <Using Include="Xunit" />
-    <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
-  </ItemGroup>
-
 </Project>

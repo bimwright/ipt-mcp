@@ -45,13 +45,13 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private McpSessionLog? _sessionLog;
     private int _historyCountQueued;
     private InvApi.ApplicationEvents? _appEvents;
-    private BackdropHint? _hint;
     private string _configPath = "";
     private ConnectionWatch? _connectionWatch;
     private System.Windows.Forms.Timer? _toastSnapshotTimer;
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
+        var runtimeLayout = Bimwright.Setup.RuntimeLayout.StartForCurrentUser("ipt-mcp");
         _app = site.Application;                    // stable API entry point (spec)
         _sta = new InventorStaDispatcher();         // created on the STA thread
         try { ModalDialogProbe.MainWindow = new IntPtr(_app.MainFrameHWND); } catch { }   // S1.1: STA-free dialog probe
@@ -59,9 +59,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _year = InventorVersion.Year;
         var enableSendCode = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE");
         var readOnly = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY") || EnvFlag("BIMWRIGHT_INVENTOR_READ_ONLY");
-        _descriptorDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Bimwright", "ipt-mcp");
+        _descriptorDir = runtimeLayout.RuntimeRoot;
 
         var options = new PluginOptions(_year, enableSendCode, readOnly, 0);
         _options = options;
@@ -79,17 +77,20 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _sessionLog.Cleared += PostHistoryCount;
 
         // Toasts (Phase 1b): settings before the transport starts, so the first command already sees them.
-        _configPath = ToastConfigStore.DefaultPath(_descriptorDir);
+        _configPath = ToastConfigStore.DefaultPath(runtimeLayout.DataRoot);
         _toastSettings = ToastConfigStore.Load(_configPath, Environment.GetEnvironmentVariable);
-        _toasts = new ToastNotifier(_toastSettings,
-            $"Inventor {_year}", ShowOrFocusHistoryWindow);
+        _toasts = new ToastNotifier(_toastSettings.EnableToast,
+            $"{BrandAssets.ProductName} {_year}", ShowOrFocusHistoryWindow);
+        _toasts.ShowBranding = _toastSettings.ShowBranding;
 
         // Start the transport and read back its bound endpoint into the descriptor.
+        var setupIdentity = SetupRuntimeIdentity.Capture(runtimeLayout, GetType().Assembly, "plugin", _year);
         _server = TransportFactory.CreateStarted(
             _year, _descriptorDir,
             (line, tcs) => HandleLine(line, dispatcher, options, _descriptor!, tcs),
             out var descriptor);
         _descriptor = descriptor;
+        _descriptor.SetupIdentity = setupIdentity;
 
         // Fill the active-document title/path (caller holds the Inventor.Application) + persist + heartbeat.
         ReadActiveDocument(out var docTitle, out var docPath);
@@ -118,7 +119,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 ShowOrFocusHistoryWindow,
                 () => _sessionLog?.Count ?? 0,
                 () => _toasts?.ShowBranding ?? false,
-                show => { if (_toasts != null) _toasts.ShowBranding = show; });
+                SetBrandingOn);
             _ribbon.Build();
         }
         catch
@@ -128,13 +129,19 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         try
         {
             _appEvents = _app.ApplicationEvents;
-            _appEvents.OnApplicationOptionChange += OnApplicationOptionChange;
             _appEvents.OnActivateView += OnActivateView;
         }
         catch
         {
             _appEvents = null;
         }
+    }
+
+    /// <summary>Ribbon Toast Brand (STA): takes effect now and persists for the next start.</summary>
+    private void SetBrandingOn(bool show)
+    {
+        if (_toasts != null) _toasts.ShowBranding = show;
+        ToastConfigStore.SaveShowBranding(_configPath, show);
     }
 
     /// <summary>Ribbon toggle (STA): takes effect now and persists. Env still wins at the next start.</summary>
@@ -184,9 +191,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _descriptor?.Port ?? 0,
         _options?.EnableSendCode ?? false,
         _options?.ReadOnly ?? false,
-        _toastSettings ?? new ToastSettings(false, ToastTheme.Auto, "default", "default"),
+        _toastSettings ?? new ToastSettings(false, "default"),
         _toasts?.Enabled ?? false,
-        _toasts?.LastPaletteDecision,
         _configPath));
 
     private void HandleLine(
@@ -254,12 +260,15 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             if (task.Wait(waitMs))
             {
                 var result = task.Result;
+                if (env.Command == "health" && result.Data is JObject healthData && descriptor.SetupIdentity != null)
+                    healthData["setup_plugin"] = descriptor.SetupIdentity.DeepClone();
                 tcs.TrySetResult(JsonConvert.SerializeObject(result));
                 RecordOutcome(env, dispatcher, result.Ok, result.Data, result.Error?.Code, result.Error?.Message, clock.ElapsedMilliseconds);
             }
             else if (env.Command == "health")
             {
                 var busyData = BusyHealthData(o);
+                if (descriptor.SetupIdentity != null) busyData["setup_plugin"] = descriptor.SetupIdentity.DeepClone();
                 tcs.TrySetResult(JsonConvert.SerializeObject(
                     InventorCommandResult.Success(env.Id, busyData, meta)));
                 RecordOutcome(env, dispatcher, true, busyData, null, null, clock.ElapsedMilliseconds);
@@ -454,8 +463,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         if (toasts is null || (!force && !toasts.Enabled)) return;
         try
         {
-            _hint ??= InventorUiSnapshotReader.ReadHint(_app);
-            toasts.UpdateSnapshot(InventorUiSnapshotReader.Read(_app, _hint));
+            toasts.UpdateSnapshot(InventorUiSnapshotReader.Read(_app));
         }
         catch
         {
@@ -463,22 +471,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         }
     }
 
-    /// <summary>Theme/colour-scheme may have changed (kAfter: the new theme is already active, spike pass4).</summary>
-    private void OnApplicationOptionChange(
-        InvApi.EventTimingEnum timing, InvApi.NameValueMap context, out InvApi.HandlingCodeEnum handling)
-    {
-        handling = InvApi.HandlingCodeEnum.kEventNotHandled;
-        if (timing != InvApi.EventTimingEnum.kAfter) return;
-        try
-        {
-            _hint = null;
-            RefreshToastSnapshot();
-            _toasts?.Retheme();
-        }
-        catch { }
-    }
-
-    /// <summary>A different view means a different anchor and possibly a different backdrop (spec theme item 5).</summary>
+    /// <summary>A different view means a different anchor.</summary>
     private void OnActivateView(
         InvApi.View view, InvApi.EventTimingEnum timing, InvApi.NameValueMap context, out InvApi.HandlingCodeEnum handling)
     {
@@ -487,7 +480,6 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         try
         {
             RefreshToastSnapshot();
-            _toasts?.Retheme();
         }
         catch { }
     }
@@ -540,7 +532,6 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         {
             if (_appEvents != null)
             {
-                _appEvents.OnApplicationOptionChange -= OnApplicationOptionChange;
                 _appEvents.OnActivateView -= OnActivateView;
             }
         }
@@ -566,7 +557,6 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _sessionLog = null;
         _dispatcher = null;
         _appEvents = null;
-        _hint = null;
         _app = null!;
         GC.Collect();
     }

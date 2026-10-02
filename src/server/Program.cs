@@ -15,6 +15,8 @@ if (args.Any(a => a == "--help" || a == "-h"))
     return;
 }
 
+// Hold the setup barrier before resolving paths or starting any data writer.
+Bimwright.Setup.RuntimeLayout.StartForCurrentUser("ipt-mcp");
 var cfg = InventorMcpConfig.Load(args);
 
 var builder = Host.CreateApplicationBuilder(args);

@@ -74,8 +74,8 @@ internal sealed class BimwrightRibbon
         {
             _brand = Existing(defs, BrandId) ?? defs.AddButtonDefinition(
                 "Toast Brand", BrandId, InvApi.CommandTypesEnum.kQueryOnlyCmdType, _clientId,
-                "Show the toast wordmark on hover (this session only)",
-                "Off by default, this session only. Disabled while toasts are off. A real hover reveals the BIMwright wordmark; the Inventor version stays visible either way.",
+                "Show the toast wordmark on hover",
+                "Off by default; the choice is remembered after Inventor restarts. Disabled while toasts are off. A real hover reveals the BIMwright wordmark; the card title (ipt-mcp and the Inventor year) stays visible either way.",
                 RibbonIcons.Letter('B', 16, Color.SeaGreen), RibbonIcons.Letter('B', 32, Color.SeaGreen),
                 InvApi.ButtonDisplayEnum.kAlwaysDisplayText);
             _brand.OnExecute += OnBrand;

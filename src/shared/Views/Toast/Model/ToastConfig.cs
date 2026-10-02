@@ -5,21 +5,19 @@ using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Shared.Views.Toast;
 
-public enum ToastTheme { Auto, Light, Dark }
-
-/// <summary>Effective toast settings plus where each value came from (shown in the ribbon Status dialog).</summary>
-public sealed record ToastSettings(bool EnableToast, ToastTheme Theme, string EnableSource, string ThemeSource);
+/// <summary>Effective toast setting plus where the value came from (shown in the ribbon Status dialog).</summary>
+public sealed record ToastSettings(bool EnableToast, string EnableSource, bool ShowBranding = false);
 
 /// <summary>
 /// Add-in-side toast config: <c>%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json</c> (keys
-/// <c>enableToast</c>, <c>toastTheme</c>), overridden by env <c>BIMWRIGHT_INVENTOR_ENABLE_TOAST</c> /
-/// <c>BIMWRIGHT_INVENTOR_TOAST_THEME</c>. Never throws: anything unreadable means defaults.
+/// <c>enableToast</c>, overridden by env <c>BIMWRIGHT_INVENTOR_ENABLE_TOAST</c>, and <c>showBranding</c>).
+/// Never throws: anything unreadable means defaults. Other keys in the file, such as the retired <c>toastTheme</c>,
+/// are ignored and kept.
 /// </summary>
 public static class ToastConfigStore
 {
     public const string FileName = "iptmcp.config.json";
     public const string EnableEnv = "BIMWRIGHT_INVENTOR_ENABLE_TOAST";
-    public const string ThemeEnv = "BIMWRIGHT_INVENTOR_TOAST_THEME";
 
     public static string DefaultPath(string descriptorDir) => Path.Combine(descriptorDir, FileName);
 
@@ -27,8 +25,7 @@ public static class ToastConfigStore
     {
         var enable = true;
         var enableSource = "default";
-        var theme = ToastTheme.Auto;
-        var themeSource = "default";
+        var showBranding = false;
 
         var json = TryRead(path, out _);
         if (json?["enableToast"] is JValue { Type: JTokenType.Boolean } e)
@@ -36,31 +33,27 @@ public static class ToastConfigStore
             enable = (bool)e;
             enableSource = "config";
         }
-        if (json?["toastTheme"] is JValue { Type: JTokenType.String } t && TryParseTheme((string?)t, out var jsonTheme))
-        {
-            theme = jsonTheme;
-            themeSource = "config";
-        }
+        if (json?["showBranding"] is JValue { Type: JTokenType.Boolean } b)
+            showBranding = (bool)b;
 
         if (TryParseBool(getEnv(EnableEnv), out var envEnable))
         {
             enable = envEnable;
             enableSource = "env " + EnableEnv;
         }
-        if (TryParseTheme(getEnv(ThemeEnv), out var envTheme))
-        {
-            theme = envTheme;
-            themeSource = "env " + ThemeEnv;
-        }
 
-        return new ToastSettings(enable, theme, enableSource, themeSource);
+        return new ToastSettings(enable, enableSource, showBranding);
     }
 
+    public static bool SaveEnableToast(string path, bool enable) => Save(path, "enableToast", enable);
+
+    public static bool SaveShowBranding(string path, bool show) => Save(path, "showBranding", show);
+
     /// <summary>
-    /// Writes <c>enableToast</c> and keeps every other key. Returns false, leaving the file untouched,
+    /// Writes one boolean key and keeps every other key. Returns false, leaving the file untouched,
     /// when the existing file has content that is not a JSON object, or when the write fails.
     /// </summary>
-    public static bool SaveEnableToast(string path, bool enable)
+    private static bool Save(string path, string key, bool value)
     {
         var tmp = path + ".tmp";
         try
@@ -70,7 +63,7 @@ public static class ToastConfigStore
                 return false;   // never clobber a file the user wrote but we cannot parse
 
             var obj = existing ?? new JObject();
-            obj["enableToast"] = enable;
+            obj[key] = value;
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
             File.WriteAllText(tmp, obj.ToString(Formatting.Indented));
             if (File.Exists(path))
@@ -119,17 +112,6 @@ public static class ToastConfigStore
                 return true;
             default:
                 return false;
-        }
-    }
-
-    private static bool TryParseTheme(string? value, out ToastTheme theme)
-    {
-        switch (value?.Trim().ToLowerInvariant())
-        {
-            case "auto": theme = ToastTheme.Auto; return true;
-            case "light": theme = ToastTheme.Light; return true;
-            case "dark": theme = ToastTheme.Dark; return true;
-            default: theme = ToastTheme.Auto; return false;
         }
     }
 }
