@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-02",
+  "phase": "drawing-phase1",
+  "acceptance_status": "partial; phase exit pending",
+  "source": {
+    "commit": "3ec58686ce7d84be8689a1d64b45b5d13cecc99d",
+    "clean_at_build": true,
+    "base_commit": "1050cd98bd6671a9c41924885cbe1fb292b0953e"
+  },
+  "runtime": {
+    "host": "Inventor 2027",
+    "framework": "net10.0-windows7.0",
+    "handler_assembly_sha256": "3652f8b756b5fa477bcf691c9b7ab792bcdfe4b2d223eb7b2eb2711abcde8ecf",
+    "server_assembly_sha256": "f8c67dc271bdeb0246b73f7279a7eafb45e64c7c01cc532dde690c8c4dcde39b"
+  },
+  "fixture": {
+    "geometry": "Generated 100 x 60 x 20 mm block with diameter 20 mm through-hole; nested assembly; supplied prompted symbol/title definition; two sheets",
+    "invocation_path": "Registry and CommandDispatcher on owned STA; MCP wrappers tested separately over a named pipe",
+    "send_code": false,
+    "installed_addin_or_client_acceptance": false
+  },
+  "surface": {
+    "all_code_enabled": 99,
+    "default": 95,
+    "read_only": 20,
+    "source": "built server tools/list for each mode"
+  },
+  "tests": {
+    "unit": {
+      "passed": 642,
+      "failed": 0
+    },
+    "toast_model": {
+      "passed": 161,
+      "failed": 0
+    },
+    "wpf": {
+      "net48": 16,
+      "net8": 16,
+      "net10": 16
+    }
+  },
+  "metrics_note": "response_bytes is compact UTF-8 command-result envelope; tokens_estimate is ceil(bytes/4), not measured tokenizer usage",
+  "invocations": [
+    {
+      "tool": "inventor_get_drawing_info",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 161,
+      "response_bytes": 1910,
+      "tokens_estimate": 478,
+      "size_policy": "within_budget",
+      "positive_invocations": 2,
+      "expected_negative_invocations": 0
+    },
+    {
+      "tool": "inventor_new_drawing",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 10074,
+      "response_bytes": 410,
+      "tokens_estimate": 103,
+      "size_policy": "within_budget",
+      "positive_invocations": 2,
+      "expected_negative_invocations": 1
+    },
+    {
+      "tool": "inventor_add_sheet",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 211,
+      "response_bytes": 432,
+      "tokens_estimate": 108,
+      "size_policy": "within_budget",
+      "positive_invocations": 3,
+      "expected_negative_invocations": 1
+    },
+    {
+      "tool": "inventor_set_title_block",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 107,
+      "response_bytes": 367,
+      "tokens_estimate": 92,
+      "size_policy": "within_budget",
+      "positive_invocations": 1,
+      "expected_negative_invocations": 1
+    },
+    {
+      "tool": "inventor_add_drawing_view",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 338,
+      "response_bytes": 679,
+      "tokens_estimate": 170,
+      "size_policy": "within_budget",
+      "positive_invocations": 7,
+      "expected_negative_invocations": 3
+    },
+    {
+      "tool": "inventor_add_section_view",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 803,
+      "response_bytes": 783,
+      "tokens_estimate": 196,
+      "size_policy": "within_budget",
+      "positive_invocations": 1,
+      "expected_negative_invocations": 1
+    },
+    {
+      "tool": "inventor_edit_drawing_view",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 254,
+      "response_bytes": 747,
+      "tokens_estimate": 187,
+      "size_policy": "within_budget",
+      "positive_invocations": 2,
+      "expected_negative_invocations": 2
+    },
+    {
+      "tool": "inventor_add_drawing_dimension",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 289,
+      "response_bytes": 788,
+      "tokens_estimate": 197,
+      "size_policy": "within_budget",
+      "positive_invocations": 8,
+      "expected_negative_invocations": 2
+    },
+    {
+      "tool": "inventor_add_balloon",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 301,
+      "response_bytes": 478,
+      "tokens_estimate": 120,
+      "size_policy": "within_budget",
+      "positive_invocations": 3,
+      "expected_negative_invocations": 1
+    },
+    {
+      "tool": "inventor_export_drawing",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 2532,
+      "response_bytes": 508,
+      "tokens_estimate": 127,
+      "size_policy": "within_budget",
+      "positive_invocations": 6,
+      "expected_negative_invocations": 2
+    },
+    {
+      "tool": "inventor_capture_sheet",
+      "status": "Success",
+      "scope": "first positive generic handler invocation; remaining variants are tracked separately",
+      "duration_ms": 210,
+      "response_bytes": 448,
+      "tokens_estimate": 112,
+      "size_policy": "within_budget",
+      "positive_invocations": 2,
+      "expected_negative_invocations": 2
+    }
+  ],
+  "verified_checks": [
+    "Known dimension values: horizontal/chain 100 mm, vertical/aligned/chain 60 mm, diameter 20 mm, radius 10 mm, angle 90 degrees",
+    "Explicit view/section position readback",
+    "Create reuse/conflicts and invalid batch leaves zero new annotations",
+    "All ten write commands rejected under read-only",
+    "Nested symbol text, region and column/angle layout",
+    "Shaded dependency-free base move requires rebuild; PDF render inspected",
+    "PDF all/subset/ordered pages and fresh DWG/IDW/PNG artifacts",
+    "Capture/export/Save-As/in-place drawing save preserve dirty referenced part and its disk bytes",
+    "Save/reopen retains two sheets, persistent sheet code, attached dimensions and no missing references",
+    "Failed drawing results preserve rollback/partial effects and failed history outcome"
+  ],
+  "blocked_variants": [
+    "Drawing crop: no drawing crop member in verified 2027 interop",
+    "Native BOM balloons: cross-document BOM rollback unverified",
+    "Dependency-preserving shaded rebuild and hidden-loaded capture"
+  ],
+  "not_run": [
+    "Full template/section inheritance/alignment/suppression/style/override variant matrix",
+    "Candidate runtime exception-after-create and queued timeout containment",
+    "Installed add-in ribbon/toast/history, named live client lifecycle",
+    "Older Inventor live support, packaging/installer/MCPB and canonical release gate",
+    "Legacy hints/read-only/catalog parity and global configurable output guarding"
+  ],
+  "release_verdict": "not run"
+}
