@@ -26,12 +26,17 @@ annotations, read-only registration, input failures and response compaction.
 Installed Codex/Inventor 2027 checks at `ccb2681` passed all eleven tool paths, save/reopen,
 exports and capture, native leader/dimension attachment and exception-after-create rollback.
 The user observed drawing toasts; the add-in journal recorded successful and failed outcomes.
+Final implementation candidate `3167314` passes 655 unit tests and an owned 2027 fixture
+with 49 successful calls / 20 expected rejections. Installed Codex checks verify cold-sheet
+read/write containment and reuse after activation. Controlled running/queued timeouts were
+resolved by health and readback without replay; the user confirmed Failed/Capture and History.
+The global output guard, configurable spill policy and all four hints for the eleven tools pass.
 The [read-only allowlist](readonly-tools.json) is generated from the built server's
 `tools/list`; it describes registration, not a claim of legacy annotation/add-in parity.
 
-## Remaining acceptance
+## Accepted scope and release dependencies
 
-This is **partial implementation acceptance**, not a release verdict or production approval.
+The revised supported Phase 1 scope is accepted. Whole-product release approval remains pending.
 
 - Four variants are deferred from Phase 1 under the revised scope; their explicit rejection stays
   part of the supported contract. They are not counted as implemented variants.
@@ -42,10 +47,12 @@ This is **partial implementation acceptance**, not a release verdict or producti
   Dependency-preserving rebuilds remain pending; a dependency-free generic base view passed PDF visual inspection.
 - Hidden-loaded drawing capture is rejected to preserve window visibility. Visible sheet capture is supported.
 - A native label failure after view creation rolled back and left the view count unchanged.
-  Queued timeout containment, further template variants and deployed add-in toast/History behavior
-  still need acceptance evidence.
-- Legacy annotation/read-only/catalog parity, global configurable response guarding,
-  whole-product release artifacts/MCPB/client lifecycle and the release gate remain separate dependencies.
+  The supported template/section/edit/style/override matrix, queued timeout containment and
+  installed toast/History checks pass. The compact toast shows counters; capture supplies
+  a validated thumbnail path to the shared content model.
+- Legacy annotation/read-only/catalog parity remains a release blocker: 19 exposed legacy
+  read-only tools lack `readOnlyHint`. Whole-product release artifacts/MCPB/client lifecycle,
+  older-host live support and the release gate remain separate dependencies.
 
 ## Run the disposable fixture
 
