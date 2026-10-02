@@ -57,7 +57,7 @@ internal static partial class DrawingOperations
             row["views"] = Page(s.DrawingViews.Cast<DrawingView>().Select(v => (JToken)DrawingSupport.ViewInfo(v)), max, offset);
             if ((string?)p["include"] == "items")
             {
-                row["dimensions"] = Page(s.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name"), ["kind"] = v.Type.ToString(), ["value"] = v.ModelValue, ["attached"] = v.Attached }), max, offset);
+                row["dimensions"] = Page(s.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name"), ["kind"] = v.Type.ToString(), ["value"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? v.ModelValue * 180 / Math.PI : v.ModelValue * 10, ["unit"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? "deg" : "mm", ["attached"] = v.Attached }), max, offset);
                 row["symbols"] = Page(s.SketchedSymbols.Cast<SketchedSymbol>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name") ?? v.Name, ["definition"] = v.Definition.Name, ["position_mm"] = new JArray(v.Position.X * 10, v.Position.Y * 10) }), max, offset);
             }
             sheetInfo.Add(row);

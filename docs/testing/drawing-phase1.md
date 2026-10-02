@@ -58,6 +58,7 @@ The final `ROOT` identifies retained fixture files and `results.jsonl` for local
 No local fixture logs, drawings, screenshots or personal paths belong in the public benchmark.
 
 Coordinates are mm from sheet lower-left; model points use the referenced model's root coordinates.
+Dimension item values use explicit `unit=mm|deg` in queries and create readbacks.
 Scale is a ratio and angles are degrees. `annotation_defaults` currently accepts
 `{dimension_style: "existing template style"}` only. Names/signatures/codes use native
 AttributeSets and survive save/reopen; queries never create attributes. Repeated creates reuse

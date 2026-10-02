@@ -81,6 +81,17 @@ static class HandlerLive
                 if ((string)item["kind"]! == "chain" && Math.Abs(dimensionResult["items"]![1]!.Value<double>("value") - 60) > 1e-5) throw new Exception("Second chain dimension is incorrect.");
             }
             if (Math.Abs(measured["items"]![1]!.Value<double>("value") - 20) > 1e-5) throw new Exception("Diameter is incorrect.");
+            void CheckQueryDimensionUnits(string drawingName)
+            {
+                var query = Call("get_drawing_info", new JObject { ["document"] = drawingName, ["sheet"] = sh, ["include"] = "items" });
+                var queried = query["sheets"]!["items"]![0]!["dimensions"]!["items"]!.ToDictionary(x => x.Value<string>("name")!);
+                foreach (var expected in new[] { ("length", 60.0), ("diameter", 20.0), ("horizontal", 100.0), ("vertical", 60.0), ("radius", 10.0), ("angle", 90.0) })
+                {
+                    var item = queried[expected.Item1];
+                    if (Math.Abs(item.Value<double>("value") - expected.Item2) > 1e-5 || item.Value<string>("unit") != (expected.Item1 == "angle" ? "deg" : "mm")) throw new Exception("Query dimension value/unit mismatch: " + expected.Item1);
+                }
+            }
+            CheckQueryDimensionUnits(doc);
             var overrideItem=(JObject)dims[2].DeepClone();overrideItem["name"]="override";overrideItem["style"]="Default - mm (ANSI)";overrideItem["precision"]=3;overrideItem["text_override"]="VALUE OVERRIDE";
             var overrideResult=Call("add_drawing_dimension",new JObject{["document"]=doc,["sheet"]=sh,["items"]=new JArray(overrideItem)});
             if(Math.Abs(overrideResult["items"]![0]!.Value<double>("value")-100)>1e-5||overrideResult["items"]![0]!.Value<int>("precision")!=3||!overrideResult["items"]![0]!.Value<string>("text")!.Contains("VALUE OVERRIDE"))throw new Exception("Dimension override corrupted measured value/precision/text.");
@@ -138,6 +149,7 @@ static class HandlerLive
             if(!inPlace.Ok||!part.Dirty||!originalModelBytes.SequenceEqual(System.IO.File.ReadAllBytes(modelPath)))throw new Exception("In-place drawing save changed reference.");
             Console.WriteLine("SAVE_IN_PLACE "+JsonConvert.SerializeObject(inPlace));
             d.Close(true); var reopened = (DrawingDocument)app.Documents.Open(Path.Combine(root, "saved.idw"), true); Console.WriteLine("REOPEN sheets=" + reopened.Sheets.Count + " missing=" + reopened.HasReferencesMissing); if (reopened.Sheets.Count != 2 || reopened.HasReferencesMissing) throw new Exception("Reopen lost sheets/references.");
+            CheckQueryDimensionUnits(reopened.DisplayName);
             addSheet["document"] = reopened.DisplayName; var reused = Call("add_sheet", addSheet); if (reused.Value<bool>("created")) throw new Exception("Sheet identity did not survive save/reopen.");
             var afterScale = reopened.Sheets.Cast<Sheet>().Single(x => x.Name == sh); if (afterScale.SketchedSymbols.Count != 2 || afterScale.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Any(x => !x.Attached)) throw new Exception("Annotations lost after edit/save/reopen.");
             foreach(SketchedSymbol symbol in afterScale.SketchedSymbols)
