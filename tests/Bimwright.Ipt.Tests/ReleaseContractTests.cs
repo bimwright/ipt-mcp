@@ -139,6 +139,21 @@ public sealed class ReleaseContractTests
         Assert.Equal("***", result["auth_token"]);
     }
 
+    [Fact]
+    public async Task Credential_bearing_modules_are_rejected_without_creating_storage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ipt-module-privacy-" + Guid.NewGuid().ToString("N"));
+        var store = new CodeModuleStore(root);
+        var body = "const string password = \"fixture-private-value\";";
+        var tools = new CodeTools(new PluginClient(new InventorMcpConfig()), store);
+        var result = JObject.Parse(await tools.SaveCodeModule("fixture", body));
+        Assert.False(result.Value<bool>("ok"));
+        Assert.Contains("credential-like", result.ToString());
+        Assert.Throws<ArgumentException>(() => store.Save("fixture", body, null, Array.Empty<string>(), null));
+        Assert.False(Directory.Exists(root));
+        Assert.Null(CodeModuleStore.ValidateSourceForPersistence("static int Twice(int n) => n * 2;"));
+    }
+
     private static CallToolResult Payload(JObject data) => new() {
         Content = new[] { new TextContentBlock { Text = data.ToString(Newtonsoft.Json.Formatting.None) } }
     };

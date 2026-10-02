@@ -19,6 +19,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Explicit code-module storage rejects credential-like source before compile/save, rather than persisting sensitive constants or silently rewriting code.
+
 - Added setup ZIP SHA-256 sidecars, NuGet README metadata, synchronized permission lists and a public host-free per-tool MCP contract test.
 - Toast regression positioning respects the monitor work area; fallback summaries show a readable operation name.
 

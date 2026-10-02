@@ -93,6 +93,9 @@ both the server and plug-in; the host kill switch `BIMWRIGHT_INVENTOR_PLUGIN_DIS
 can only disable recording. Bodies are replaced with length/hash metadata, including
 nested code modules. In-memory History is separate; its re-runs do not persist logs.
 Caching and TTL body journaling remain separate opt-ins, both off by default.
+Explicitly saved code modules reject credential-like source values before compilation/storage.
+The same source masker is used as for baked source; the long-token heuristic can reject
+non-secret constants too. Remove embedded credentials rather than persisting them.
 
 The active document transaction in `send_code` covers that document only. Operations
 on other documents, creation/closing, and external files cannot be rolled back by

@@ -70,6 +70,8 @@ public sealed class CodeModuleStore
 
     public Entry Save(string name, string code, string? description, IReadOnlyList<string> requires, JToken? signatures)
     {
+        var privacyError = ValidateSourceForPersistence(code);
+        if (privacyError != null) throw new ArgumentException(privacyError, nameof(code));
         lock (_gate)
         {
             var index = ReadIndex();
@@ -92,6 +94,10 @@ public sealed class CodeModuleStore
             return entry;
         }
     }
+
+    public static string? ValidateSourceForPersistence(string code)
+        => string.Equals(code, Bimwright.Ipt.Shared.Security.BakeRedactor.RedactSource(code), StringComparison.Ordinal)
+            ? null : "Code modules cannot persist credential-like values; remove embedded credentials before saving.";
 
     public bool Delete(string name, out string? blockedBy)
     {

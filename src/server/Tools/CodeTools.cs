@@ -66,13 +66,15 @@ public sealed class CodeTools
     }
 
     [McpServerTool(Name = "inventor_save_code_module", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
-     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Save (or replace) a reusable C# helper module for inventor_send_code: declarations only — static methods, classes/records, constants — no top-level statements. It is policy-checked and dry-compiled in the running Inventor add-in before it is stored, so errors surface now with module:<name> line numbers. requires: other saved modules this one calls (loaded automatically, dependencies first). Returns the module hash and its function signatures. name: [a-z][a-z0-9_]*, max 64 KiB.")]
+     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Save (or replace) a reusable C# helper module for inventor_send_code: declarations only — static methods, classes/records, constants — no top-level statements. Credential-like source values are rejected before storage. It is policy-checked and dry-compiled in the running Inventor add-in before it is stored, so errors surface now with module:<name> line numbers. requires: other saved modules this one calls (loaded automatically, dependencies first). Returns the module hash and its function signatures. name: [a-z][a-z0-9_]*, max 64 KiB.")]
     public async Task<string> SaveCodeModule(string name, string code, string? description = null, string[]? requires = null,
         CancellationToken ct = default)
     {
         var nameError = CodeModuleStore.ValidateName(name);
         if (nameError != null) return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, nameError);
         if (string.IsNullOrWhiteSpace(code)) return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, "code is required");
+        var privacyError = CodeModuleStore.ValidateSourceForPersistence(code);
+        if (privacyError != null) return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, privacyError);
         if (Encoding.UTF8.GetByteCount(code) > CodeModuleStore.MaxModuleBytes)
             return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, $"module exceeds {CodeModuleStore.MaxModuleBytes} bytes; split it");
         var policy = BakeCompilerPolicy.ValidateSource(code, "code module");
