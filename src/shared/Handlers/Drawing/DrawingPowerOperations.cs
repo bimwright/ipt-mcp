@@ -43,7 +43,7 @@ internal static partial class DrawingOperations
     {
         DrawingSupport.RequireAnnotations(sheet);
         var app = DrawingSupport.App(ctx);
-        if (app.ActiveDocument == null || !app.ActiveDocument.Equals(d) || !d.ActiveSheet.Equals(sheet) || app.ActiveEditObject != null) throw new ArgumentException("sketch_on_view requires the selected drawing/sheet to be active with no object open for edit.");
+        if (app.ActiveDocument == null || !app.ActiveDocument.Equals(d) || !d.ActiveSheet.Equals(sheet) || !sheet.Equals(app.ActiveEditObject)) throw new ArgumentException("sketch_on_view requires the selected drawing/sheet to be active with no object open for edit.");
         var view = DrawingInput.Present(p, "view") ? DrawingSupport.View(sheet, p.Value<string>("view")) : null;
         if (view != null && (view.Suppressed || !view.UpToDate)) throw new ArgumentException("The target view must be available and up to date.");
         var sketches = view == null ? sheet.Sketches : view.Sketches;
@@ -74,8 +74,6 @@ internal static partial class DrawingOperations
             var origin = Map(new JArray(0, 0)); var xAxis = Map(new JArray(1, 0)); var yAxis = Map(new JArray(0, 1));
             var handedness = Math.Sign((xAxis.X - origin.X) * (yAxis.Y - origin.Y) - (xAxis.Y - origin.Y) * (yAxis.X - origin.X));
             if (handedness == 0) throw new ArgumentException("Sketch coordinate transform is singular.");
-            if (p["color_rgb"] is JArray rgb) sketch.Color = app.TransientObjects.CreateColor(rgb[0].Value<byte>(), rgb[1].Value<byte>(), rgb[2].Value<byte>());
-            if (DrawingInput.Present(p, "weight_mm")) sketch.LineWeight = p.Value<double>("weight_mm") / 10;
             var checks = new List<Action>(); var editing = false;
             try
             {
@@ -88,11 +86,15 @@ internal static partial class DrawingOperations
                         case "line":
                             var from = Map(e["from"]!); var to = Map(e["to"]!); var line = sketch.SketchLines.AddByTwoPoints(from, to);
                             if (layer != null) line.Layer = layer;
+                            if (p["color_rgb"] is JArray lineColor) line.OverrideColor = app.TransientObjects.CreateColor(lineColor[0].Value<byte>(), lineColor[1].Value<byte>(), lineColor[2].Value<byte>());
+                            if (DrawingInput.Present(p, "weight_mm")) line.LineWeight = p.Value<double>("weight_mm") / 10;
                             checks.Add(() => { CheckPoint(line.StartSketchPoint.Geometry, from); CheckPoint(line.EndSketchPoint.Geometry, to); });
                             break;
                         case "circle":
                             var center = Map(e["center"]!); var radius = Radius(e["center"]!, e.Value<double>("radius_mm")); var circle = sketch.SketchCircles.AddByCenterRadius(center, radius);
                             if (layer != null) circle.Layer = layer;
+                            if (p["color_rgb"] is JArray circleColor) circle.OverrideColor = app.TransientObjects.CreateColor(circleColor[0].Value<byte>(), circleColor[1].Value<byte>(), circleColor[2].Value<byte>());
+                            if (DrawingInput.Present(p, "weight_mm")) circle.LineWeight = p.Value<double>("weight_mm") / 10;
                             checks.Add(() => { CheckPoint(circle.CenterSketchPoint.Geometry, center); CheckLength(circle.Geometry.Radius, radius); });
                             break;
                         case "arc":
@@ -101,6 +103,8 @@ internal static partial class DrawingOperations
                             var nativeStart = sweep < 0 ? start + sweep : start;
                             var arc = sketch.SketchArcs.AddByCenterStartSweepAngle(arcCenter, arcRadius, nativeStart, Math.Abs(sweep));
                             if (layer != null) arc.Layer = layer;
+                            if (p["color_rgb"] is JArray arcColor) arc.OverrideColor = app.TransientObjects.CreateColor(arcColor[0].Value<byte>(), arcColor[1].Value<byte>(), arcColor[2].Value<byte>());
+                            if (DrawingInput.Present(p, "weight_mm")) arc.LineWeight = p.Value<double>("weight_mm") / 10;
                             checks.Add(() => { CheckPoint(arc.CenterSketchPoint.Geometry, arcCenter); CheckLength(arc.Geometry.Radius, arcRadius); CheckLength(Math.Abs(arc.Geometry.SweepAngle), Math.Abs(sweep)); CheckPoint(arc.StartSketchPoint.Geometry, app.TransientGeometry.CreatePoint2d(arcCenter.X + arcRadius * Math.Cos(nativeStart), arcCenter.Y + arcRadius * Math.Sin(nativeStart))); CheckPoint(arc.EndSketchPoint.Geometry, app.TransientGeometry.CreatePoint2d(arcCenter.X + arcRadius * Math.Cos(nativeStart + Math.Abs(sweep)), arcCenter.Y + arcRadius * Math.Sin(nativeStart + Math.Abs(sweep)))); });
                             break;
                         case "text":
@@ -111,7 +115,14 @@ internal static partial class DrawingOperations
                             {
                                 var style = (TextStyle)text.Style.Copy("BimwrightSketchText_" + Guid.NewGuid().ToString("N")); style.FontSize = Radius(e["position"]!, e.Value<double>("font_size_mm")); text.Style = style;
                             }
-                            var rotation = Angle(e["position"]!, e.Value<double?>("rotation_deg") ?? 0); text.Rotation = rotation; text.Origin = position;
+                            var rotation = Angle(e["position"]!, e.Value<double?>("rotation_deg") ?? 0);
+                            if (Math.Abs(rotation) > 1e-10)
+                            {
+                                text.ShowBoundaries = true;
+                                var objects = app.TransientObjects.CreateObjectCollection(); objects.Add(text);
+                                sketch.RotateSketchObjects(objects, position, rotation, false, false);
+                                text.ShowBoundaries = false;
+                            }
                             if (p["color_rgb"] is JArray color) text.Color = app.TransientObjects.CreateColor(color[0].Value<byte>(), color[1].Value<byte>(), color[2].Value<byte>());
                             checks.Add(() => { CheckPoint(text.Origin, position); if (text.Text != e.Value<string>("text")) throw new ArgumentException("Literal sketch text did not match native readback."); CheckLength(Math.Sin(text.Rotation - rotation), 0); CheckLength(Math.Cos(text.Rotation - rotation), 1); if (DrawingInput.Present(e, "font_size_mm")) CheckLength(text.Style.FontSize, Radius(e["position"]!, e.Value<double>("font_size_mm"))); });
                             break;
@@ -130,8 +141,8 @@ internal static partial class DrawingOperations
             d.Update(); foreach (var check in checks) check();
             var native = SketchContent(sketch);
             if (((JArray)native["entities"]!).Count != ((JArray)p["entities"]!).Count) throw new ArgumentException("Sketch entity count did not match readback.");
-            if (DrawingInput.Present(p, "weight_mm")) CheckLength(sketch.LineWeight, p.Value<double>("weight_mm") / 10);
-            if (p["color_rgb"] is JArray expectedColor && !JToken.DeepEquals(native["color_rgb"], expectedColor)) throw new ArgumentException("Sketch color did not match readback.");
+            if (DrawingInput.Present(p, "weight_mm") && ((JArray)native["curve_attributes"]!).Any(row => Math.Abs(row.Value<double>("weight_mm") - p.Value<double>("weight_mm")) > 1e-6)) throw new ArgumentException("Sketch line weight did not match readback.");
+            if (p["color_rgb"] is JArray expectedColor && (((JArray)native["curve_attributes"]!).Any(row => !JToken.DeepEquals(row["color"], expectedColor)) || ((JArray)native["entities"]!).Any(row => row.Value<string>("kind") == "text" && !JToken.DeepEquals(row["color_rgb"], expectedColor)))) throw new ArgumentException("Sketch color did not match readback.");
             if (layer != null && ((JArray)native["entities"]!).Any(row => row.Value<string>("layer") != layer.Name)) throw new ArgumentException("Sketch layer did not match readback.");
             DrawingSupport.Mark(sketch.AttributeSets, name, p); DrawingSupport.Write(sketch.AttributeSets, "native_hash", DrawingGeometry.Hash(native.ToString(Formatting.None)));
             return new JObject { ["created"] = true, ["created_count"] = 1, ["name"] = sketch.Name, ["sheet"] = sheet.Name, ["view"] = view?.Name, ["space"] = p.Value<string>("space"), ["entity_count"] = checks.Count, ["follows_view"] = view != null, ["box_mm"] = SketchBox(sketch), ["content"] = native, ["ui_restored"] = true, ["saved"] = false };
@@ -139,7 +150,13 @@ internal static partial class DrawingOperations
         if (outcome.Data is JObject data)
         {
             var restored = false;
-            try { restored = app.ActiveDocument != null && app.ActiveDocument.Equals(d) && d.ActiveSheet.Equals(sheet) && app.ActiveEditObject == null && d.SelectSet.Cast<object>().SequenceEqual(selection); }
+            try
+            {
+                // Committing/aborting a native transaction may clear the restored selection.
+                d.SelectSet.Clear();
+                if (selection.Length > 0) { var selected = app.TransientObjects.CreateObjectCollection(); foreach (var item in selection) selected.Add(item); d.SelectSet.SelectMultiple(selected); }
+                restored = app.ActiveDocument != null && app.ActiveDocument.Equals(d) && d.ActiveSheet.Equals(sheet) && sheet.Equals(app.ActiveEditObject) && d.SelectSet.Cast<object>().SequenceEqual(selection);
+            }
             catch (Exception ex) { data["ui_restore_error"] = ex.Message; }
             data["ui_restored"] = restored;
             if (!restored)

@@ -104,7 +104,7 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -230,7 +230,7 @@ Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; bui
 
 | Tool | Mô tả |
 |---|---|
-| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Validated on an Inventor 2027 disposable fixture. |
 | `inventor_place_occurrence` | Đặt một component (.ipt/.iam) vào assembly active; tùy chọn pose ban đầu + grounded. |
 | `inventor_add_constraint` | Constrain hai ref theo tên (mate/flush/insert/angle); response mang `health` — luôn kiểm tra. |
 | `inventor_create_imate` | Author một iMate theo tên trên part active dùng một face selector xác định. |

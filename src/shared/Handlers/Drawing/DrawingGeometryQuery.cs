@@ -23,6 +23,7 @@ internal static partial class DrawingGeometry
         internal DrawingCurve[] Curves { get; init; } = Array.Empty<DrawingCurve>();
         internal JObject[] Rows { get; init; } = Array.Empty<JObject>();
         internal string Revision { get; init; } = "";
+        internal string ReferenceContext { get; init; } = "";
     }
     internal static string Hash(string input)
     {
@@ -41,19 +42,20 @@ internal static partial class DrawingGeometry
         curve.Evaluator2D.GetLengthAtParam(start, end, out var length);
         return length * 10;
     }
-    private static JObject? ModelReference(DrawingCurve curve)
+    private static JObject? ModelReference(DrawingCurve curve, int keyContext)
     {
         try
         {
             var geometry = curve.ModelGeometry; byte[] key = Array.Empty<byte>(); string? path = null;
-            if (geometry is Edge edge) edge.GetReferenceKey(ref key, 0);
-            else if (geometry is EdgeProxy proxy)
+            // A COM proxy also exposes Edge. Check the proxy first to preserve assembly context.
+            if (geometry is EdgeProxy proxy)
             {
-                proxy.GetReferenceKey(ref key, 0);
+                proxy.GetReferenceKey(ref key, keyContext);
                 var parts = new List<string>(); var occurrence = proxy.ContainingOccurrence;
                 while (occurrence != null && parts.Count < 64) { parts.Add(occurrence.Name); occurrence = occurrence.ParentOccurrence; }
                 parts.Reverse(); path = string.Join("/", parts);
             }
+            else if (geometry is Edge edge) edge.GetReferenceKey(ref key, keyContext);
             else return null;
             return new JObject { ["reference_key"] = Convert.ToBase64String(key), ["occurrence_path"] = path };
         }
@@ -66,25 +68,32 @@ internal static partial class DrawingGeometry
         var collection = Curves(view, null);
         if (collection.Count > 50000) throw new ArgumentException("View exceeds the 50000-curve geometry snapshot limit.");
         var curves = collection.Cast<DrawingCurve>().ToArray();
-        var rows = curves.Select((curve, index) =>
+        var modelDocument = (global::Inventor.Document)view.ReferencedDocumentDescriptor.ReferencedDocument;
+        var keyManager = modelDocument.ReferenceKeyManager; var keyContext = keyManager.CreateKeyContext();
+        JObject[] rows; byte[] contextData = Array.Empty<byte>();
+        try
         {
-            var kind = curve.ProjectedCurveType switch { Curve2dTypeEnum.kLineSegmentCurve2d => "line", Curve2dTypeEnum.kCircularArcCurve2d => "arc", Curve2dTypeEnum.kCircleCurve2d => "circle", _ => "other" };
-            var segments = curve.Segments.Cast<DrawingCurveSegment>().ToArray();
-            double? radius = null;
-            foreach (var segment in segments) { if (segment.Geometry is Circle2d circle) radius = circle.Radius * 10; else if (segment.Geometry is Arc2d arc) radius = arc.Radius * 10; if (radius.HasValue) break; }
-            var model = ModelReference(curve);
-            return new JObject {
-                ["geometry_id"] = "curve:" + (index + 1).ToString(CultureInfo.InvariantCulture), ["kind"] = kind,
-                ["start_mm"] = PointInfo(curve.StartPoint), ["end_mm"] = PointInfo(curve.EndPoint),
-                ["mid_mm"] = PointInfo(curve.MidPoint), ["center_mm"] = PointInfo(curve.CenterPoint), ["radius_mm"] = radius,
-                ["box_mm"] = CurveBox(curve), ["projected_length_mm"] = CurveLengthMm(curve),
-                ["visible"] = segments.Any(s => s.Visible), ["segment_visibility"] = new JArray(segments.Select(s => s.Visible)),
-                ["model_reference"] = model, ["occurrence_path"] = model?["occurrence_path"]?.DeepClone(),
-                ["intent_supported"] = model != null
-            };
-        }).ToArray();
+            rows = curves.Select((curve, index) =>
+            {
+                var kind = curve.ProjectedCurveType switch { Curve2dTypeEnum.kLineSegmentCurve2d => "line", Curve2dTypeEnum.kCircularArcCurve2d => "arc", Curve2dTypeEnum.kCircleCurve2d => "circle", _ => "other" };
+                var segments = curve.Segments.Cast<DrawingCurveSegment>().ToArray();
+                double? radius = null;
+                foreach (var segment in segments) { if (segment.Geometry is Circle2d circle) radius = circle.Radius * 10; else if (segment.Geometry is Arc2d arc) radius = arc.Radius * 10; if (radius.HasValue) break; }
+                var model = ModelReference(curve, keyContext);
+                return new JObject {
+                    ["geometry_id"] = "curve:" + (index + 1).ToString(CultureInfo.InvariantCulture), ["kind"] = kind,
+                    ["start_mm"] = PointInfo(curve.StartPoint), ["end_mm"] = PointInfo(curve.EndPoint),
+                    ["mid_mm"] = PointInfo(curve.MidPoint), ["center_mm"] = PointInfo(curve.CenterPoint), ["radius_mm"] = radius,
+                    ["box_mm"] = CurveBox(curve), ["projected_length_mm"] = CurveLengthMm(curve),
+                    ["visible"] = segments.Any(s => s.Visible), ["segment_visibility"] = new JArray(segments.Select(s => s.Visible)),
+                    ["model_reference"] = model, ["occurrence_path"] = model?["occurrence_path"]?.DeepClone(),
+                    ["intent_supported"] = model != null
+                };
+            }).ToArray();
+            keyManager.SaveContextToArray(keyContext, ref contextData);
+        }
+        finally { keyManager.ReleaseKeyContext(keyContext); }
         byte[] viewKey = Array.Empty<byte>(); view.GetReferenceKey(ref viewKey, 0);
-        var modelDocument = view.ReferencedDocumentDescriptor.ReferencedDocument;
         var state = new JObject {
             ["lifetime"] = Lifetimes.GetValue(document, _ => new Lifetime()).Id,
             ["document"] = document.InternalName, ["sheet"] = sheet.InternalName, ["view_key"] = Convert.ToBase64String(viewKey),
@@ -92,7 +101,7 @@ internal static partial class DrawingGeometry
             ["model_revision"] = modelDocument.DatabaseRevisionId, ["model_dirty"] = modelDocument.Dirty,
             ["view"] = DrawingSupport.ViewInfo(view), ["curves"] = new JArray(rows.Select(r => r.DeepClone()))
         };
-        return new Snapshot { Curves = curves, Rows = rows, Revision = Hash(state.ToString(Formatting.None)) };
+        return new Snapshot { Curves = curves, Rows = rows, Revision = Hash(state.ToString(Formatting.None)), ReferenceContext = Convert.ToBase64String(contextData) };
     }
     private static DrawingIntent ResolveGeometryId(Sheet sheet, DrawingView view, JObject locator)
     {
@@ -129,7 +138,7 @@ internal static partial class DrawingOperations
             (p["region_mm"] is not JObject region || Enumerable.Range(0, 2).All(axis => row["box_mm"]!["min"]![axis]!.Value<double>() <= region["max"]![axis]!.Value<double>() && row["box_mm"]!["max"]![axis]!.Value<double>() >= region["min"]![axis]!.Value<double>()))).ToArray();
         var page = Page(rows, p.Value<int?>("max_items") ?? 100, p.Value<int?>("offset") ?? 0);
         return DrawingSupport.Success(ctx, new JObject { ["view"] = view.Name, ["sheet"] = s.Name, ["revision"] = snapshot.Revision,
-            ["geometry"] = page, ["count"] = rows.Length, ["cache_hit"] = false, ["resolution"] = "fresh_native", ["document_unchanged"] = true });
+            ["geometry"] = page, ["model_reference_context"] = snapshot.ReferenceContext, ["count"] = rows.Length, ["cache_hit"] = false, ["resolution"] = "fresh_native", ["document_unchanged"] = true });
     }
 }
 #endif

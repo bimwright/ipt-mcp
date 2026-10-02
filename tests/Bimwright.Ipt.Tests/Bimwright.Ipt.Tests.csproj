@@ -42,6 +42,7 @@
     <Compile Include="..\..\src\shared\Handlers\BatchExecutor.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\HandlerBase.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\Drawing\DrawingCommandHandler.cs" LinkBase="Shared\Handlers\Drawing" />
+    <Compile Include="..\..\src\shared\Handlers\Assembly\CreateDesignViewHandler.cs" LinkBase="Shared\Handlers\Assembly" />
     <Compile Include="..\..\src\shared\Handlers\Vec3Params.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\EnumText.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Logging\*.cs" LinkBase="Shared\Logging" />

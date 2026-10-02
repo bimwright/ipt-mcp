@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: Phase 1 and Phase 2 supported scope accepted.** Phase 3 adds four source tools for Inventor 2027; build/tests/live checks have not been run. See [Phase 3 behavior](docs/testing/drawing-phase3.md).
+> **Status: Phase 1 and Phase 2 supported scope accepted.** Phase 3 adds four tools validated by build, automated tests and native Inventor 2027 disposable fixtures; installed-client and release acceptance remain separate. See [Phase 3 behavior](docs/testing/drawing-phase3.md).
 
 The final MCP output guard warns at 64/256 KiB and uses a 1 MiB UTF-8 budget. Oversized reads request narrowing; completed writes retain compact effects and must not be replayed. `--disable-output-guard` keeps the transport fence active. CLI/JSON/environment thresholds and the configurable 36-hour spill policy are documented in [drawing testing](docs/testing/drawing-phase1.md).
 
@@ -127,7 +127,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -254,7 +254,7 @@ Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; bui
 
 | Tool | Description |
 |---|---|
-| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Validated on an Inventor 2027 disposable fixture. |
 | `inventor_place_occurrence` | Place a component (.ipt/.iam) into the active assembly; optional initial pose + grounded. |
 | `inventor_add_constraint` | Constrain two named refs (mate/flush/insert/angle); response carries `health` — always check it. |
 | `inventor_create_imate` | Author a named iMate on the active part using a deterministic face selector. |

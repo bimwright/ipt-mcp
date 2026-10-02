@@ -106,7 +106,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -232,7 +232,7 @@ Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; bui
 
 | Tool | 描述 |
 |---|---|
-| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Validated on an Inventor 2027 disposable fixture. |
 | `inventor_place_occurrence` | 把一个 component（.ipt/.iam）放入 active assembly；可选初始 pose + grounded。 |
 | `inventor_add_constraint` | 约束两个命名引用（mate/flush/insert/angle）；response 携带 `health` —— 务必检查它。 |
 | `inventor_create_imate` | 使用确定性面选择器在 active part 上编写一个命名 iMate。 |

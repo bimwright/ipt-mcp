@@ -14,6 +14,7 @@ namespace Bimwright.Ipt.Tests;
 /// pure System.IO.Path allowlist, repair-hint rules, module source assembly, the module store,
 /// result spill and document matching. All host-free.
 /// </summary>
+[Collection("Process-wide privacy state")]
 public sealed class SendCodeReductionTests
 {
     // ---- S1.3 policy: pure System.IO.Path calls ------------------------------------------

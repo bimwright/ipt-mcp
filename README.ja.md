@@ -102,7 +102,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -228,7 +228,7 @@ Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; bui
 
 | ツール | 説明 |
 |---|---|
-| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Validated on an Inventor 2027 disposable fixture. |
 | `inventor_place_occurrence` | コンポーネント（.ipt/.iam）をアクティブアセンブリに配置。初期姿勢と接地はオプション。 |
 | `inventor_add_constraint` | 2 つの名前付き参照を拘束（mate/flush/insert/angle）。応答には `health` が含まれるため、常に確認してください。 |
 | `inventor_create_imate` | 決定論的面セレクターを使用して、アクティブパーツに名前付き iMate を作成。 |

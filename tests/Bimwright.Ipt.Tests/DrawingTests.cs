@@ -71,6 +71,7 @@ public sealed class DrawingTests : IDisposable
     [InlineData("capture_sheet")]
     [InlineData("add_drawing_note")][InlineData("add_drawing_table")]
     [InlineData("add_drawing_symbol")][InlineData("edit_drawing_annotation")][InlineData("delete_drawing_items")][InlineData("edit_drawing_table")][InlineData("set_drawing_styles")][InlineData("edit_sheet")]
+    [InlineData("find_view_geometry")][InlineData("sketch_on_view")][InlineData("hide_view_edges")][InlineData("create_design_view")]
     public async Task Every_wrapper_invokes_transport_and_preserves_timeout_and_snake_case(string command)
     {
         using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
@@ -81,6 +82,10 @@ public sealed class DrawingTests : IDisposable
         var intent = JsonDocument.Parse("{\"model_edge\":\"body:1/edge:1\",\"point_intent\":\"start\"}").RootElement.Clone();
         var invoke = command switch
         {
+            "find_view_geometry" => new DrawingQueryTools(_client).FindViewGeometry("Front", occurrence_path: "Part:1", timeout_ms: timeout),
+            "sketch_on_view" => tools.SketchOnView("Markup", [JsonDocument.Parse("{\"line\":{\"from\":[0,0],\"to\":[10,10]}}").RootElement.Clone()], timeout_ms: timeout),
+            "hide_view_edges" => tools.HideViewEdges("D.idw", "Sheet2", "Front", max_model_size_mm: 2, timeout_ms: timeout),
+            "create_design_view" => new AssemblyTools(_client).CreateDesignView("Detail", document: "A.iam", timeout_ms: timeout),
             "get_drawing_info" => new DrawingQueryTools(_client).GetDrawingInfo(document: "D.idw", timeout_ms: timeout),
             "new_drawing" => tools.NewDrawing("D", Path.Combine(_dir, "template.idw"), timeout_ms: timeout),
             "add_sheet" => tools.AddSheet("Sheet2", document: "D.idw", timeout_ms: timeout),
@@ -109,7 +114,7 @@ public sealed class DrawingTests : IDisposable
         if (command == "add_balloon") Assert.Equal("Part:1", (string?)p["items"]![0]!["occurrence_path"]);
         if (command == "export_drawing") Assert.False(p.Value<bool>("overwrite_existing"));
         Assert.Equal("inventor_" + command, (string?)envelope["tool"]?["name"]);
-        Assert.Equal(command == "get_drawing_info" ? "drawing_query" : "drawing", (string?)envelope["tool"]?["toolset"]);
+        Assert.Equal(command == "create_design_view" ? "assembly" : command == "get_drawing_info" || command == "find_view_geometry" ? "drawing_query" : "drawing", (string?)envelope["tool"]?["toolset"]);
         Assert.Equal(timeout, (int)envelope["tool"]!["timeout_ms"]!);
     }
     private static async Task<JObject> Receive(NamedPipeServerStream server, CancellationToken ct)

@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Xml;
+using Formatting = Newtonsoft.Json.Formatting;
 using Inventor;
 using Bimwright.Ipt.Shared.Handlers.Drawing;
 using Newtonsoft.Json;
@@ -27,7 +28,7 @@ public sealed class CreateDesignViewHandler : HandlerBase, IInventorCommand
             DrawingPhase3Input.Validate(Name, p);
 #if INVENTOR2027
             if (!ActiveDocumentSupport.TryGetAssembly(ctx, p, Name, out var app, out var assembly, out var failure)) return failure!;
-            if (app.ActiveEditObject != null) throw new ArgumentException("Exit the current edit environment before creating a design view.");
+            if (app.ActiveDocument == null || !app.ActiveDocument.Equals(assembly) || !assembly.Equals(app.ActiveEditObject)) throw new ArgumentException("Activate the target assembly and exit the current edit environment before creating a design view.");
             return Create(ctx, app, assembly, p);
 #else
             return Fail(ctx, InventorErrorCodes.UNSUPPORTED_HOST, "create_design_view requires Inventor 2027.");

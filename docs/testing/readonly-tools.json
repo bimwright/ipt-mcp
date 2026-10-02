@@ -1,6 +1,6 @@
 {
   "profile": "read-only",
-  "source": "Phase 3 source declarations; build and tools/list regeneration not run",
+  "source": "built server tools/list",
   "tools": [
     "inventor_check_interference",
     "inventor_create_bake_issue_draft",
