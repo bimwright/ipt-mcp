@@ -15,6 +15,8 @@ static class HandlerLive
         try
         {
             app = (Inventor.Application)Activator.CreateInstance(Type.GetTypeFromProgID("Inventor.Application", true)!)!; app.Visible = true; app.SilentOperation = true;
+            Console.WriteLine("HOST_VERSION "+app.SoftwareVersion.DisplayVersion);
+            Console.WriteLine("HANDLER_ASSEMBLY "+typeof(DrawingCommandHandler).Assembly.Location);
             if (app.Documents.Count != 0) throw new Exception("Owned fixture session is not empty.");
             var commands = Bimwright.Ipt.Shared.Plugin.InventorCommandRegistry.Build(new Bimwright.Ipt.Shared.Plugin.PluginOptions(2027, false, false, 5000000));
             var dispatcher = new CommandDispatcher(commands, 5000000);
@@ -123,4 +125,3 @@ static class HandlerLive
         finally { if (app != null) app.Quit(); }
     }
 }
-
