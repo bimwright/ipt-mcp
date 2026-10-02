@@ -7,7 +7,7 @@ for Inventor 2027; older add-ins return `UNSUPPORTED_HOST`.
 
 | Tool | Live generic fixture coverage |
 |---|---|
-| `inventor_get_drawing_info` | Sheets/views/definitions/items, pagination, dirty state preserved |
+| `inventor_get_drawing_info` | Sheets/views/definitions/items, pagination, dirty state preserved; cold inactive sheets report unavailable annotations |
 | `inventor_new_drawing` | Unsaved template drawing, first/third-angle projection, visible/hidden load, existing dimension style defaults, repeated create |
 | `inventor_add_sheet` | Second A3 sheet, persistent code, existing border/title definition, prompts, repeated create |
 | `inventor_set_title_block` | Prompt replacement and Title in Summary Information |
@@ -48,6 +48,15 @@ This is **partial implementation acceptance**, not a release verdict or producti
   whole-product release artifacts/MCPB/client lifecycle and the release gate remain separate dependencies.
 
 ## Run the disposable fixture
+
+After opening a drawing, Inventor can report unknown/no-data status on an inactive sheet
+and expose empty annotation collections despite saved dimensions being present.
+The query returns `annotation_data_available=false`, `sheet_status_bits`, null annotation
+counts and null requested annotation collections in that state. Activate the sheet in
+Inventor and query again before deciding whether annotations are missing. The query itself
+does not activate or update sheets, and unavailable data must never trigger a create replay.
+Annotation creation and shaded rebuild preflight also reject that state with `API_ERROR`
+before mutation, since name conflicts and dependencies cannot yet be checked reliably.
 
 Close existing Inventor sessions yourself. The runner refuses to attach to any existing process,
 creates its own 2027 session and generic part/nested assembly/template, writes artifacts under a

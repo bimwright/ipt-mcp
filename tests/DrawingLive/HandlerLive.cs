@@ -142,6 +142,7 @@ static class HandlerLive
             Call("export_drawing", new JObject { ["document"] = doc, ["format"] = "autocad_dwg", ["output_path"] = Path.Combine(root, "autocad.dwg"), ["all_sheets"] = true });
             Call("export_drawing", new JObject { ["document"] = doc, ["format"] = "native_idw", ["output_path"] = Path.Combine(root, "copy.idw") });
             if (!part.Dirty || !originalModelBytes.SequenceEqual(System.IO.File.ReadAllBytes(modelPath))) throw new Exception("Capture/export persisted a dirty referenced model.");
+            d.Sheets[initial].Activate(); // Persist the annotated sheet as inactive to exercise cold reads.
             var save = new Bimwright.Ipt.Shared.Handlers.Document.SaveDocumentHandler().Execute(ctx, new JObject { ["document"] = doc, ["path"] = Path.Combine(root, "saved.idw"), ["silent"] = true }); Console.WriteLine("SAVE " + JsonConvert.SerializeObject(save)); if (!save.Ok) throw new Exception("Save failed.");
             if (!part.Dirty || !originalModelBytes.SequenceEqual(System.IO.File.ReadAllBytes(modelPath))) throw new Exception("Saving a drawing persisted or cleared a dirty referenced model.");
             d.PropertySets["Inventor Summary Information"]["Subject"].Value="Drawing-only in-place save";
@@ -149,7 +150,22 @@ static class HandlerLive
             if(!inPlace.Ok||!part.Dirty||!originalModelBytes.SequenceEqual(System.IO.File.ReadAllBytes(modelPath)))throw new Exception("In-place drawing save changed reference.");
             Console.WriteLine("SAVE_IN_PLACE "+JsonConvert.SerializeObject(inPlace));
             d.Close(true); var reopened = (DrawingDocument)app.Documents.Open(Path.Combine(root, "saved.idw"), true); Console.WriteLine("REOPEN sheets=" + reopened.Sheets.Count + " missing=" + reopened.HasReferencesMissing); if (reopened.Sheets.Count != 2 || reopened.HasReferencesMissing) throw new Exception("Reopen lost sheets/references.");
+            var coldDirty = reopened.Dirty; var coldActive = reopened.ActiveSheet.Name;
+            var coldQuery = Call("get_drawing_info", new JObject { ["document"] = reopened.DisplayName, ["sheet"] = sh, ["include"] = "items" }, readOnly: true);
+            var coldSheet = coldQuery["sheets"]!["items"]![0]!;
+            if (coldSheet.Value<bool?>("annotation_data_available") != false ||
+                coldSheet["dimension_count"]!.Type != JTokenType.Null || coldSheet["symbol_count"]!.Type != JTokenType.Null ||
+                coldSheet["balloon_count"]!.Type != JTokenType.Null || coldSheet["dimensions"]!.Type != JTokenType.Null ||
+                coldSheet["symbols"]!.Type != JTokenType.Null || reopened.Dirty != coldDirty || reopened.ActiveSheet.Name != coldActive)
+                throw new Exception("Cold inactive-sheet query reported empty annotations or changed drawing state.");
+            var coldDimensions = Call("add_drawing_dimension", dp, true);
+            var coldBalloons = Call("add_balloon", balloons, true);
+            if ((string?)coldDimensions["error"]?["code"] != "API_ERROR" || (string?)coldBalloons["error"]?["code"] != "API_ERROR" ||
+                reopened.Dirty != coldDirty || reopened.ActiveSheet.Name != coldActive)
+                throw new Exception("Cold annotation writes were not rejected before mutation.");
+            reopened.Sheets[sh].Activate();
             CheckQueryDimensionUnits(reopened.DisplayName);
+            if (Call("add_drawing_dimension", dp).Value<int>("created_count") != 0) throw new Exception("Reopened dimensions were duplicated.");
             addSheet["document"] = reopened.DisplayName; var reused = Call("add_sheet", addSheet); if (reused.Value<bool>("created")) throw new Exception("Sheet identity did not survive save/reopen.");
             var afterScale = reopened.Sheets.Cast<Sheet>().Single(x => x.Name == sh); if (afterScale.SketchedSymbols.Count != 2 || afterScale.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Any(x => !x.Attached)) throw new Exception("Annotations lost after edit/save/reopen.");
             foreach(SketchedSymbol symbol in afterScale.SketchedSymbols)

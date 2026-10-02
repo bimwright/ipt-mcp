@@ -12,6 +12,11 @@ namespace Bimwright.Ipt.Shared.Handlers.Drawing;
 internal static class DrawingSupport
 {
     internal const string Attributes = "BimwrightDrawing";
+    internal static bool AnnotationsAvailable(DrawingSheetStatusBits status) => (status & (DrawingSheetStatusBits.kUnknownOutOfDateDrawingSheet | DrawingSheetStatusBits.kNoDataDrawingSheet)) == 0;
+    internal static void RequireAnnotations(Sheet sheet)
+    {
+        if (!AnnotationsAvailable(sheet.Status)) throw new DrawingFailure(InventorErrorCodes.API_ERROR, "Annotation data unavailable on sheet '" + sheet.Name + "'. Activate the sheet in Inventor and query before writing; no mutation was applied.");
+    }
     internal static Application App(InventorCommandContext ctx) => (Application)ctx.Application!;
     internal static DrawingDocument Document(InventorCommandContext ctx, JObject p)
     {

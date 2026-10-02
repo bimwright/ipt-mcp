@@ -53,9 +53,24 @@ internal static partial class DrawingOperations
         var sheetInfo = new List<JToken>();
         foreach (var s in sheets)
         {
+            // Cold inactive sheets can expose empty annotation collections until activated.
+            // A query must not activate/update the sheet or present unavailable data as zero.
+            var status = s.Status;
+            var annotationsAvailable = DrawingSupport.AnnotationsAvailable(status);
             var row = DrawingSupport.SheetInfo(s); row["prompts"] = TitlePrompts(s.TitleBlock);
+            row["sheet_status_bits"] = (int)status;
+            row["annotation_data_available"] = annotationsAvailable;
+            if (!annotationsAvailable)
+            {
+                foreach (var key in new[] { "dimension_count", "symbol_count", "balloon_count" }) row[key] = JValue.CreateNull();
+                row["readback_hint"] = "Activate the sheet in Inventor, then query again. Do not recreate annotations from unavailable data.";
+            }
             row["views"] = Page(s.DrawingViews.Cast<DrawingView>().Select(v => (JToken)DrawingSupport.ViewInfo(v)), max, offset);
-            if ((string?)p["include"] == "items")
+            if ((string?)p["include"] == "items" && !annotationsAvailable)
+            {
+                row["dimensions"] = JValue.CreateNull(); row["symbols"] = JValue.CreateNull();
+            }
+            else if ((string?)p["include"] == "items")
             {
                 row["dimensions"] = Page(s.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name"), ["kind"] = v.Type.ToString(), ["value"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? v.ModelValue * 180 / Math.PI : v.ModelValue * 10, ["unit"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? "deg" : "mm", ["attached"] = v.Attached }), max, offset);
                 row["symbols"] = Page(s.SketchedSymbols.Cast<SketchedSymbol>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name") ?? v.Name, ["definition"] = v.Definition.Name, ["position_mm"] = new JArray(v.Position.X * 10, v.Position.Y * 10) }), max, offset);

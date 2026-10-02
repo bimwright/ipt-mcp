@@ -118,6 +118,7 @@ internal static partial class DrawingOperations
         var moving = DrawingInput.Present(p, "position_mm") || DrawingInput.Present(p, "align");
         var rebuild = shaded && moving;
         if (rebuild && p.Value<bool?>("rebuild") != true) throw new ArgumentException("Moving a shaded view requires rebuild=true to avoid shifted export shading.");
+        if (rebuild) DrawingSupport.RequireAnnotations(s);
         if (rebuild && (children.Length > 0 || s.DrawingDimensions.GeneralDimensions.Count > 0 || s.SketchedSymbols.Count > 0 || s.Balloons.Count > 0)) throw new ArgumentException("Cannot rebuild a shaded view while dependent or unmanaged annotations/views may be lost.");
         var position = DrawingInput.Present(p, "position_mm") ? DrawingSupport.Point(app, p["position_mm"]) : v.Position;
         if (p["align"] is JObject align)

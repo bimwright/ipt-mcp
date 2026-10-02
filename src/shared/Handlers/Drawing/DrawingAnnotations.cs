@@ -31,6 +31,7 @@ internal static partial class DrawingOperations
     private static JObject DimensionInfo(GeneralDimension dimension, JObject item, bool created) => new JObject { ["name"] = (string)item["name"]!, ["view"] = (string)item["view"]!, ["kind"] = (string)item["kind"]!, ["value"] = (string?)item["kind"] == "angular" ? dimension.ModelValue * 180 / Math.PI : dimension.ModelValue * 10, ["unit"] = (string?)item["kind"] == "angular" ? "deg" : "mm", ["attached"] = dimension.Attached, ["created"] = created, ["text_position_mm"] = new JArray(dimension.Text.Origin.X * 10, dimension.Text.Origin.Y * 10), ["text"] = dimension.Text.FormattedText, ["intents"] = item["intents"]!.DeepClone(), ["precision"] = dimension.Precision };
     private static InventorCommandResult AddDimensions(InventorCommandContext ctx, DrawingDocument d, Sheet s, JObject p)
     {
+        DrawingSupport.RequireAnnotations(s);
         var plans = new List<DimensionPlan>();
         foreach (var item in FlattenDimensions((JArray)p["items"]!))
         {
@@ -80,6 +81,7 @@ internal static partial class DrawingOperations
     }
     private static InventorCommandResult AddBalloons(InventorCommandContext ctx, DrawingDocument d, Sheet s, JObject p)
     {
+        DrawingSupport.RequireAnnotations(s);
         var mode = (string?)p["mode"] ?? "symbol";
         if (mode == "bom")
         {
