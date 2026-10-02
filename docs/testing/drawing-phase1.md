@@ -8,13 +8,13 @@ for Inventor 2027; older add-ins return `UNSUPPORTED_HOST`.
 | Tool | Live generic fixture coverage |
 |---|---|
 | `inventor_get_drawing_info` | Sheets/views/definitions/items, pagination, dirty state preserved |
-| `inventor_new_drawing` | Unsaved template drawing, projection, existing dimension style defaults, repeated create |
+| `inventor_new_drawing` | Unsaved template drawing, first/third-angle projection, visible/hidden load, existing dimension style defaults, repeated create |
 | `inventor_add_sheet` | Second A3 sheet, persistent code, existing border/title definition, prompts, repeated create |
 | `inventor_set_title_block` | Prompt replacement and Title in Summary Information |
 | `inventor_add_drawing_view` | Base/projected/arbitrary/circular detail, assembly design view, reference display/margin/hidden-line options, repeated/conflicting names |
-| `inventor_add_section_view` | Cut line, negative direction, finite depth, rotation; explicit position readback |
-| `inventor_edit_drawing_view` | Scale/move and attached dimensions preserved; shaded base rebuilt without dependencies and PDF render inspected |
-| `inventor_add_drawing_dimension` | Horizontal 100 mm, vertical/aligned 60 mm, diameter 20 mm, radius 10 mm, angle 90°, chain, model-point intents, repeated create, invalid batch |
+| `inventor_add_section_view` | Cut line, positive/negative direction, full/finite depth, inherited view, rotation; explicit position readback |
+| `inventor_edit_drawing_view` | Scale/move and attached dimensions preserved; alignment, suppression, rotation and hidden-line style; shaded base rebuilt without dependencies and PDF render inspected |
+| `inventor_add_drawing_dimension` | Horizontal 100 mm, vertical/aligned 60 mm, diameter 20 mm, radius 10 mm, angle 90°, chain, model-point intents, supplied style/precision/text override, repeated create, invalid batch |
 | `inventor_add_balloon` | Supplied prompted symbol with text readback, nested occurrence, target region, column/angle layout, repeated create; native leader attachment after assembly scale/move and reopen |
 | `inventor_capture_sheet` | Sheet PNG, region/inline, UI/dirty state restoration, existing-path rejection |
 | `inventor_export_drawing` | All/subset/ordered PDF, per-sheet AutoCAD DWG, native IDW copy, overwrite rejection/opt-in, fresh nonempty artifacts |
@@ -30,14 +30,17 @@ The [read-only allowlist](readonly-tools.json) is generated from the built serve
 
 This is **partial implementation acceptance**, not a release verdict or production approval.
 
-- Drawing crop is blocked: the 2027 interop has no drawing crop API. The tool rejects crop explicitly.
-- Native BOM balloons are blocked until rollback of model BOM changes across documents is verified.
+- Four variants are deferred from Phase 1 under the revised scope; their explicit rejection stays
+  part of the supported contract. They are not counted as implemented variants.
+- Drawing crop is deferred: the 2027 interop has no drawing crop API. The tool rejects crop explicitly.
+- Native BOM balloons are deferred until rollback of model BOM changes across documents is verified.
   `mode=bom` never silently changes a model; symbol balloons are the supported path.
 - Shaded moves rebuild only managed base/arbitrary views without dependent views or annotations.
   Dependency-preserving rebuilds remain pending; a dependency-free generic base view passed PDF visual inspection.
 - Hidden-loaded drawing capture is rejected to preserve window visibility. Visible sheet capture is supported.
-- More template/section/alignment/style variants, timeout/exception-after-create containment,
-  and deployed add-in toast/History behavior still need acceptance evidence.
+- A native label failure after view creation rolled back and left the view count unchanged.
+  Queued timeout containment, further template variants and deployed add-in toast/History behavior
+  still need acceptance evidence.
 - Legacy annotation/read-only/catalog parity, global configurable response guarding,
   packaging/installer/client lifecycle and the release gate remain separate dependencies.
 

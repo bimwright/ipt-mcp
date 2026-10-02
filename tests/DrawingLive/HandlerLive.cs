@@ -52,6 +52,12 @@ static class HandlerLive
             Call("add_drawing_view", new JObject { ["document"] = doc, ["sheet"] = sh, ["name"] = "arbitrary", ["kind"] = "arbitrary", ["model"] = modelPath, ["position_mm"] = new JArray(270, 230), ["eye_direction"] = new JArray(1, 1, 1), ["up_direction"] = new JArray(0, 0, 1), ["scale"] = 0.5 });
             Call("add_drawing_view", new JObject { ["document"] = doc, ["sheet"] = sh, ["name"] = "detail", ["kind"] = "detail", ["parent_view"] = "front", ["position_mm"] = new JArray(350, 230), ["detail_region_mm"] = new JObject { ["center"] = new JArray(120, 120), ["radius_mm"] = 15 }, ["scale"] = 2 });
             Call("add_section_view", new JObject { ["document"] = doc, ["sheet"] = sh, ["name"] = "section", ["parent_view"] = "front", ["position_mm"] = new JArray(120, 230), ["cut_line_mm"] = new JArray(new JArray(120, 80), new JArray(120, 160)), ["direction"] = "negative", ["depth_mm"] = 10, ["rotation_deg"] = 90 });
+            var fullSection=Call("add_section_view",new JObject{["document"]=doc,["sheet"]=sh,["name"]="section-full",["parent_view"]="front",["position_mm"]=new JArray(60,245),["cut_line_mm"]=new JArray(new JArray(120,80),new JArray(120,160)),["direction"]="positive",["inherit_3d"]=new JObject{["name"]="section-inherited",["position_mm"]=new JArray(205,275)}});
+            if(fullSection["depth_mm"]!.Type!=JTokenType.Null||(string?)fullSection["inherited_view"]?["parent_view"]! != "section-full")throw new Exception("Full-depth/inherited section readback mismatch.");
+            var faultSheet=d.Sheets.Cast<Sheet>().Single(x=>x.Name==sh);var beforeFaultViews=faultSheet.DrawingViews.Count;
+            var faultInput=(JObject)baseInput.DeepClone();faultInput["name"]="runtime-fault";faultInput["label"]="<StyleOverride FontSize='invalid'>Fault after view creation</StyleOverride>";
+            var fault=Call("add_drawing_view",faultInput,true);
+            if(fault.Value<bool?>("rolled_back")!=true||faultSheet.DrawingViews.Count!=beforeFaultViews)throw new Exception("Post-create failure was not rolled back.");
             var dims = new JArray();
             JObject Edge(string edge, string point) => new() { ["model_edge"] = edge, ["point_intent"] = point };
             var front = d.ActiveSheet; foreach (Sheet s in d.Sheets) if (s.Name == sh) front = s;
@@ -75,6 +81,9 @@ static class HandlerLive
                 if ((string)item["kind"]! == "chain" && Math.Abs(dimensionResult["items"]![1]!.Value<double>("value") - 60) > 1e-5) throw new Exception("Second chain dimension is incorrect.");
             }
             if (Math.Abs(measured["items"]![1]!.Value<double>("value") - 20) > 1e-5) throw new Exception("Diameter is incorrect.");
+            var overrideItem=(JObject)dims[2].DeepClone();overrideItem["name"]="override";overrideItem["style"]="Default - mm (ANSI)";overrideItem["precision"]=3;overrideItem["text_override"]="VALUE OVERRIDE";
+            var overrideResult=Call("add_drawing_dimension",new JObject{["document"]=doc,["sheet"]=sh,["items"]=new JArray(overrideItem)});
+            if(Math.Abs(overrideResult["items"]![0]!.Value<double>("value")-100)>1e-5||overrideResult["items"]![0]!.Value<int>("precision")!=3||!overrideResult["items"]![0]!.Value<string>("text")!.Contains("VALUE OVERRIDE"))throw new Exception("Dimension override corrupted measured value/precision/text.");
             var horizontalEdge = EntityResolverEdge(part, horizontalId);
             JObject ModelPoint(Inventor.Point point) => new() { ["model_point_mm"] = new JArray(point.X * 10, point.Y * 10, point.Z * 10) };
             Call("add_drawing_dimension", new JObject { ["document"] = doc, ["sheet"] = sh, ["items"] = new JArray(new JObject { ["name"] = "model-points", ["view"] = "front", ["kind"] = "aligned", ["intents"] = new JArray(ModelPoint(horizontalEdge.StartVertex.Point), ModelPoint(horizontalEdge.StopVertex.Point)), ["text_position_mm"] = new JArray(120, 185) }) });
@@ -100,6 +109,15 @@ static class HandlerLive
             Call("edit_drawing_view",new JObject{["document"]=doc,["sheet"]=initial,["view"]="shaded",["position_mm"]=new JArray(150,150)},true);
             var rebuilt=Call("edit_drawing_view",new JObject{["document"]=doc,["sheet"]=initial,["view"]="shaded",["position_mm"]=new JArray(150,150),["rebuild"]=true});
             if(!rebuilt.Value<bool>("rebuilt")||Math.Abs(rebuilt["position_mm"]![0]!.Value<double>()-150)>0.01)throw new Exception("Shaded rebuild failed readback.");
+            var aligned=Call("edit_drawing_view",new JObject{["document"]=doc,["sheet"]=sh,["view"]="arbitrary",["align"]=new JObject{["axis"]="x",["with_view"]="front",["offset_mm"]=10},["rotation_deg"]=15,["style"]="hidden_line",["label"]="Fixture arbitrary"});
+            if(Math.Abs(aligned["position_mm"]![0]!.Value<double>()-135)>0.01||Math.Abs(aligned.Value<double>("rotation_deg")-15)>0.01)throw new Exception("Alignment/rotation readback mismatch.");
+            Call("edit_drawing_view",new JObject{["document"]=doc,["sheet"]=sh,["view"]="arbitrary",["suppressed"]=true});
+            Call("edit_drawing_view",new JObject{["document"]=doc,["sheet"]=sh,["view"]="arbitrary",["suppressed"]=false,["rotation_deg"]=0,["position_mm"]=new JArray(270,230)});
+            var hiddenInput=(JObject)np.DeepClone();hiddenInput["name"]="Hidden-variant.idw";hiddenInput["visible"]=false;hiddenInput["projection"]="first_angle";Call("new_drawing",hiddenInput);
+            var hiddenDoc=app.Documents.Cast<Inventor.Document>().OfType<DrawingDocument>().Single(x=>x.DisplayName=="Hidden-variant.idw");
+            var hiddenInfo=Call("get_drawing_info",new JObject{["document"]=hiddenDoc.DisplayName});if((string?)hiddenInfo["projection"]! != "first_angle")throw new Exception("First angle projection was not applied.");
+            Call("capture_sheet",new JObject{["document"]=hiddenDoc.DisplayName,["sheet"]=hiddenDoc.ActiveSheet.Name,["output_path"]=Path.Combine(root,"hidden.png")},true);
+            if(System.IO.File.Exists(Path.Combine(root,"hidden.png")))throw new Exception("Hidden capture wrote a file.");hiddenDoc.Close(true);
             var originalModelBytes = System.IO.File.ReadAllBytes(modelPath);
             part.PropertySets["Inventor Summary Information"]["Title"].Value = "Unsaved reference sentinel"; if (!part.Dirty) throw new Exception("Reference fixture was not made dirty.");
             Call("capture_sheet", new JObject { ["document"] = doc, ["sheet"] = sh, ["output_path"] = Path.Combine(root, "sheet.png") });
