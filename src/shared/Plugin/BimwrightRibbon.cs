@@ -35,6 +35,8 @@ internal sealed class BimwrightRibbon
     private readonly Action<bool> _setBrandOn;
     private readonly Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions>? _position;
     private readonly Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions, bool>? _savePosition;
+    private readonly Func<int>? _idleSeconds;
+    private readonly Func<int, bool>? _saveIdleSeconds;
     private InvApi.ButtonDefinition? _brand;
     private InvApi.ButtonDefinition? _toggle;
     private InvApi.ButtonDefinition? _status;
@@ -47,7 +49,8 @@ internal sealed class BimwrightRibbon
         Func<string> statusText, Action onHistory, Func<int> historyCount,
         Func<bool> isBrandOn, Action<bool> setBrandOn,
         Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions>? position = null,
-        Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions, bool>? savePosition = null)
+        Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions, bool>? savePosition = null,
+        Func<int>? idleSeconds = null, Func<int, bool>? saveIdleSeconds = null)
     {
         _app = app;
         _clientId = clientId;
@@ -60,6 +63,8 @@ internal sealed class BimwrightRibbon
         _setBrandOn = setBrandOn;
         _position = position;
         _savePosition = savePosition;
+        _idleSeconds = idleSeconds;
+        _saveIdleSeconds = saveIdleSeconds;
     }
 
     /// <summary>Idempotent: also used after a ribbon reset.</summary>
@@ -181,7 +186,8 @@ internal sealed class BimwrightRibbon
     {
         try
         {
-            using var dialog = new ToastPositionForm(_statusText(), _position, _savePosition);
+            using var dialog = new ToastPositionForm(_statusText(), _position, _savePosition,
+                _idleSeconds, _saveIdleSeconds);
             dialog.ShowDialog(new Win32Owner(new IntPtr(_app.MainFrameHWND)));
         }
         catch { }

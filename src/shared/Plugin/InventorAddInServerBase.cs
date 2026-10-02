@@ -80,7 +80,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _configPath = ToastConfigStore.DefaultPath(runtimeLayout.DataRoot);
         _toastSettings = ToastConfigStore.Load(_configPath, Environment.GetEnvironmentVariable);
         _toasts = new ToastNotifier(_toastSettings.EnableToast,
-            $"{BrandAssets.ProductName} {_year}", ShowOrFocusHistoryWindow);
+            $"{BrandAssets.ProductName} {_year}", ShowOrFocusHistoryWindow,
+            ToastConfigStore.LoadIdleSeconds(_configPath));
         _toasts.ShowBranding = _toastSettings.ShowBranding;
         _toasts.Position = ToastConfigStore.LoadPosition(_configPath);
         _toasts.SavePosition = value => ToastConfigStore.SavePosition(_configPath, value);
@@ -123,7 +124,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 () => _toasts?.ShowBranding ?? false,
                 SetBrandingOn,
                 () => _toasts?.Position ?? new ToastPositionOptions(),
-                value => _toasts?.SetPosition(value) ?? false);
+                value => _toasts?.SetPosition(value) ?? false,
+                () => _toasts?.IdleSeconds ?? ToastConfigStore.DefaultIdleSeconds,
+                SetToastIdleSeconds);
             _ribbon.Build();
         }
         catch
@@ -139,6 +142,13 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         {
             _appEvents = null;
         }
+    }
+
+    private bool SetToastIdleSeconds(int seconds)
+    {
+        if (!ToastConfigStore.SaveIdleSeconds(_configPath, seconds)) return false;
+        _toasts?.SetIdleSeconds(seconds);
+        return true;
     }
 
     /// <summary>Ribbon Toast Brand (STA): takes effect now and persists for the next start.</summary>

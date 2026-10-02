@@ -15,6 +15,36 @@ namespace Bimwright.Ipt.Toast.Wpf.Tests;
 /// </summary>
 public sealed class ToastHostTests
 {
+    [Fact]
+    public void Notifier_uses_configured_idle_on_the_next_deadline_without_resetting_the_current_card()
+    {
+        using var notifier = new ToastNotifier(true, "ipt-mcp 2027", () => { }, 10);
+        var activity = Field<ActivityAggregator>(notifier, "_activity");
+        var now = Field<Func<TimeSpan>>(activity, "_now");
+        activity.Record(Result(1), true);
+        var card = activity.TakeRender().Card!;
+        var firstDeadline = Field<TimeSpan>(activity, "_deadline");
+        Assert.InRange((firstDeadline - now()).TotalSeconds, 9, 10);
+
+        notifier.SetIdleSeconds(60);
+        Assert.Equal(firstDeadline, Field<TimeSpan>(activity, "_deadline"));
+        activity.PointerEntered(card.CardId);
+        activity.PointerLeft(card.CardId);
+        Assert.InRange((Field<TimeSpan>(activity, "_deadline") - now()).TotalSeconds, 59, 60);
+        Assert.Equal(card.CardId, activity.TakeRender().Card!.CardId);
+
+        notifier.SetIdleSeconds(30);
+        activity.Record(Result(2), true);
+        Assert.InRange((Field<TimeSpan>(activity, "_deadline") - now()).TotalSeconds, 29, 30);
+        Assert.Equal(2, activity.TakeRender().Card!.Succeeded);
+        notifier.SetIdleSeconds(15);
+        activity.Record(Result(3), true);
+        Assert.InRange((Field<TimeSpan>(activity, "_deadline") - now()).TotalSeconds, 19, 20);
+    }
+
+    private static T Field<T>(object target, string name) => (T)target.GetType()
+        .GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(target)!;
+
     private static ToastModel Result(int n) => new("extrude", "Extrude " + n, "Feature", "Created", "",
         null, ToolActivityKind.Write, true, 0);
 
@@ -90,7 +120,9 @@ public sealed class ToastHostTests
     public void Card_uses_the_RVT_owner_corner_in_physical_pixels()
         => Sta.Run(() =>
         {
-            var frame = new Window { Left = 80, Top = 80, Width = 900, Height = 600 };
+            // Keep the fixture inside the current work area so app bars do not trigger clamping.
+            var work = SystemParameters.WorkArea;
+            var frame = new Window { Left = work.Left + 80, Top = work.Top + 80, Width = 900, Height = 600 };
             ToastHost? host = null;
             try
             {

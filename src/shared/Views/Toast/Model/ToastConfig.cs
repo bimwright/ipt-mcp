@@ -11,6 +11,7 @@ public sealed record ToastSettings(bool EnableToast, string EnableSource, bool S
 /// <summary>
 /// Add-in-side toast config: <c>%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json</c> (keys
 /// <c>enableToast</c>, overridden by env <c>BIMWRIGHT_INVENTOR_ENABLE_TOAST</c>, and <c>showBranding</c>).
+/// <c>toastIdleSeconds</c> accepts 10, 20, 30 or 60 seconds and defaults to 20.
 /// Never throws: anything unreadable means defaults. Other keys in the file, such as the retired <c>toastTheme</c>,
 /// are ignored and kept.
 /// </summary>
@@ -19,6 +20,8 @@ public static class ToastConfigStore
     private static readonly object WriteGate = new();
     public const string FileName = "iptmcp.config.json";
     public const string EnableEnv = "BIMWRIGHT_INVENTOR_ENABLE_TOAST";
+    public const int DefaultIdleSeconds = 20;
+    public static readonly int[] IdleChoices = { 10, 20, 30, 60 };
 
     public static string DefaultPath(string descriptorDir) => Path.Combine(descriptorDir, FileName);
 
@@ -49,6 +52,19 @@ public static class ToastConfigStore
     public static bool SaveEnableToast(string path, bool enable) => Save(path, "enableToast", enable);
 
     public static bool SaveShowBranding(string path, bool show) => Save(path, "showBranding", show);
+
+    public static int NormalizeIdleSeconds(int seconds)
+        => Array.IndexOf(IdleChoices, seconds) >= 0 ? seconds : DefaultIdleSeconds;
+
+    public static int LoadIdleSeconds(string path)
+    {
+        var value = TryRead(path, out _)?["toastIdleSeconds"];
+        return value?.Type == JTokenType.Integer && int.TryParse(value.ToString(), out var seconds)
+            ? NormalizeIdleSeconds(seconds) : DefaultIdleSeconds;
+    }
+
+    public static bool SaveIdleSeconds(string path, int seconds)
+        => Update(path, root => root["toastIdleSeconds"] = NormalizeIdleSeconds(seconds));
 
     public static ToastPositionOptions LoadPosition(string path)
     {

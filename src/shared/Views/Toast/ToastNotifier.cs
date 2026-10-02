@@ -14,7 +14,8 @@ internal sealed class ToastNotifier : IDisposable
     private const int ToggleSeconds = 3;
 
     private readonly object _gate = new();
-    private readonly ActivityAggregator _activity = new();
+    private readonly ActivityAggregator _activity;
+    private volatile int _idleSeconds;
     private readonly string _identity;
     private readonly Action _openHistory;
     private ToastHost? _host;
@@ -37,12 +38,20 @@ internal sealed class ToastNotifier : IDisposable
     private volatile InventorUiSnapshot _ui = InventorUiSnapshot.Empty;
     private string? _pendingConnection;
 
-    public ToastNotifier(bool enabled, string identity, Action openHistory)
+    public ToastNotifier(bool enabled, string identity, Action openHistory,
+        int idleSeconds = ToastConfigStore.DefaultIdleSeconds)
     {
+        _idleSeconds = ToastConfigStore.NormalizeIdleSeconds(idleSeconds);
+        _activity = new ActivityAggregator(() => _idleSeconds);
         _enabled = enabled;
         _identity = identity;
         _openHistory = openHistory;
     }
+
+    public int IdleSeconds => _idleSeconds;
+
+    // The card reads the setting when a result or pointer leave rearms its deadline.
+    public void SetIdleSeconds(int seconds) => _idleSeconds = ToastConfigStore.NormalizeIdleSeconds(seconds);
 
     public bool Enabled
     {

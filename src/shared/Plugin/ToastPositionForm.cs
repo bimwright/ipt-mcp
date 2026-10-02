@@ -6,11 +6,12 @@ using Bimwright.Ipt.Shared.Views.Toast;
 
 namespace Bimwright.Ipt.Shared.Plugin;
 
-/// <summary>Status and immediately applied owner-relative toast preferences.</summary>
+/// <summary>Status and toast preferences. Position applies immediately; duration needs Apply.</summary>
 internal sealed class ToastPositionForm : Form
 {
     public ToastPositionForm(string status, Func<ToastPositionOptions>? read,
-        Func<ToastPositionOptions, bool>? save)
+        Func<ToastPositionOptions, bool>? save, Func<int>? readIdleSeconds = null,
+        Func<int, bool>? saveIdleSeconds = null)
     {
         Text = "Bimwright Inventor MCP";
         Size = new Size(540, 500);
@@ -46,6 +47,37 @@ internal sealed class ToastPositionForm : Form
         panel.Controls.Add(drag);
         panel.Controls.Add(reset);
         panel.Controls.Add(feedback);
+
+        var savedIdle = ToastConfigStore.NormalizeIdleSeconds(readIdleSeconds?.Invoke() ?? ToastConfigStore.DefaultIdleSeconds);
+        var idle = new ComboBox { Name = "ToastIdleSeconds", DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+        foreach (var seconds in ToastConfigStore.IdleChoices) idle.Items.Add(seconds);
+        idle.SelectedItem = savedIdle;
+        var applyIdle = new Button { Name = "ApplyToastIdle", Text = "Apply", AutoSize = true, Enabled = false };
+        var idleError = new Label { Name = "ToastIdleError", AutoSize = true, MaximumSize = new Size(475, 0), ForeColor = Color.Firebrick };
+        idle.SelectedIndexChanged += (_, _) => applyIdle.Enabled = (int)idle.SelectedItem != savedIdle;
+        applyIdle.Click += (_, _) =>
+        {
+            var seconds = (int)idle.SelectedItem;
+            if (saveIdleSeconds?.Invoke(seconds) != true)
+            {
+                idleError.Text = "Toast duration could not be saved. The previous duration is still active. Try Apply again.";
+                return;
+            }
+            savedIdle = seconds;
+            idleError.Text = "";
+            applyIdle.Enabled = false;
+        };
+        panel.Controls.Add(new Label { Text = "Toast duration (seconds)", AutoSize = true, Margin = new Padding(3, 16, 3, 4) });
+        panel.Controls.Add(idle);
+        panel.Controls.Add(new Label { Text = "After Apply, the next result or pointer leave uses this duration.", AutoSize = true, MaximumSize = new Size(475, 0) });
+        panel.Controls.Add(applyIdle);
+        panel.Controls.Add(idleError);
+        FormClosing += (_, e) =>
+        {
+            if ((int)idle.SelectedItem != savedIdle)
+                e.Cancel = MessageBox.Show(this, "Discard the unapplied toast duration change?", Text,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes;
+        };
     }
 }
 #endif

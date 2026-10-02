@@ -284,7 +284,7 @@ Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server 
 
 当 Inventor 可见时，命令结果更新到 **一张紧凑的活动卡片**，显示最新 tool 和带数字滚动效果的 **Success / Failed / Capture** 计数器。Capture 是 Success 的子集，包含 `inventor_capture_view` 的 `inline=true` 调用，不应再加到操作总数中。Failed 包含软失败和 batch rollback。读写操作都使用蓝色强调色；记录过失败的卡片保持红色强调色。该卡片与 rvt-mcp、dwg-mcp 的卡片相同，数值变化时布局保持稳定，没有优先级堆叠或逐 tool 的 toast 队列。成功且保存了图像的 capture 还会显示该图像的**缩略图**，居中放在固定大小的框内；点击缩略图会打开文件。计数仅覆盖当前 target 上该卡片的生命周期，不代表整个任务或特定 MCP client。`inventor_health` 不产生 toast。**Agent connected** 只是状态通知，不增加计数，也不替换保留中的活动卡片或任务报告。
 
-活动卡片在 **最后一个结果之后 20 秒**消失。由指针移动确认的真实悬停暂停计时，离开后重新开始完整的 20 秒。卡片出现在静止光标下不算悬停。点击卡片打开 **History** 并关闭卡片；**×** 只关闭卡片。卡片标题始终显示网关名称和 **Inventor 年份**（`ipt-mcp 2027`），不受 branding 开关影响。
+活动卡片默认在 **最后一个结果之后 20 秒**消失。可在 **Status → Toast duration → Apply** 中选择 10、20、30 或 60 秒，选择保存为 `toastIdleSeconds`。保存失败时会显示错误，并继续使用原来的时长。由指针移动确认的真实悬停暂停计时，离开后重新开始完整的所选时长。新时长从下一个结果或指针离开时开始生效。卡片出现在静止光标下不算悬停。点击卡片打开 **History** 并关闭卡片；**×** 只关闭卡片。卡片标题始终显示网关名称和 **Inventor 年份**（`ipt-mcp 2027`），不受 branding 开关影响。
 
 agent 必须显式调用 `inventor_report_task_result` 报告工作结果：每项 agent/job 使用唯一 `task_id`（1–80 字符），`outcome` 为 `completed`/`failed`/`cancelled`，`summary` 为真实的单行总结（1–120 字符）。报告 **替换同一个共享卡位**，标注 **Agent reported**，显示时限为 **8 秒**；真实悬停暂停，离开后重新计时。报告不增加活动计数，下一个 tool 结果开始新的活动卡片。不会从空闲时间或单个 tool 成功推断任务完成。报告绕过 Inventor 命令队列，不调用 Inventor API，因此长时间 `send_code` 占用主线程时仍可接收。`toast_shown` 表示是否已保留卡片供显示，也包括等待 Inventor 取消最小化或关闭模态对话框的情况。报告遵守 Toasts 开关，需同时更新 server 和 add-in。
 

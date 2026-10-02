@@ -156,4 +156,53 @@ public sealed class ToastConfigStoreTests : IDisposable
     [Fact]
     public void Default_path_is_in_the_descriptor_dir()
         => Assert.Equal(Path.Combine(@"C:\x\ipt-mcp", "iptmcp.config.json"), ToastConfigStore.DefaultPath(@"C:\x\ipt-mcp"));
+
+    [Theory]
+    [InlineData(null, 20)]
+    [InlineData("10", 10)]
+    [InlineData("20", 20)]
+    [InlineData("30", 30)]
+    [InlineData("60", 60)]
+    [InlineData("15", 20)]
+    [InlineData("0", 20)]
+    [InlineData("-1", 20)]
+    [InlineData("2147483648", 20)]
+    [InlineData("30.0", 20)]
+    [InlineData("\"30\"", 20)]
+    [InlineData("true", 20)]
+    [InlineData("{}", 20)]
+    [InlineData("null", 20)]
+    public void Idle_duration_loads_only_supported_integer_values(string? jsonValue, int expected)
+    {
+        if (jsonValue != null) File.WriteAllText(Cfg, "{\"toastIdleSeconds\":" + jsonValue + "}");
+        Assert.Equal(expected, ToastConfigStore.LoadIdleSeconds(Cfg));
+    }
+
+    [Theory]
+    [InlineData(10, 10)]
+    [InlineData(20, 20)]
+    [InlineData(30, 30)]
+    [InlineData(60, 60)]
+    [InlineData(15, 20)]
+    public void Idle_duration_round_trips_without_changing_other_preferences(int seconds, int expected)
+    {
+        File.WriteAllText(Cfg, """{ "foo": 1, "enableToast": false, "toastDragOffset": { "x": 12, "y": 34 } }""");
+        Assert.True(ToastConfigStore.SaveIdleSeconds(Cfg, seconds));
+        Assert.Equal(expected, ToastConfigStore.LoadIdleSeconds(Cfg));
+        var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Cfg));
+        Assert.Equal(1, (int)json["foo"]!);
+        Assert.False((bool)json["enableToast"]!);
+        Assert.Equal(12, (int)json["toastDragOffset"]!["x"]!);
+        Assert.Equal(34, (int)json["toastDragOffset"]!["y"]!);
+    }
+
+    [Fact]
+    public void Failed_idle_save_keeps_the_existing_file()
+    {
+        File.WriteAllText(Cfg, "{ malformed");
+        Assert.Equal(20, ToastConfigStore.LoadIdleSeconds(Cfg));
+        Assert.False(ToastConfigStore.SaveIdleSeconds(Cfg, 60));
+        Assert.Equal("{ malformed", File.ReadAllText(Cfg));
+        Assert.False(File.Exists(Cfg + ".tmp"));
+    }
 }
