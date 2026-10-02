@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,11 +62,26 @@ public class FaceSelectorDto
 /// names "XY Plane"|"XZ Plane"|"YZ Plane"|"X Axis"|"Y Axis"|"Z Axis"|"Center Point"). Unknown names
 /// return INVALID_ARGUMENT with the full list of available names (self-teaching). Lengths mm, angles deg.
 /// </summary>
-[McpServerToolType]
+[McpServerToolType, Toolset("assembly")]
 public sealed class AssemblyTools
 {
     private readonly PluginClient _client;
     public AssemblyTools(PluginClient client) => _client = client;
+
+    [McpServerTool(Name = "inventor_create_design_view", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Create a named assembly design view by copying source (current representation if omitted). occurrence_visibility=[{occurrence_path,visible}], appearance=[{occurrence_path,asset}] use exact nested occurrence paths and existing appearance asset names (document or library). Prevalidates targets/assets; library assets are copied into the assembly without editing the library or part documents. activate=false keeps the original representation active. Identical managed requests verify native state and reuse; conflicting names fail. Source representations remain unchanged. One transaction with readback/rollback, no implicit save. Inventor 2027.")]
+    public async Task<string> CreateDesignView(string name, string? document = null, string? source = null, JsonElement[]? occurrence_visibility = null, JsonElement[]? appearance = null, bool activate = false, int? timeout_ms = null, CancellationToken ct = default)
+    {
+        try
+        {
+            var p = JObject.Parse(JsonSerializer.Serialize(new { name, document, source, occurrence_visibility, appearance, activate, timeout_ms }));
+            DrawingPhase3Input.Validate("create_design_view", p);
+            var data = await _client.SendAsync("create_design_view", p, ct, timeoutMs: timeout_ms);
+            return ToolResponse.Serialize(data);
+        }
+        catch (ArgumentException ex) { return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
+        catch (InventorGatewayException ex) { return ToolResponse.Error(ex.Code, ex.Message); }
+    }
 
     [McpServerTool(Name = "inventor_place_occurrence"),
      Description("Place a component (.ipt/.iam full path) into the ACTIVE ASSEMBLY. position_mm/rotation_deg_xyz give an initial pose only (final position comes from constraints; rotations applied X then Y then Z). grounded pins it. Returns occurrence_name (use it in all later refs) and bbox_mm.")]

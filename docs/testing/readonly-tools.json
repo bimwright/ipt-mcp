@@ -1,9 +1,10 @@
 {
   "profile": "read-only",
-  "source": "built server tools/list",
+  "source": "Phase 3 source declarations; build and tools/list regeneration not run",
   "tools": [
     "inventor_check_interference",
     "inventor_create_bake_issue_draft",
+    "inventor_find_view_geometry",
     "inventor_get_assembly_bom",
     "inventor_get_current_target",
     "inventor_get_document_info",

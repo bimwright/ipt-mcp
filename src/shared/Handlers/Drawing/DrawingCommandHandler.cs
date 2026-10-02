@@ -9,7 +9,7 @@ namespace Bimwright.Ipt.Shared.Handlers.Drawing;
 public sealed class DrawingCommandHandler : HandlerBase, IInventorCommand
 {
     public string Name { get; }
-    public bool IsReadOnly => Name == "get_drawing_info";
+    public bool IsReadOnly => Name == "get_drawing_info" || Name == "find_view_geometry";
     public DrawingCommandHandler(string name) => Name = name;
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {

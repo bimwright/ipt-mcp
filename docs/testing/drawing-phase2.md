@@ -2,7 +2,7 @@
 
 Eight additional drawing writes are implemented on this branch: add note, symbol
 and custom table; edit annotation, table and sheet; delete drawing items; set
-drawing styles. The current surface is 107 all-enabled / 103 with code off /
+drawing styles. The accepted Phase 2 surface is 107 all-enabled / 103 with code off /
 20 read-only. Supported Phase 2 scope is accepted: **PASS**.
 
 Notes accept literal text, a persistent name and a position in sheet mm.

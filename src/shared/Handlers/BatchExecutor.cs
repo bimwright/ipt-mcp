@@ -38,6 +38,7 @@ public static class BatchExecutor
         "add_drawing_note", "add_drawing_table",
         "add_drawing_symbol", "edit_drawing_annotation",
         "delete_drawing_items", "edit_drawing_table", "set_drawing_styles", "edit_sheet",
+        "find_view_geometry", "sketch_on_view", "hide_view_edges", "create_design_view",
     };
 
     public sealed class Outcome

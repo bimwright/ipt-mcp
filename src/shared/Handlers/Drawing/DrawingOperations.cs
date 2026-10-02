@@ -43,6 +43,9 @@ internal static partial class DrawingOperations
                 "edit_drawing_table" => EditTable(ctx, d, s, p),
                 "set_drawing_styles" => SetStyles(ctx, d, p),
                 "edit_sheet" => EditSheet(ctx, d, s, p),
+                "find_view_geometry" => FindGeometry(ctx, d, s, p),
+                "sketch_on_view" => SketchOnView(ctx, d, s, p),
+                "hide_view_edges" => HideEdges(ctx, d, s, p),
                 _ => throw new ArgumentException("Unknown drawing command.")
             };
         }

@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Bimwright.Ipt.Tests;
 
-/// <summary>Golden snapshot for the assembly batch: 3 write + 5 read-only tools, toolset wiring.</summary>
+/// <summary>Declared assembly surface: 9 write + 6 read-only tools, toolset wiring.</summary>
 public sealed class AssemblyToolsTests
 {
     private static string[] ToolNamesOf(Type toolType)
@@ -18,10 +18,10 @@ public sealed class AssemblyToolsTests
             .Where(n => n is not null).Select(n => n!).ToArray();
 
     [Fact]
-    public void AssemblyTools_exposes_exactly_the_three_write_tools()
+    public void AssemblyTools_exposes_exactly_the_nine_write_tools()
     {
         var names = ToolNamesOf(typeof(AssemblyTools));
-        Assert.Equal(new[] { "inventor_add_constraint", "inventor_create_imate", "inventor_delete_occurrences",
+        Assert.Equal(new[] { "inventor_add_constraint", "inventor_create_design_view", "inventor_create_imate", "inventor_delete_occurrences",
                              "inventor_place_occurrence", "inventor_place_occurrences", "inventor_reset_appearance",
                              "inventor_set_appearance", "inventor_set_occurrence_state" },
                      names.OrderBy(x => x).ToArray());

@@ -16,7 +16,7 @@ public sealed class DrawingDimensionItem
     [JsonPropertyName("name")] public required string Name { get; set; }
     [JsonPropertyName("view")] public required string View { get; set; }
     [JsonPropertyName("kind")] public required string Kind { get; set; }
-    [JsonPropertyName("intents"), Description("Intent objects: model_point_mm:[x,y,z] or model_edge reference, optional occurrence_path and point_intent=start|end|mid|center. Ambiguous matches fail.")] public required JsonElement[] Intents { get; set; }
+    [JsonPropertyName("intents"), Description("Intent objects: model_point_mm:[x,y,z] or model_edge reference with optional occurrence_path; alternatively geometry_id+revision from find_view_geometry. Optional point_intent=start|end|mid|center. Ambiguous or stale matches fail before mutation.")] public required JsonElement[] Intents { get; set; }
     [JsonPropertyName("text_position_mm")] public double[]? TextPosition { get; set; }
     [JsonPropertyName("text_positions_mm")] public double[][]? ChainPositions { get; set; }
     [JsonPropertyName("direction")] public string? Direction { get; set; }
@@ -71,6 +71,11 @@ public sealed class DrawingQueryTools
      Description("Inspect an already-loaded drawing without changing it. include=summary returns sheets, views, definitions and annotation counts; items returns bounded annotation locators. max_items (1..1000) and offset apply to each collection. Sheet coordinates and sizes are mm from the lower-left. Omit document/sheet for the active drawing/sheet. Inventor 2027 first; other hosts report UNSUPPORTED_HOST.")]
     public Task<string> GetDrawingInfo(string? document = null, string? sheet = null, string include = "summary", int max_items = 200, int offset = 0, bool references = true, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "get_drawing_info", new { document, sheet, include, max_items, offset, references }, timeout_ms, ct);
+
+    [McpServerTool(Name = "inventor_find_view_geometry", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Inspect geometry in one loaded drawing view (up to 50000 curves). Supply one model_point_mm [x,y,z], model_edge, region_mm={min,max}, or occurrence_path alone. occurrence_path can also narrow a model/region selector. Model points use the existing endpoint/mid/center intent resolver. kind=line|arc|circle|all; visible_only=true, tolerance_mm=0.5, max_items=100 (1..1000), offset=0. Return sheet-mm geometry, model references where available, geometry_id and view revision. Use both geometry_id+revision in dimension/leader/symbol intents. Every call reads fresh native geometry; cache_hit=false, refresh is accepted. No document/selection/UI changes. Inventor 2027.")]
+    public Task<string> FindViewGeometry(string view, string? document = null, string? sheet = null, double[]? model_point_mm = null, string? model_edge = null, string? occurrence_path = null, JsonElement? region_mm = null, string kind = "all", bool visible_only = true, double tolerance_mm = 0.5, int max_items = 100, int offset = 0, bool refresh = false, int? timeout_ms = null, CancellationToken ct = default)
+        => DrawingWire.Call(_client, "find_view_geometry", new { view, document, sheet, model_point_mm, model_edge, occurrence_path, region_mm, kind, visible_only, tolerance_mm, max_items, offset, refresh }, timeout_ms, ct);
 }
 
 [McpServerToolType, Toolset("drawing")]
@@ -78,6 +83,16 @@ public sealed class DrawingTools
 {
     private readonly PluginClient _client;
     public DrawingTools(PluginClient client) => _client = client;
+
+    [McpServerTool(Name = "inventor_sketch_on_view", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Create a named drawing sketch with 1..500 entities: {line:{from:[x,y],to:[x,y]}}, {circle:{center:[x,y],radius_mm}}, {arc:{center,radius_mm,start_deg,sweep_deg}}, {text:{text,position:[x,y],font_size_mm?,rotation_deg?}}. Literal text. space=sheet (mm from lower-left) or view_local (requires view). With view, sketch follows parent move/scale; omitted view creates a sheet sketch. Optional existing layer, color_rgb [0..255], weight_mm. Drawing/sheet must already be active with no sketch edit open; temporary edit restores selection. Matching managed name/content returns existing; conflicts fail. One transaction, native readback, no save. Inventor 2027.")]
+    public Task<string> SketchOnView(string name, JsonElement[] entities, string? document = null, string? sheet = null, string? view = null, string space = "sheet", string? layer = null, int[]? color_rgb = null, double? weight_mm = null, int? timeout_ms = null, CancellationToken ct = default)
+        => DrawingWire.Call(_client, "sketch_on_view", new { name, entities, document, sheet, view, space, layer, color_rgb, weight_mm }, timeout_ms, ct);
+
+    [McpServerTool(Name = "inventor_hide_view_edges", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
+     Description("Hide currently visible native curve segments in one explicit drawing document/sheet/view. Supply occurrences (existing occurrence selector) and/or max_model_size_mm (projected curve length divided by view scale); criteria combine with AND. Suppressed/invisible occurrences are excluded. dry_run=true returns candidates without writing; default false. At most 20000 segments. Direct segment visibility API, one transaction, no UI command or selection changes, no automatic retry/save. Return candidate/hidden counts, stage timings and new geometry revision; already hidden segments are skipped. Inventor 2027.")]
+    public Task<string> HideViewEdges(string document, string sheet, string view, JsonElement? occurrences = null, double? max_model_size_mm = null, bool dry_run = false, int? timeout_ms = null, CancellationToken ct = default)
+        => DrawingWire.Call(_client, "hide_view_edges", new { document, sheet, view, occurrences, max_model_size_mm, dry_run }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_new_drawing", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Create a named unsaved drawing from an absolute existing Inventor IDW/native DWG template. projection=template|first_angle|third_angle. Repeating identical input returns the existing managed drawing; a conflicting name fails. Does not save. Inventor 2027 first.")]

@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-103%20or%20107%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: drawing implementation in progress.** The existing core surface now includes 11 Inventor 2027 drawing tools. Generic live handler checks and host-free tests pass; full drawing acceptance and release gates remain pending. See [drawing checks](docs/testing/drawing-phase1.md).
+> **Status: Phase 1 and Phase 2 supported scope accepted.** Phase 3 adds four source tools for Inventor 2027; build/tests/live checks have not been run. See [Phase 3 behavior](docs/testing/drawing-phase3.md).
 
 The final MCP output guard warns at 64/256 KiB and uses a 1 MiB UTF-8 budget. Oversized reads request narrowing; completed writes retain compact effects and must not be replayed. `--disable-output-guard` keeps the transport fence active. CLI/JSON/environment thresholds and the configurable 36-hour spill policy are documented in [drawing testing](docs/testing/drawing-phase1.md).
 
@@ -111,7 +111,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **103 tools** by default when all platform toolsets are enabled, or **107 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **107 tools** by default when all platform toolsets are enabled, or **111 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
 Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`, `drawing`, `drawing_query`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
@@ -125,20 +125,22 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 **Dialogs.** Save, open, close, export and the batch document tools run under `Application.SilentOperation` by default (`silent=true`), so Inventor answers its own prompts with their defaults instead of opening a hidden modal dialog that blocks the call. If a call still times out, the TIMEOUT message and `inventor_health` report `modal_dialog {open, title}` — probed without touching Inventor's main thread.
 
 
-### drawing_query (1) / drawing (18) — Inventor 2027
+### drawing_query (2) / drawing (20) — Inventor 2027
 
-`inventor_get_drawing_info` is read-only. Drawing writes:
+Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+
+`inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
 `inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
 `inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
 `inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`,
 `inventor_add_drawing_symbol`, `inventor_edit_drawing_annotation`, `inventor_delete_drawing_items`,
-`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`. Captures write PNG files and are excluded from read-only.
+`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`, `inventor_sketch_on_view`, `inventor_hide_view_edges`. Captures write PNG files and are excluded from read-only.
 
 [Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
 [Drawing annotations, tables and sheets](docs/testing/drawing-phase2.md) ·
 [Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
-[Generated read-only registration](docs/testing/readonly-tools.json).
+[Declared read-only inventory](docs/testing/readonly-tools.json).
 
 ### meta (3) — server-side target tools, never round-trip to the add-in; stay exposed under `--read-only`
 
@@ -248,10 +250,11 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 > Export paths must be absolute and under an allowed output root (user profile or temp).
 
-### assembly (8, write) — compose and edit assemblies
+### assembly (9, write) — compose and edit assemblies
 
 | Tool | Description |
 |---|---|
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
 | `inventor_place_occurrence` | Place a component (.ipt/.iam) into the active assembly; optional initial pose + grounded. |
 | `inventor_add_constraint` | Constrain two named refs (mate/flush/insert/angle); response carries `health` — always check it. |
 | `inventor_create_imate` | Author a named iMate on the active part using a deterministic face selector. |

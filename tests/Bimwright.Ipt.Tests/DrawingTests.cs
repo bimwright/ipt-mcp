@@ -123,7 +123,7 @@ public sealed class DrawingTests : IDisposable
     {
         var config = new InventorMcpConfig { ReadOnly = true, Toolsets = { "all" }, EnableSendCode = true }; var types = Program.ResolveToolTypesForRegistration(config);
         Assert.Contains(typeof(DrawingQueryTools), types); Assert.DoesNotContain(typeof(DrawingTools), types);
-        var methods = new[] { typeof(DrawingTools), typeof(DrawingQueryTools) }.SelectMany(t => t.GetMethods()).Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null).ToArray(); Assert.Equal(19, methods.Length);
+        var methods = new[] { typeof(DrawingTools), typeof(DrawingQueryTools) }.SelectMany(t => t.GetMethods()).Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null).ToArray(); Assert.Equal(22, methods.Length);
         foreach (var m in methods)
         {
             var declaration = m.CustomAttributes.Single(a => a.AttributeType == typeof(McpServerToolAttribute));

@@ -10,7 +10,7 @@ public static class ResponseEffectSummary
     {
         var compact = new JObject();
         if (data != null)
-            foreach (var key in new[] { "ok", "created", "existing", "updated", "deleted", "dry_run", "rebuilt", "completed", "count", "created_count", "updated_count", "deleted_count", "affected_count", "completed_count", "failed_count", "rolled_back", "mutation_applied", "readback_required", "source_unchanged", "document_unchanged", "ui_restored", "model_bom_changed", "name", "document", "sheet", "sheet_id", "path", "format", "error" })
+            foreach (var key in new[] { "ok", "created", "existing", "updated", "deleted", "dry_run", "rebuilt", "completed", "count", "created_count", "updated_count", "deleted_count", "affected_count", "completed_count", "failed_count", "entity_count", "candidate_count", "hidden_count", "changed_count", "revision", "active_design_view", "active_representation_restored", "follows_view", "rolled_back", "mutation_applied", "readback_required", "source_unchanged", "document_unchanged", "ui_restored", "model_bom_changed", "name", "document", "sheet", "sheet_id", "view", "path", "format", "error" })
                 if (data[key] != null) compact[key] = Bound(data[key]!);
         if (data == null || !new[] { "ok", "created", "updated", "deleted", "dry_run", "existing", "completed", "completed_count", "mutation_applied" }.Any(k => data[k] != null)) compact["outcome_unknown"] = true;
         foreach (var key in new[] { "items", "files" })

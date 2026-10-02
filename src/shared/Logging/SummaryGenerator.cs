@@ -35,6 +35,14 @@ namespace Bimwright.Ipt.Shared.Logging
                         return Truncate("drawing " + result?.Value<string>("document"), MaxLength);
                     case "get_drawing_info":
                         return Truncate(result?.Value<string>("document") + " · " + result?["sheets"]?.Value<int>("total") + " sheets", MaxLength);
+                    case "find_view_geometry":
+                        return Truncate(result?.Value<int>("count") + " curves · " + result?.Value<string>("view"), MaxLength);
+                    case "sketch_on_view":
+                        return Truncate(result?.Value<string>("name") + " · " + result?.Value<int>("entity_count") + " sketch entities", MaxLength);
+                    case "hide_view_edges":
+                        return (result?.Value<bool>("dry_run") == true ? "preview " + result?.Value<int>("candidate_count") : "hidden " + result?.Value<int>("hidden_count")) + " segments";
+                    case "create_design_view":
+                        return Truncate((result?.Value<bool>("created") == true ? "created " : "existing ") + "design view " + result?.Value<string>("name"), MaxLength);
                     case "add_sheet": case "add_drawing_view": case "add_section_view": case "edit_drawing_view":
                         return Truncate(result?.Value<string>("name") ?? toolName, MaxLength);
                     case "set_title_block":

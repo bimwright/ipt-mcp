@@ -40,10 +40,7 @@ public static class DrawingPhase2Input
     }
     public static void Intent(JObject p)
     {
-        var intent = Object(p, "intent"); Keys(intent, "model_edge model_point_mm occurrence_path point_intent"); DrawingInput.Any(intent, "model_edge", "model_point_mm");
-        Name(intent, "model_edge", "occurrence_path", "point_intent");
-        if (DrawingInput.Present(intent, "model_point_mm")) DrawingInput.Point(intent["model_point_mm"], 3);
-        DrawingInput.Choice(intent, "point_intent", "start", "end", "mid", "center");
+        DrawingPhase3Input.GeometryIntent(Object(p, "intent"));
     }
     public static void Target(JObject p)
     {

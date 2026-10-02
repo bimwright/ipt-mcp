@@ -17,7 +17,7 @@ internal sealed class DrawingIntent
 }
 
 /// <summary>Resolves actual model-backed curve intents, never unattached sheet coordinates.</summary>
-internal static class DrawingGeometry
+internal static partial class DrawingGeometry
 {
     internal static ComponentOccurrence Occurrence(AssemblyDocument model, string path)
     {
@@ -36,7 +36,7 @@ internal static class DrawingGeometry
         if (view.ReferencedDocumentDescriptor.ReferencedDocument is not AssemblyDocument assembly) throw new ArgumentException("occurrence_path requires an assembly-backed view.");
         return view.DrawingCurves[Occurrence(assembly, occurrencePath)];
     }
-    internal static DrawingIntent Resolve(Sheet sheet, DrawingView view, JObject locator, double toleranceMm)
+    internal static DrawingCurve[] Candidates(DrawingView view, JObject locator)
     {
         var occurrencePath = (string?)locator["occurrence_path"];
         var curves = Curves(view, occurrencePath).Cast<DrawingCurve>().ToArray();
@@ -55,6 +55,14 @@ internal static class DrawingGeometry
             else throw new ArgumentException("model_edge on an assembly requires occurrence_path.");
             curves = view.DrawingCurves[geometry].Cast<DrawingCurve>().ToArray();
         }
+        return curves;
+    }
+    internal static DrawingIntent Resolve(Sheet sheet, DrawingView view, JObject locator, double toleranceMm)
+    {
+        DrawingPhase3Input.GeometryIntent(locator);
+        if (DrawingInput.Present(locator, "geometry_id")) return ResolveGeometryId(sheet, view, locator);
+        var curves = Candidates(view, locator);
+        var edgeRef = (string?)locator["model_edge"];
         var pointIntent = (string?)locator["point_intent"];
         if (pointIntent != null && !new[] { "start", "end", "mid", "center" }.Contains(pointIntent)) throw new ArgumentException("point_intent must be start|end|mid|center.");
         var candidates = new List<(DrawingCurve curve, PointIntentEnum intent, Point2d point, string identity)>();

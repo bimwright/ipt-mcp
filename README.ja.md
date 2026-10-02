@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-103%20or%20107%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -92,7 +92,7 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **103 ツール**です（send_code ツールセットが有効な場合は **107 ツール**：`inventor_send_code` と 3 つのコードモジュールツール）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **107 ツール**です（send_code ツールセットが有効な場合は **111 ツール**：`inventor_send_code` と 3 つのコードモジュールツール）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
 デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`、`drawing`、`drawing_query`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
@@ -100,19 +100,21 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 すべての長さ入力は **mm**、角度は **度** 単位です。アドインが Inventor 内部のセンチメートル/ラジアンに変換します。
 
 
-### drawing_query (1) / drawing (18) — Inventor 2027
+### drawing_query (2) / drawing (20) — Inventor 2027
 
-`inventor_get_drawing_info` is read-only. Drawing writes:
+Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+
+`inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
 `inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
 `inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
 `inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`,
 `inventor_add_drawing_symbol`, `inventor_edit_drawing_annotation`, `inventor_delete_drawing_items`,
-`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`. Captures write PNG files and are excluded from read-only.
+`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`, `inventor_sketch_on_view`, `inventor_hide_view_edges`. Captures write PNG files and are excluded from read-only.
 
 [Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
 [Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
-[Generated read-only registration](docs/testing/readonly-tools.json).
+[Declared read-only inventory](docs/testing/readonly-tools.json).
 
 ### meta (3) — サーバーサイドターゲットツール。アドインへのラウンドトリップなし。`--read-only` でも公開
 
@@ -222,10 +224,11 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 > エクスポートパスは絶対パスで、許可された出力ルート（ユーザープロファイルまたは temp）の下にある必要があります。
 
-### assembly (8、書き込み) — アセンブリの構成と編集
+### assembly (9、書き込み) — アセンブリの構成と編集
 
 | ツール | 説明 |
 |---|---|
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
 | `inventor_place_occurrence` | コンポーネント（.ipt/.iam）をアクティブアセンブリに配置。初期姿勢と接地はオプション。 |
 | `inventor_add_constraint` | 2 つの名前付き参照を拘束（mate/flush/insert/angle）。応答には `health` が含まれるため、常に確認してください。 |
 | `inventor_create_imate` | 決定論的面セレクターを使用して、アクティブパーツに名前付き iMate を作成。 |

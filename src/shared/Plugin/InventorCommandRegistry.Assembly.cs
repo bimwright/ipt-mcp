@@ -18,6 +18,7 @@ public static partial class InventorCommandRegistry
         add(new SetOccurrenceStateHandler());
         add(new SetAppearanceHandler());
         add(new ResetAppearanceHandler());
+        add(new CreateDesignViewHandler());
     }
 }
 #endif

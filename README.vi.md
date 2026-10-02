@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-103%20or%20107%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -92,7 +92,7 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **103 công cụ** khi bật mọi platform toolset mặc định, hoặc **107 công cụ** khi bật toolset send_code (opt-in: `inventor_send_code` + 3 tool code module). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **107 công cụ** khi bật mọi platform toolset mặc định, hoặc **111 công cụ** khi bật toolset send_code (opt-in: `inventor_send_code` + 3 tool code module). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
 **Chọn document & occurrence.** Các tool cấp document nhận `document` tuỳ chọn (đường dẫn hoặc tên của document Inventor đang giữ trong bộ nhớ — cả part được assembly tham chiếu); không bao giờ tự mở/activate. Các tool assembly theo lô dùng chung selector `{names?: [glob], regex?, file?, path_contains?, leaf?, max_depth?, include_suppressed?, limit?}`; không khớp hoặc vượt `limit` là lỗi kèm gợi ý tên gần giống. Save/open/close/export chạy dưới `SilentOperation` mặc định để dialog ẩn không làm treo call; nếu vẫn timeout, `inventor_health` báo `modal_dialog {open, title}`.
 
@@ -102,19 +102,21 @@ Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in
 Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in tự chuyển sang centimét/radian nội bộ của Inventor.
 
 
-### drawing_query (1) / drawing (18) — Inventor 2027
+### drawing_query (2) / drawing (20) — Inventor 2027
 
-`inventor_get_drawing_info` is read-only. Drawing writes:
+Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+
+`inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
 `inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
 `inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
 `inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`,
 `inventor_add_drawing_symbol`, `inventor_edit_drawing_annotation`, `inventor_delete_drawing_items`,
-`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`. Captures write PNG files and are excluded from read-only.
+`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`, `inventor_sketch_on_view`, `inventor_hide_view_edges`. Captures write PNG files and are excluded from read-only.
 
 [Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
 [Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
-[Generated read-only registration](docs/testing/readonly-tools.json).
+[Declared read-only inventory](docs/testing/readonly-tools.json).
 
 ### meta (3) — tool target phía server, không round-trip tới add-in; vẫn hiện dưới `--read-only`
 
@@ -224,10 +226,11 @@ Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in 
 
 > Đường dẫn export phải là absolute và nằm dưới một output root được phép (user profile hoặc temp).
 
-### assembly (8, write) — dựng và sửa assembly
+### assembly (9, write) — dựng và sửa assembly
 
 | Tool | Mô tả |
 |---|---|
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
 | `inventor_place_occurrence` | Đặt một component (.ipt/.iam) vào assembly active; tùy chọn pose ban đầu + grounded. |
 | `inventor_add_constraint` | Constrain hai ref theo tên (mate/flush/insert/angle); response mang `health` — luôn kiểm tra. |
 | `inventor_create_imate` | Author một iMate theo tên trên part active dùng một face selector xác định. |

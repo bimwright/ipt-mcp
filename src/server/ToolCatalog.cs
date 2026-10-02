@@ -18,9 +18,11 @@ internal sealed class ToolsetAttribute : Attribute
 
 internal static class ToolCatalog
 {
-    // The drawing surface opts into metadata while existing classes retain their current
-    // display behavior. Expansion of legacy annotations is a separate release dependency.
-    private static readonly IReadOnlyDictionary<string, ToolMetadata> Drawing = Build(new[] { typeof(DrawingTools), typeof(DrawingQueryTools) });
+    // Drawing and the new design-view tool opt into metadata. Legacy methods keep their
+    // current display behavior until their permission hints are explicitly declared.
+    private static readonly IReadOnlyDictionary<string, ToolMetadata> Explicit = Build(new[] { typeof(DrawingTools), typeof(DrawingQueryTools), typeof(AssemblyTools) })
+        .Where(entry => entry.Value.Toolset.StartsWith("drawing", StringComparison.Ordinal) || entry.Key == "create_design_view")
+        .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
     // Legacy methods do not yet declare permission hints. Use the canonical read-only
     // registration surface for their output policy rather than guessing from missing hints.
     private static readonly IReadOnlyDictionary<string, ToolMetadata> ReadOnly = Build(Program.ResolveToolTypesForRegistration(new InventorMcpConfig { ReadOnly = true }));
@@ -41,7 +43,7 @@ internal static class ToolCatalog
     }
     internal static ToolMetadata? ForCommand(string command, int timeout)
     {
-        if (!Drawing.TryGetValue(command, out var entry)) return null;
+        if (!Explicit.TryGetValue(command, out var entry)) return null;
         return new ToolMetadata { Name = entry.Name, Toolset = entry.Toolset, Description = entry.Description, TimeoutMs = timeout, ReadOnly = entry.ReadOnly, Destructive = entry.Destructive, Idempotent = entry.Idempotent, OpenWorld = entry.OpenWorld };
     }
 }

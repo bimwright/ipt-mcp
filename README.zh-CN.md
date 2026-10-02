@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-103%20or%20107%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -96,7 +96,7 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **103 个 tools**（14 个 default-on toolsets；`code` 关闭），启用 send_code toolset 时为 **107 个**（`inventor_send_code` + 3 个 code module tools）。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+当所有平台 toolsets 都启用时，完整 surface 默认是 **107 个 tools**（14 个 default-on toolsets；`code` 关闭），启用 send_code toolset 时为 **111 个**（`inventor_send_code` + 3 个 code module tools）。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
 
 默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`、`drawing`、`drawing_query`。
 默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
@@ -104,19 +104,21 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 所有长度输入单位为 **mm**，角度单位为 **degrees**；add-in 会转换成 Inventor 内部的 centimetres/radians。
 
 
-### drawing_query (1) / drawing (18) — Inventor 2027
+### drawing_query (2) / drawing (20) — Inventor 2027
 
-`inventor_get_drawing_info` is read-only. Drawing writes:
+Phase 3 source declares 111 all-enabled / 107 code-off / 21 read-only tools; build, tests and runtime catalog regeneration have not been run. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+
+`inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
 `inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
 `inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
 `inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`,
 `inventor_add_drawing_symbol`, `inventor_edit_drawing_annotation`, `inventor_delete_drawing_items`,
-`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`. Captures write PNG files and are excluded from read-only.
+`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`, `inventor_sketch_on_view`, `inventor_hide_view_edges`. Captures write PNG files and are excluded from read-only.
 
 [Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
 [Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
-[Generated read-only registration](docs/testing/readonly-tools.json).
+[Declared read-only inventory](docs/testing/readonly-tools.json).
 
 ### meta (3) —— server-side 的 target tools，不 round-trip 到 add-in；在 `--read-only` 下仍然暴露
 
@@ -226,10 +228,11 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 > 导出路径必须是绝对路径，且位于允许的 output root 之下（用户 profile 或 temp）。
 
-### assembly (8, write) —— 组合与编辑装配体
+### assembly (9, write) —— 组合与编辑装配体
 
 | Tool | 描述 |
 |---|---|
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Phase 3 source, unbuilt and untested. |
 | `inventor_place_occurrence` | 把一个 component（.ipt/.iam）放入 active assembly；可选初始 pose + grounded。 |
 | `inventor_add_constraint` | 约束两个命名引用（mate/flush/insert/angle）；response 携带 `health` —— 务必检查它。 |
 | `inventor_create_imate` | 使用确定性面选择器在 active part 上编写一个命名 iMate。 |

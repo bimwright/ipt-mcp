@@ -28,6 +28,7 @@ public static class ResponseSizePolicyCatalog
             ["fillet"] = "Narrow the edge selector (radius_mm, center_mm, on_body, adjacent_surface_types) or pass explicit edge ids.",
             ["probe_brep"] = "Retry with a smaller max_items, a body=<name> scope, or min_diameter_mm.",
             ["get_drawing_info"] = "Use one sheet, include=summary, smaller max_items or offset.",
+            ["find_view_geometry"] = "Use a narrower model_edge/occurrence_path/region_mm, smaller max_items or offset.",
         };
 
     public static string GetNarrowingHint(string? commandName)

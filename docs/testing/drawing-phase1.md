@@ -31,7 +31,7 @@ with 49 successful calls / 20 expected rejections. Installed Codex checks verify
 read/write containment and reuse after activation. Controlled running/queued timeouts were
 resolved by health and readback without replay; the user confirmed Failed/Capture and History.
 The global output guard, configurable spill policy and all four hints for the eleven tools pass.
-The [read-only allowlist](readonly-tools.json) is generated from the built server's
+The Phase 1 read-only allowlist was generated from the built server's
 `tools/list`; it describes registration, not a claim of legacy annotation/add-in parity.
 
 ## Accepted scope and release dependencies

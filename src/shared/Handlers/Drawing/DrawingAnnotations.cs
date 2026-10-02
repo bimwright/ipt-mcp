@@ -36,7 +36,12 @@ internal static partial class DrawingOperations
         foreach (var item in FlattenDimensions((JArray)p["items"]!))
         {
             var name = (string)item["name"]!; AnnotationConflict(s, name); var existing = DimensionByName(s, name);
-            if (existing != null) { DrawingSupport.Existing(existing.AttributeSets, item); plans.Add(new DimensionPlan { Input = item, Existing = existing, Intents = Array.Empty<DrawingIntent>() }); continue; }
+            if (existing != null)
+            {
+                DrawingSupport.Existing(existing.AttributeSets, item);
+                foreach (JObject locator in (JArray)item["intents"]!) if (DrawingInput.Present(locator, "geometry_id")) DrawingGeometry.Resolve(s, DrawingSupport.View(s, item.Value<string>("view")), locator, item.Value<double?>("tolerance_mm") ?? 0.5);
+                plans.Add(new DimensionPlan { Input = item, Existing = existing, Intents = Array.Empty<DrawingIntent>() }); continue;
+            }
             var view = DrawingSupport.View(s, (string?)item["view"]); var intents = ((JArray)item["intents"]!).Cast<JObject>().Select(x => DrawingGeometry.Resolve(s, view, x, item.Value<double?>("tolerance_mm") ?? 0.5)).ToArray();
             var kind = (string)item["kind"]!;
             if (kind == "horizontal" || kind == "vertical" || kind == "aligned")
@@ -98,13 +103,25 @@ internal static partial class DrawingOperations
             var name = (string)item["name"]!; if (NamedNoteOrTable(s, name) || DimensionByName(s, name) != null) throw new ArgumentException("Annotation name conflicts: " + name);
             var signature = new JObject { ["item"] = item.DeepClone(), ["mode"] = mode, ["symbol"] = definition.Name, ["prompts"] = p["prompts"]?.DeepClone(), ["layout"] = layout?.DeepClone() };
             var existing = s.SketchedSymbols.Cast<SketchedSymbol>().SingleOrDefault(x => DrawingSupport.Read(x.AttributeSets, "name") == name);
-            if (existing != null) { DrawingSupport.Existing(existing.AttributeSets, signature); plans.Add(new BalloonPlan { Input = item, Signature = signature, Existing = existing }); index++; continue; }
+            if (existing != null)
+            {
+                DrawingSupport.Existing(existing.AttributeSets, signature);
+                if (item["intent"] is JObject cachedIntent && DrawingInput.Present(cachedIntent, "geometry_id")) DrawingGeometry.Resolve(s, DrawingSupport.View(s, item.Value<string>("view")), cachedIntent, item.Value<double?>("tolerance_mm") ?? 0.5);
+                plans.Add(new BalloonPlan { Input = item, Signature = signature, Existing = existing }); index++; continue;
+            }
             if (layout != null && DrawingInput.Present(item, "position_mm")) throw new ArgumentException("layout conflicts with explicit positions.");
             var position = layout == null ? DrawingSupport.Point(app, item["position_mm"]) : app.TransientGeometry.CreatePoint2d(layout.Value<double>("column_x_mm") / 10, (layout.Value<double>("start_y_mm") - index * layout.Value<double>("spacing_mm")) / 10);
             var view = DrawingSupport.View(s, (string?)item["view"]); var path = (string)item["occurrence_path"]!;
             var locator = item["intent"] as JObject;
             DrawingIntent intent;
-            if (locator != null) { locator = (JObject)locator.DeepClone(); if (DrawingInput.Present(locator, "occurrence_path") && (string?)locator["occurrence_path"] != path) throw new ArgumentException("Balloon intent occurrence conflicts."); locator["occurrence_path"] = path; intent = DrawingGeometry.Resolve(s, view, locator, item.Value<double?>("tolerance_mm") ?? 0.5); }
+            if (locator != null)
+            {
+                locator = (JObject)locator.DeepClone();
+                if (DrawingInput.Present(locator, "occurrence_path") && (string?)locator["occurrence_path"] != path) throw new ArgumentException("Balloon intent occurrence conflicts.");
+                if (!DrawingInput.Present(locator, "geometry_id")) locator["occurrence_path"] = path;
+                intent = DrawingGeometry.Resolve(s, view, locator, item.Value<double?>("tolerance_mm") ?? 0.5);
+                if (DrawingInput.Present(locator, "geometry_id") && !DrawingGeometry.Curves(view, path).Cast<DrawingCurve>().Any(curve => curve.Equals(intent.Curve))) throw new ArgumentException("Balloon geometry_id does not belong to the requested occurrence.");
+            }
             else
             {
                 var curves = DrawingGeometry.Curves(view, path).Cast<DrawingCurve>().Where(c => c.Segments.Cast<DrawingCurveSegment>().Any(x => x.Visible)).ToArray();
