@@ -87,7 +87,7 @@ public sealed class ToastHostTests
         });
 
     [Fact]
-    public void Card_sits_below_the_ribbon_of_the_frame_in_physical_pixels()
+    public void Card_uses_the_RVT_owner_corner_in_physical_pixels()
         => Sta.Run(() =>
         {
             var frame = new Window { Left = 80, Top = 80, Width = 900, Height = 600 };
@@ -106,11 +106,11 @@ public sealed class ToastHostTests
                 var frameRect = ToastNative.Rect(main)!.Value;
                 var dpi = ToastNative.Dpi(main);
                 GetWindowRect(toast, out var rect);
-                // No graphics view here, so the home-page anchor applies: 16 DIP in, 150 DIP down.
+                // RVT parity: the default owner-relative top-left corner is 16 DIP from both edges.
                 Assert.InRange(rect.Left, frameRect.Left + ToastLayout.Px(ToastLayout.EdgeDip, dpi) - 2,
                     frameRect.Left + ToastLayout.Px(ToastLayout.EdgeDip, dpi) + 2);
-                Assert.InRange(rect.Top, frameRect.Top + ToastLayout.Px(ToastLayout.HomeTopDip, dpi) - 2,
-                    frameRect.Top + ToastLayout.Px(ToastLayout.HomeTopDip, dpi) + 2);
+                Assert.InRange(rect.Top, frameRect.Top + ToastLayout.Px(ToastLayout.EdgeDip, dpi) - 2,
+                    frameRect.Top + ToastLayout.Px(ToastLayout.EdgeDip, dpi) + 2);
             }
             finally { host?.Shutdown(); frame.Close(); }
         });

@@ -21,6 +21,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         public static readonly SolidColorBrush Primary = Brush("#007ACC");
         public static readonly SolidColorBrush Success = Brush("#38A169");
         public static readonly SolidColorBrush Error = Brush("#E53E3E");
+        public static readonly SolidColorBrush ActivityBorder = Brush("#D8DEE8");
         public static readonly SolidColorBrush MutedAccent = Brush("#94A3B8");
         // Backdrop behind a capture: darker than the card so a white sheet reads as a sheet.
         public static readonly SolidColorBrush ThumbnailBackground = Brush("#E6EAF0");
@@ -93,4 +94,5 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         }
     }
 }
+
 #endif

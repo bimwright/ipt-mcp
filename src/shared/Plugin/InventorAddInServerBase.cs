@@ -82,6 +82,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _toasts = new ToastNotifier(_toastSettings.EnableToast,
             $"{BrandAssets.ProductName} {_year}", ShowOrFocusHistoryWindow);
         _toasts.ShowBranding = _toastSettings.ShowBranding;
+        _toasts.Position = ToastConfigStore.LoadPosition(_configPath);
+        _toasts.SavePosition = value => ToastConfigStore.SavePosition(_configPath, value);
 
         // Start the transport and read back its bound endpoint into the descriptor.
         var setupIdentity = SetupRuntimeIdentity.Capture(runtimeLayout, GetType().Assembly, "plugin", _year);
@@ -119,7 +121,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 ShowOrFocusHistoryWindow,
                 () => _sessionLog?.Count ?? 0,
                 () => _toasts?.ShowBranding ?? false,
-                SetBrandingOn);
+                SetBrandingOn,
+                () => _toasts?.Position ?? new ToastPositionOptions(),
+                value => _toasts?.SetPosition(value) ?? false);
             _ribbon.Build();
         }
         catch

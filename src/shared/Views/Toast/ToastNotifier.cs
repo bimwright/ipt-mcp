@@ -21,6 +21,19 @@ internal sealed class ToastNotifier : IDisposable
     private bool _disposed;
     private volatile bool _enabled;
     private volatile bool _showBranding;
+    private ToastPositionOptions _position = new();
+    public Func<ToastPositionOptions, bool>? SavePosition { get; set; }
+    public ToastPositionOptions Position
+    {
+        get => _position;
+        set { lock (_gate) { _position = value; _host?.SetPosition(value); } }
+    }
+
+    public bool SetPosition(ToastPositionOptions value)
+    {
+        Position = value;
+        return SavePosition?.Invoke(value) ?? false;
+    }
     private volatile InventorUiSnapshot _ui = InventorUiSnapshot.Empty;
     private string? _pendingConnection;
 
@@ -138,6 +151,7 @@ internal sealed class ToastNotifier : IDisposable
     {
         if (_host != null) return _host;
         _host = new ToastHost(_ui, _activity, _identity, _openHistory, _showBranding);
+        _host.SetPosition(_position, value => SetPosition(value));
         _host.RequestRender(); // drains a Reset that claimed the render slot before the host existed
         return _host;
     }

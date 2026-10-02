@@ -16,6 +16,7 @@ public sealed record ToastSettings(bool EnableToast, string EnableSource, bool S
 /// </summary>
 public static class ToastConfigStore
 {
+    private static readonly object WriteGate = new();
     public const string FileName = "iptmcp.config.json";
     public const string EnableEnv = "BIMWRIGHT_INVENTOR_ENABLE_TOAST";
 
@@ -49,33 +50,62 @@ public static class ToastConfigStore
 
     public static bool SaveShowBranding(string path, bool show) => Save(path, "showBranding", show);
 
+    public static ToastPositionOptions LoadPosition(string path)
+    {
+        var root = TryRead(path, out _);
+        var offset = root?["toastDragOffset"] as JObject;
+        double? Number(JToken? value) => value?.Type is JTokenType.Integer or JTokenType.Float
+            ? (double?)value : null;
+        return new ToastPositionOptions(
+            root?["toastHorizontalAlign"]?.Type == JTokenType.String && (string?)root["toastHorizontalAlign"] == "right",
+            root?["toastVerticalAlign"]?.Type == JTokenType.String && (string?)root["toastVerticalAlign"] == "bottom",
+            root?["toastDragEnabled"] is JValue { Type: JTokenType.Boolean } drag && (bool)drag,
+            Number(offset?["x"]), Number(offset?["y"]));
+    }
+
+    public static bool SavePosition(string path, ToastPositionOptions options) => Update(path, root =>
+    {
+        root["toastHorizontalAlign"] = options.Right ? "right" : "left";
+        root["toastVerticalAlign"] = options.Bottom ? "bottom" : "top";
+        root["toastDragEnabled"] = options.DragEnabled;
+        if (options.HasOffset)
+            root["toastDragOffset"] = new JObject { ["x"] = options.OffsetX, ["y"] = options.OffsetY };
+        else root.Remove("toastDragOffset");
+    });
+
     /// <summary>
     /// Writes one boolean key and keeps every other key. Returns false, leaving the file untouched,
     /// when the existing file has content that is not a JSON object, or when the write fails.
     /// </summary>
     private static bool Save(string path, string key, bool value)
-    {
-        var tmp = path + ".tmp";
-        try
-        {
-            var existing = TryRead(path, out var hadContent);
-            if (existing == null && hadContent)
-                return false;   // never clobber a file the user wrote but we cannot parse
+        => Update(path, obj => obj[key] = value);
 
-            var obj = existing ?? new JObject();
-            obj[key] = value;
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            File.WriteAllText(tmp, obj.ToString(Formatting.Indented));
-            if (File.Exists(path))
-                File.Replace(tmp, path, null);
-            else
-                File.Move(tmp, path);
-            return true;
-        }
-        catch
+    private static bool Update(string path, Action<JObject> update)
+    {
+        lock (WriteGate)
         {
-            try { File.Delete(tmp); } catch { }
-            return false;
+            var tmp = path + ".tmp";
+            try
+            {
+                var existing = TryRead(path, out var hadContent);
+                if (existing == null && hadContent)
+                    return false;   // never clobber a file the user wrote but we cannot parse
+
+                var obj = existing ?? new JObject();
+                update(obj);
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                File.WriteAllText(tmp, obj.ToString(Formatting.Indented));
+                if (File.Exists(path))
+                    File.Replace(tmp, path, null);
+                else
+                    File.Move(tmp, path);
+                return true;
+            }
+            catch
+            {
+                try { File.Delete(tmp); } catch { }
+                return false;
+            }
         }
     }
 

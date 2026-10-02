@@ -24,6 +24,8 @@ internal sealed class ToastHost
     private McpToastManager? _manager;
     private DispatcherTimer? _track;
     private volatile bool _showBranding;
+    private volatile ToastPositionOptions _position = new();
+    private Action<ToastPositionOptions>? _positionChanged;
     private volatile InventorUiSnapshot _ui;
     private int _stopped;
 
@@ -53,7 +55,8 @@ internal sealed class ToastHost
                     showBranding: () => _showBranding,
                     instanceIdentity: () => _identity,
                     motionEnabled: _motion,
-                    position: Anchor);
+                    positionOptions: () => _position,
+                    positionChanged: value => { _position = value; _positionChanged?.Invoke(value); });
                 _track = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
                     { Interval = TimeSpan.FromMilliseconds(100) };
                 _track.Tick += (_, _) => Track();
@@ -75,6 +78,12 @@ internal sealed class ToastHost
     }
 
     public void SetSnapshot(InventorUiSnapshot ui) => _ui = ui;
+    public void SetPosition(ToastPositionOptions options, Action<ToastPositionOptions>? changed = null)
+    {
+        _position = options;
+        if (changed != null) _positionChanged = changed;
+        Post(() => _manager?.ApplyPosition());
+    }
     public void RequestRender() => Post(Render);
     public void SetShowBranding(bool show)
     {
@@ -112,6 +121,7 @@ internal sealed class ToastHost
         if (manager == null) return;
         // Re-evaluate at render time too: a posted result can race minimize/modal changes.
         var usable = _usable(_ui);
+        manager.SetOwnerHandle(new IntPtr(_ui.MainHwnd));
         _activity.Tick(usable);
         manager.Render();
         manager.Reposition();
@@ -123,6 +133,7 @@ internal sealed class ToastHost
         var manager = _manager;
         if (manager == null) return;
         var ui = _ui;
+        manager.SetOwnerHandle(new IntPtr(ui.MainHwnd));
         var live = ToastNative.MainState(new IntPtr(ui.MainHwnd));
         if (!live.Exists || !live.Visible || !ui.AppVisible)
         {
@@ -143,23 +154,6 @@ internal sealed class ToastHost
         // Pending state (no HWND) still needs a Win32 tracker. Inventor has no Idling event.
         if (_activity.HasUnrenderedResults || _manager?.HasWindow == true) _track?.Start();
         else _track?.Stop();
-    }
-
-    /// <summary>
-    /// Card top-left in device-independent units: over the graphics view when it is big enough,
-    /// otherwise below the ribbon (see <see cref="ToastLayout.Anchor"/>). Null without a native frame.
-    /// </summary>
-    private Point? Anchor()
-    {
-        var ui = _ui;
-        var main = new IntPtr(ui.MainHwnd);
-        var rect = ToastNative.Rect(main);
-        if (rect == null) return null;
-        var view = ToastNative.VisibleRect(new IntPtr(ui.ViewHwnd));
-        var dpi = ToastNative.Dpi(main);
-        var px = ToastLayout.Anchor(view, rect.Value, dpi);
-        var scale = 96.0 / dpi;
-        return new Point(px.X * scale, px.Y * scale);
     }
 
     private void OnClick(long id)

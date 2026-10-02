@@ -30,7 +30,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
 
             var vm = new McpToastViewModel { Title = model.Title, Summary = model.Summary, Detail = model.Detail };
             return RecordResult(model.Title, vm.Body, model.Success, model.ThumbnailPath, frameUsable,
-                isCapture: model.Command == "capture_view" || model.Command == "capture_sheet");
+                isCapture: model.Command == "capture_view" || model.Command == "capture_sheet", durationMs: model.DurationMs);
         }
 
         /// <summary>
@@ -74,11 +74,11 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         /// displayable file (inline <c>capture_view</c>): still counted under Capture, never a thumbnail.
         /// </summary>
         public bool RecordResult(string title, string body, bool success, string imagePath, bool frameUsable,
-            bool isCapture)
+            bool isCapture, long? durationMs = null)
         {
             lock (_gate)
             {
-                var render = RecordResult(title, body, success, imagePath, frameUsable);
+                var render = RecordResult(title, body, success, imagePath, frameUsable, durationMs);
                 if (success && isCapture && string.IsNullOrEmpty(imagePath))
                     _images++;
                 return render;

@@ -13,6 +13,13 @@
   </PropertyGroup>
   <!-- Real WPF windows on an STA dispatcher, independent of Inventor. -->
   <ItemGroup>
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastActivityEntry.cs" Link="ToastActivityEntry.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastActivityLog.cs" Link="ToastActivityLog.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastPositionOptions.cs" Link="ToastPositionOptions.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastPlacement.cs" Link="ToastPlacement.cs" />
+    <Compile Include="../../src/shared/Views/Toast/ToastActivityPanel.cs" Link="ToastActivityPanel.cs" />
+    <Compile Include="../../src/shared/Views/Toast/ToastScrollBarStyles.cs" Link="ToastScrollBarStyles.cs" />
+    <Compile Include="../../src/shared/Security/SecretMasker.cs" Link="SecretMasker.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.cs" Link="ActivityAggregator.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.Ipt.cs" Link="ActivityAggregator.Ipt.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/McpToastViewModel.cs" Link="McpToastViewModel.cs" />

@@ -14,27 +14,53 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--hover-regression")
+            {
+                HoverRegressionTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--thumbnail-motion")
             {
                 ToastVisualTests.CheckThumbnailMotion();
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--live-motion")
+            {
+                for (var i = 0; i < 20; i++) LiveTailVisualTests.CheckIncomingDuringMotionAndClosedState();
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--arrival")
+            {
+                ArrivalVisualTests.Run();
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--position")
+            {
+                PositionVisualTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--demo")
                 return ToastPreview.Run();
-            if (args.Length == 1 && args[0] == "--after-thumbnail")
-                ToastVisualTests.RunAfterThumbnail();
-            else
+            if (args.Length == 1 && args[0] == "--activity")
             {
-                CheckCompactBody();
-                CheckCloseHover();
-                CheckCompactLayout();
-                ToastVisualTests.Run();
+                RecentActivityVisualTests.Run();
+                LiveTailVisualTests.Run();
+                return 0;
             }
+            CheckCompactBody();
+            CheckCloseHover();
+            CheckCompactLayout();
+            ToastVisualTests.Run();
             CheckNaNSafePlacement();
             CheckBrandingFollowsPreference();
             CheckIdentityRow();
             CheckThumbnailRow();
             CheckStationaryPointerFiltering();
+            HoverRegressionTests.Run();
+            RecentActivityVisualTests.Run();
+            LiveTailVisualTests.Run();
+            PositionVisualTests.Run();
+            ArrivalVisualTests.Run();
             CheckSingleActivityCard();
             CheckStatusAndClickLifecycle();
             Console.WriteLine("PASS: single-card activity manager and WPF guards");
@@ -51,12 +77,12 @@ internal static class Program
     {
         var cases = new (string Summary, string Detail, string Expected)[]
         {
-            ("24 bodies", "Solid 22, surface 2", "24 bodies · Solid 22, surface 2"),
+            ("24 rooms", "Placed 22, unplaced 2", "24 rooms · Placed 22, unplaced 2"),
             ("Done", null, "Done"),
             (null, "Context only", "Context only"),
             (null, null, ""),
             (" ", " ", ""),
-            ("Done", " list bodies ", "Done"),
+            ("Done", " list rooms ", "Done"),
             (" Done ", " done ", "Done"),
             (" output_path is required. ", " Export a view. ", "output_path is required. · Export a view."),
             ("Saved view.png", "Click to open", "Saved view.png · Click to open")
@@ -65,7 +91,7 @@ internal static class Program
         {
             var vm = new McpToastViewModel
             {
-                Title = "List Bodies", Summary = item.Summary, Detail = item.Detail
+                Title = "List Rooms", Summary = item.Summary, Detail = item.Detail
             };
             if (vm.Body != item.Expected)
                 throw new Exception($"Expected body '{item.Expected}', got '{vm.Body}'.");
@@ -75,7 +101,7 @@ internal static class Program
 
     private static void CheckCloseHover()
     {
-        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Bodies", "Done", true, false);
+        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Rooms", "Done", true, false);
         var window = new McpToastWindow(snapshot, null, null, null, null, null);
         try
         {
@@ -97,13 +123,13 @@ internal static class Program
     {
         double Measure(string body)
         {
-            var snapshot = new ActivitySnapshot(1, false, 2, 1, 1, "List Bodies", body, true, true);
+            var snapshot = new ActivitySnapshot(1, false, 2, 1, 1, "List Rooms", body, true, true);
             var window = new McpToastWindow(snapshot, null, null, null, null, null);
             try
             {
                 var root = (Border)window.Content;
                 var grid = (Grid)root.Child;
-                if (grid.RowDefinitions.Count != 5 || grid.Children.Count != 5)
+                if (grid.RowDefinitions.Count != 6 || grid.Children.Count != 6)
                     throw new Exception("Expected the stable activity card layout.");
                 var header = (DockPanel)grid.Children[0];
                 var hasProductHeader = false;
@@ -117,17 +143,17 @@ internal static class Program
                 }
                 if (!hasProductHeader)
                     throw new Exception("The activity card must name the product in its title.");
-                if (((TextBlock)grid.Children[1]).Text != "List Bodies")
+                if (((TextBlock)grid.Children[1]).Text != "List Rooms")
                     throw new Exception("The line under the title must name the latest tool.");
                 var bodyGrid = (Grid)grid.Children[2];
                 var counterRow = (Viewbox)bodyGrid.Children[0];
-                if (counterRow.Visibility != Visibility.Visible || (string)counterRow.ToolTip != body
+                if (counterRow.Visibility != Visibility.Visible || counterRow.ToolTip != null
                     || bodyGrid.Children[1].Visibility != Visibility.Collapsed)
-                    throw new Exception("Activity must show counters, with its last summary only in the tooltip.");
-                var thumbnail = (Border)grid.Children[3];
+                    throw new Exception("Activity must show counters; results require deliberate hover.");
+                var thumbnail = (Border)grid.Children[4];
                 if (thumbnail.Visibility != Visibility.Collapsed)
                     throw new Exception("Thumbnail row must stay collapsed without a capture.");
-                var footer = (Grid)grid.Children[4];
+                var footer = (Grid)grid.Children[5];
                 if (((Grid)footer.Children[0]).HorizontalAlignment != HorizontalAlignment.Right)
                     throw new Exception("Brand must align right independently of footer fill.");
                 root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -161,7 +187,7 @@ internal static class Program
         var manager = new McpToastManager(Dispatcher.CurrentDispatcher, aggregator);
         try
         {
-            if (!aggregator.RecordResult("list_bodies", "Done", true, null, true))
+            if (!aggregator.RecordResult("revit_list_rooms", "Done", true, null, true))
                 throw new Exception("The first activity result did not request a render.");
             manager.Render();
             Pump();
@@ -181,7 +207,7 @@ internal static class Program
         var manager = new McpToastManager(Dispatcher.CurrentDispatcher, aggregator, showBranding: () => show);
         try
         {
-            if (!aggregator.RecordResult("List Bodies", "Done", true, null, true))
+            if (!aggregator.RecordResult("List Rooms", "Done", true, null, true))
                 throw new Exception("The first activity result did not request a render.");
             manager.Render();
             Pump();
@@ -189,13 +215,13 @@ internal static class Program
             if (window == null)
                 throw new Exception("The activity card was not created.");
             var footer = BrandRow(window);
-            if (TitleText(window) != "ipt-mcp" || ToolText(window) != "List Bodies"
+            if (TitleText(window) != "ipt-mcp" || ToolText(window) != "List Rooms"
                 || footer.Visibility != Visibility.Collapsed)
                 throw new Exception("A card opened with branding off must omit the wordmark row.");
             show = true;
             manager.ApplyShowBranding();
             Pump();
-            if (TitleText(window) != "ipt-mcp" || ToolText(window) != "List Bodies"
+            if (TitleText(window) != "ipt-mcp" || ToolText(window) != "List Rooms"
                 || footer.Visibility != Visibility.Hidden)
                 throw new Exception("Turning branding on must reserve a blank brand row and leave the text alone.");
         }
@@ -205,13 +231,13 @@ internal static class Program
 
     private static void CheckIdentityRow()
     {
-        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Bodies", "Done", true, false);
+        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Rooms", "Done", true, false);
 
         var window = new McpToastWindow(snapshot, null, null, null, null, null,
             instanceIdentity: "ipt-mcp 2027");
         try
         {
-            if (TitleText(window) != "ipt-mcp 2027" || ToolText(window) != "List Bodies")
+            if (TitleText(window) != "ipt-mcp 2027" || ToolText(window) != "List Rooms")
                 throw new Exception("The title must carry the supplied instance identity above the tool.");
             window.SetShowBranding(false);
             if (TitleText(window) != "ipt-mcp 2027" || BrandRow(window).Visibility != Visibility.Collapsed)
@@ -251,7 +277,7 @@ internal static class Program
                 throw new Exception("A capture result must render its thumbnail in the card.");
 
             // A newer result without an image collapses the row again.
-            window.Update(new ActivitySnapshot(1, false, 2, 0, 1, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 2, 0, 1, "List Rooms", "Done", true, false));
             if (host.Visibility != Visibility.Collapsed || image.Source != null)
                 throw new Exception("The thumbnail must clear when the latest result has no image.");
 
@@ -267,7 +293,7 @@ internal static class Program
 
     private static string WriteTempPng()
     {
-        var path = Path.Combine(Path.GetTempPath(), "iptmcp-toast-check.png");
+        var path = Path.Combine(Path.GetTempPath(), "rvtmcp-toast-check.png");
         // 1x1 transparent PNG
         var bytes = new byte[]
         {
@@ -308,7 +334,7 @@ internal static class Program
         {
             for (var i = 0; i < 100; i++)
             {
-                if (aggregator.RecordResult("list_bodies", "Done", true, null, true))
+                if (aggregator.RecordResult("revit_list_rooms", "Done", true, null, true))
                     manager.Render();
             }
             Pump();
@@ -319,7 +345,7 @@ internal static class Program
             var firstId = first.CardId;
             var stableHeight = first.ActualHeight;
 
-            if (aggregator.RecordResult("list_bodies", "Updated", true, null, true))
+            if (aggregator.RecordResult("revit_list_rooms", "Updated", true, null, true))
                 manager.Render();
             Pump();
             var updated = Current(manager);
@@ -332,7 +358,7 @@ internal static class Program
                 throw new Exception("The current card could not be dismissed.");
             manager.Render(); // begin the one-way fade
 
-            if (aggregator.RecordResult("list_bodies", "New card", true, null, true))
+            if (aggregator.RecordResult("revit_list_rooms", "New card", true, null, true))
                 manager.Render(); // force-closes the fading card before creating the new one
             Pump();
             var replacement = Current(manager);
@@ -349,7 +375,7 @@ internal static class Program
             if (Current(manager) != null)
                 throw new Exception("Turning toast off during fade left a topmost window behind.");
 
-            if (!aggregator.RecordResult("list_bodies", "Restored", true, null, true))
+            if (!aggregator.RecordResult("revit_list_rooms", "Restored", true, null, true))
                 throw new Exception("The post-toggle activity result did not request a render.");
             manager.Render();
             Pump();
@@ -375,7 +401,7 @@ internal static class Program
             if (Current(manager) != null)
                 throw new Exception("DismissAllImmediate left a toast window behind.");
 
-            if (!aggregator.RecordResult("list_bodies", "After shutdown", true, null, true))
+            if (!aggregator.RecordResult("revit_list_rooms", "After shutdown", true, null, true))
                 throw new Exception("DismissAllImmediate left the aggregator render request stuck.");
             manager.Render();
             Pump();
@@ -390,7 +416,7 @@ internal static class Program
 
     private static void CheckStationaryPointerFiltering()
     {
-        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Bodies", "Done", true, false);
+        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Rooms", "Done", true, false);
         var window = new McpToastWindow(snapshot, null, null, null, null, null,
             () => new Point(100, 200));
         try

@@ -49,6 +49,7 @@
     <!-- Host-free toast model: the card state machine, content builder, layout, config and status text.
          The WPF card itself is covered by tests/Bimwright.Ipt.Toast.Tests. -->
     <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
+    <Compile Include="..\..\src\shared\Localization\L.cs" Link="Shared\Localization\L.cs" />
   </ItemGroup>
 
 </Project>

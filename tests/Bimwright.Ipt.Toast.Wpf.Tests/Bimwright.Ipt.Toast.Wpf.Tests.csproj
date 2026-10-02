@@ -32,6 +32,8 @@
     <Compile Include="..\..\src\shared\Infrastructure\IsExternalInitPolyfill.cs" LinkBase="Shared\Infrastructure" />
     <Compile Include="..\..\src\shared\Views\BrandAssets.cs" LinkBase="Shared\Views" />
     <Compile Include="..\..\src\shared\Localization\L.cs" LinkBase="Shared\Localization" />
+    <Compile Include="..\..\src\shared\Security\SecretMasker.cs" Link="Shared\Security\SecretMasker.cs" />
+    <Compile Include="..\..\src\shared\Plugin\ToastPositionForm.cs" Link="Shared\Plugin\ToastPositionForm.cs" />
     <Compile Include="..\..\src\shared\Views\Toast\*.cs" LinkBase="Shared\Views\Toast" />
     <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
   </ItemGroup>

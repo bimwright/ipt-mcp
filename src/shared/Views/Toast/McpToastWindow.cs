@@ -36,8 +36,12 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         private const int BrandRevealDelayMs = 100;
         private const int BrandRevealDurationMs = 500;
         private const int BrandHideDurationMs = 200;
+        private const int DetailsRevealDelayMs = 200;
+        private const int DetailsLeaveDelayMs = 120;
+        private const int DetailsOpenMs = 260;
+        private const int DetailsCloseMs = 220;
         private const int GwlExStyle = -20;
-        private const long WsExNoActivate = 0x08000000L;
+        private const long WS_EX_NOACTIVATE = 0x08000000L;
         private const long WsExToolWindow = 0x00000080L;
 
         private readonly TextBlock _iconText;
@@ -56,6 +60,15 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         private readonly Grid _brandRow;
         private readonly Grid _brandCell;
         private readonly string _instanceIdentity;
+        private readonly Border _detailsRow;
+        private readonly ToastActivityPanel _detailsPanel;
+        private readonly TranslateTransform _detailsShift = new TranslateTransform(0, -6);
+        private DispatcherTimer _detailsRevealTimer;
+        private DispatcherTimer _detailsHideTimer;
+        private bool _detailsRevealed;
+        private bool _detailsHiding;
+        private int _detailsGeneration;
+        private MouseButtonEventHandler _detailsUpHandler;
         private readonly Border _thumbnailRow;
         private readonly Border _thumbnailHost;
         private readonly Image _thumbnailImage;
@@ -100,8 +113,24 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         private bool _handlersDetached;
         private bool _showBranding = true;
         private ActivitySnapshot _lastSnapshot;
+        private DockPanel _dragHeader;
+        private bool _dragEnabled;
+        private bool _alignRight;
+        private bool _growUp;
+        private bool _dragPending;
+        private bool _dragStarted;
+        private Point _dragPointerStart;
+        private Point _dragWindowStart;
+        private int _positionGeneration;
+        internal bool IsDragging => _dragPending;
+        internal bool HasExpandedRows => _detailsRevealed || _thumbnailShown;
+        internal bool IsPositionAnimating { get; private set; }
+        internal Action<double> PrepareExpansion { get; set; }
+        internal Func<Point, Point> ConstrainDrag { get; set; }
+        internal Action<Point> DragCompleted { get; set; }
 
         public McpToastViewModel ViewModel { get; private set; }
+
         public long CardId => _cardId;
 
         /// <summary>
@@ -157,7 +186,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 Margin = new Thickness(8),
                 CornerRadius = new CornerRadius(8),
                 Background = McpToastTheme.Background,
-                BorderBrush = McpToastTheme.BuildAccentBrush(ViewModel),
+                BorderBrush = McpToastTheme.BuildAccentBrush(new McpToastViewModel { Success = !snapshot.HasFailure }),
                 BorderThickness = new Thickness(6, 0, 0, 0),
                 RenderTransformOrigin = new Point(0, 0.5),
                 RenderTransform = transformGroup,
@@ -176,18 +205,22 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             // Status summary and activity counters share one fixed-height body row.
             content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(26) });
-            // Capture thumbnail: collapsed unless the aggregator holds a capture for the card.
+            // Recent outcomes only expand on deliberate hover; then capture and branding.
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var header = new DockPanel { LastChildFill = true };
+            _dragHeader = header;
+            header.PreviewMouseLeftButtonDown += OnHeaderMouseDown;
+            PreviewMouseMove += OnDragMouseMove;
+            PreviewMouseLeftButtonUp += OnDragMouseUp;
+            LostMouseCapture += OnDragCaptureLost;
 
             _iconText = new TextBlock
             {
-                Text = McpToastTheme.GetIconGlyph(ViewModel),
                 FontFamily = McpToastTheme.IconFont,
                 FontSize = 16,
-                Foreground = McpToastTheme.BuildIconBrush(ViewModel),
                 Margin = new Thickness(0, 1, 8, 0),
                 VerticalAlignment = VerticalAlignment.Top
             };
@@ -284,6 +317,21 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             Grid.SetRow(body, 2);
             content.Children.Add(body);
 
+            _detailsPanel = new ToastActivityPanel(_motionEnabled)
+            {
+                Opacity = 0, RenderTransform = _detailsShift
+            };
+            _detailsRow = new Border
+            {
+                Height = 0, ClipToBounds = true, Visibility = Visibility.Collapsed,
+                Child = _detailsPanel, Cursor = Cursors.Arrow
+            };
+            // Reading/scrolling the preview must not invoke the card's dismiss action.
+            _detailsUpHandler = (_, e) => e.Handled = true;
+            _detailsRow.MouseLeftButtonUp += _detailsUpHandler;
+            Grid.SetRow(_detailsRow, 3);
+            content.Children.Add(_detailsRow);
+
             _thumbnailImage = CreateThumbnailImage();
             _thumbnailBack = CreateThumbnailImage();
             var thumbnailStack = new Grid();
@@ -315,7 +363,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 Child = _thumbnailHost,
                 Visibility = Visibility.Collapsed
             };
-            Grid.SetRow(_thumbnailRow, 3);
+            Grid.SetRow(_thumbnailRow, 4);
             content.Children.Add(_thumbnailRow);
 
             _brandRow = new Grid { Margin = new Thickness(24, 5, 0, 0) };
@@ -362,7 +410,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             _brandCell.Children.Add(_brandShine);
             _brandRow.Children.Add(_brandCell);
 
-            Grid.SetRow(_brandRow, 4);
+            Grid.SetRow(_brandRow, 5);
             content.Children.Add(_brandRow);
             ParkBrandRow();
 
@@ -382,6 +430,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 {
                     _brandPointerMoved = true;
                     ScheduleBrandReveal();
+                    ScheduleDetailsReveal();
                 }
             };
             // A card that opens under a still cursor ignores that enter. The first
@@ -390,17 +439,22 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             {
                 if (!_brandPointerOver || !PointerPositionChanged())
                     return;
+                // The card opened under a still cursor, so MouseEnter did not count.
+                // This first real movement is the hover: pause idle as well as reveal the wordmark.
+                _activityPointerEntered?.Invoke(_cardId);
                 _brandPointerMoved = true;
                 ScheduleBrandReveal();
+                ScheduleDetailsReveal();
             };
             _mouseLeaveHandler = (_, __) =>
             {
-                if (!PointerPositionChanged())
+                if (_dragPending || !PointerPositionChanged())
                     return;
                 _activityPointerLeft?.Invoke(_cardId);
                 _brandPointerOver = false;
                 _brandPointerMoved = false;
                 HideBrand(immediate: false);
+                ScheduleDetailsHide();
             };
             _mouseUpHandler = (_, e) =>
             {
@@ -446,7 +500,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
 
             _slideTransform.BeginAnimation(TranslateTransform.XProperty,
-                new DoubleAnimation(-24, 0, duration) { EasingFunction = ease });
+                new DoubleAnimation(_alignRight ? 24 : -24, 0, duration) { EasingFunction = ease });
             _scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty,
                 new DoubleAnimation(0.96, 1, duration) { EasingFunction = ease });
             _scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty,
@@ -454,13 +508,145 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration) { EasingFunction = ease });
         }
 
+        internal void SetPositionPreferences(bool dragEnabled, bool alignRight, bool growUp)
+        {
+            _dragEnabled = dragEnabled;
+            _alignRight = alignRight;
+            _growUp = growUp;
+            _root.RenderTransformOrigin = new Point(alignRight ? 1 : 0, growUp ? 1 : 0);
+            _dragHeader.Cursor = dragEnabled ? Cursors.SizeAll : Cursors.Hand;
+            if (!dragEnabled) CancelHeaderDrag();
+        }
+
+        internal void MoveTo(double top, double left)
+        {
+            var fromTop = Top;
+            var fromLeft = Left;
+            SetPosition(top, left);
+            if (!_motionEnabled() || !IsVisible) return;
+            var generation = ++_positionGeneration;
+            IsPositionAnimating = true;
+            var duration = TimeSpan.FromMilliseconds(260);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var move = new DoubleAnimation(fromTop, top, duration) { EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+            move.Completed += (_, __) => { if (generation == _positionGeneration) IsPositionAnimating = false; };
+            BeginAnimation(TopProperty, move);
+            BeginAnimation(LeftProperty, new DoubleAnimation(fromLeft, left, duration) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+        }
+
         public void SetPosition(double top, double left)
         {
+            if (double.IsNaN(top) || double.IsInfinity(top) || double.IsNaN(left) || double.IsInfinity(left)) return;
+            ++_positionGeneration;
+            IsPositionAnimating = false;
             // A previous animation's held value must not override a direct reflow.
             BeginAnimation(TopProperty, null);
             BeginAnimation(LeftProperty, null);
             Top = top;
             Left = left;
+        }
+
+        private void OnHeaderMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_dragEnabled || _isClosing || IsWithin(e.OriginalSource as DependencyObject, _closeHost)) return;
+            BeginHeaderDrag(_cursorPosition());
+            if (_dragPending) e.Handled = true;
+        }
+
+        private static bool IsWithin(DependencyObject child, DependencyObject ancestor)
+        {
+            while (child != null)
+            {
+                if (ReferenceEquals(child, ancestor)) return true;
+                child = child is Visual ? VisualTreeHelper.GetParent(child) : LogicalTreeHelper.GetParent(child);
+            }
+            return false;
+        }
+
+        internal void BeginHeaderDrag(Point screenPoint)
+        {
+            if (!_dragEnabled || _isClosing || !IsCursorPointValid(screenPoint)) return;
+            SetPosition(Top, Left);
+            _dragPointerStart = screenPoint;
+            _dragWindowStart = new Point(Left, Top);
+            // Capture may synchronously route synthetic move/lost-capture events.
+            // Do not expose a pending gesture until capture has actually succeeded.
+            if (!CaptureMouse()) return;
+            _dragPending = true;
+            _dragStarted = false;
+            CancelDetailsRevealTimer();
+            CancelDetailsHideTimer();
+            _activityPointerEntered?.Invoke(_cardId);
+        }
+
+        private Vector ScreenDelta(Point screenPoint)
+        {
+            var delta = screenPoint - _dragPointerStart;
+            var source = PresentationSource.FromVisual(this);
+            return source?.CompositionTarget != null ? source.CompositionTarget.TransformFromDevice.Transform(delta) : delta;
+        }
+
+        internal void ContinueHeaderDrag(Point screenPoint)
+        {
+            if (!_dragPending || !IsCursorPointValid(screenPoint)) return;
+            var delta = ScreenDelta(screenPoint);
+            if (!_dragStarted)
+            {
+                if (!ToastPlacement.DragThreshold(delta.X, delta.Y,
+                    SystemParameters.MinimumHorizontalDragDistance, SystemParameters.MinimumVerticalDragDistance)) return;
+                _dragStarted = true;
+                HideDetails(immediate: true);
+                HideBrand(immediate: true);
+                UpdateLayout();
+            }
+            var point = new Point(_dragWindowStart.X + delta.X, _dragWindowStart.Y + delta.Y);
+            if (ConstrainDrag != null) point = ConstrainDrag(point);
+            SetPosition(point.Y, point.X);
+        }
+
+        private void OnDragMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_dragPending) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { CancelHeaderDrag(); return; }
+            ContinueHeaderDrag(_cursorPosition());
+            e.Handled = true;
+        }
+
+        internal bool FinishHeaderDrag()
+        {
+            if (!_dragPending) return false;
+            var dragged = _dragStarted;
+            _dragPending = _dragStarted = false;
+            if (IsMouseCaptured) ReleaseMouseCapture();
+            if (dragged) DragCompleted?.Invoke(new Point(Left, Top));
+            ReconcileDragPointer();
+            return dragged;
+        }
+
+        private void OnDragMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (FinishHeaderDrag()) e.Handled = true;
+        }
+
+        internal void CancelHeaderDrag()
+        {
+            if (!_dragPending) return;
+            _dragPending = _dragStarted = false;
+            if (IsMouseCaptured) ReleaseMouseCapture();
+            ReconcileDragPointer();
+        }
+
+        private void OnDragCaptureLost(object sender, MouseEventArgs e) => CancelHeaderDrag();
+
+        private void ReconcileDragPointer()
+        {
+            if (!IsMouseOver) _activityPointerLeft?.Invoke(_cardId);
+            else
+            {
+                _brandPointerOver = _brandPointerMoved = true;
+                ScheduleBrandReveal();
+                ScheduleDetailsReveal();
+            }
         }
 
         /// <summary>Reconcile the visible activity card without replaying enter animation.</summary>
@@ -504,6 +690,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 return;
 
             ApplyActivitySnapshot(_lastSnapshot, preserveSnapshot: true);
+            _detailsPanel.RefreshLocalization();
         }
 
         public void CloseImmediate()
@@ -522,7 +709,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         /// </summary>
         private void ScheduleBrandReveal()
         {
-            if (!_showBranding || !_brandPointerOver || _closedCallbackRaised || _isClosing)
+            if (_dragPending || !_showBranding || !_brandPointerOver || _closedCallbackRaised || _isClosing)
                 return;
             if (_brandRevealed && !_brandHiding)
                 return;
@@ -545,6 +732,161 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 BeginBrandReveal();
             };
             _brandRevealTimer.Start();
+        }
+
+        /// <summary>
+        /// Intent delay is independent of branding and reduced motion. A passing pointer
+        /// or a card appearing underneath a still pointer never exposes outcome content.
+        /// </summary>
+        private void ScheduleDetailsReveal()
+        {
+            CancelDetailsHideTimer();
+            if (_dragPending || !_brandPointerOver || !_brandPointerMoved || _closedCallbackRaised || _isClosing
+                || _lastSnapshot == null || _lastSnapshot.IsStatus || _lastSnapshot.RecentEntries.Count == 0)
+                return;
+            if (_detailsRevealed)
+            {
+                // Reverse an interrupted close from its current height, without resetting
+                // the reader's scroll position or replaying a complete entrance.
+                if (_detailsHiding)
+                    BeginDetailsReveal();
+                return;
+            }
+            if (_detailsRevealTimer != null)
+                return;
+            _detailsRevealTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(DetailsRevealDelayMs)
+            };
+            _detailsRevealTimer.Tick += (_, __) =>
+            {
+                CancelDetailsRevealTimer();
+                if (_brandPointerOver && _brandPointerMoved && !_isClosing && !_closedCallbackRaised)
+                    BeginDetailsReveal();
+            };
+            _detailsRevealTimer.Start();
+        }
+
+        private void BeginDetailsReveal()
+        {
+            var snapshot = _lastSnapshot;
+            if (snapshot == null || snapshot.IsStatus || snapshot.RecentEntries.Count == 0)
+                return;
+            var newReading = !_detailsRevealed;
+            if (newReading)
+            {
+                PrepareExpansion?.Invoke(157);
+                _detailsShift.Y = _growUp ? 6 : -6;
+                _detailsPanel.SetEntries(snapshot.RecentEntries);
+            }
+            // New results refresh this view separately. A reversal/height retarget must
+            // preserve its scroll position; only a genuinely new hover starts at the tail.
+            _detailsRevealed = true;
+            _detailsHiding = false;
+            var generation = ++_detailsGeneration;
+            _detailsPanel.Measure(new Size(CardWidth - 28, double.PositiveInfinity));
+            var height = _detailsPanel.DesiredSize.Height;
+            _detailsRow.Visibility = Visibility.Visible;
+            if (newReading)
+                _detailsPanel.ScrollToLatest();
+            if (!_motionEnabled())
+            {
+                SettleDetailsOpen(height);
+                return;
+            }
+            var duration = TimeSpan.FromMilliseconds(DetailsOpenMs);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var open = new DoubleAnimation(_detailsRow.Height, height, duration) { EasingFunction = ease };
+            open.Completed += (_, __) =>
+            {
+                if (generation == _detailsGeneration && !_closedCallbackRaised)
+                    SettleDetailsOpen(height);
+            };
+            _detailsRow.BeginAnimation(HeightProperty, open);
+            _detailsPanel.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(_detailsPanel.Opacity, 1, duration) { EasingFunction = ease });
+            _detailsShift.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(_detailsShift.Y, 0, duration) { EasingFunction = ease });
+        }
+
+        private void SettleDetailsOpen(double height)
+        {
+            _detailsRow.BeginAnimation(HeightProperty, null);
+            _detailsPanel.BeginAnimation(OpacityProperty, null);
+            _detailsShift.BeginAnimation(TranslateTransform.YProperty, null);
+            _detailsRow.Height = height;
+            _detailsPanel.Opacity = 1;
+            _detailsShift.Y = 0;
+        }
+
+        private void ScheduleDetailsHide()
+        {
+            CancelDetailsRevealTimer();
+            if (!_detailsRevealed || _detailsHideTimer != null)
+                return;
+            // Grace period avoids collapsing when crossing into the newly expanded area.
+            _detailsHideTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(DetailsLeaveDelayMs)
+            };
+            _detailsHideTimer.Tick += (_, __) =>
+            {
+                CancelDetailsHideTimer();
+                if (!_brandPointerOver)
+                    HideDetails(immediate: false);
+            };
+            _detailsHideTimer.Start();
+        }
+
+        private void HideDetails(bool immediate)
+        {
+            CancelDetailsRevealTimer();
+            CancelDetailsHideTimer();
+            var generation = ++_detailsGeneration;
+            if (immediate || !_motionEnabled() || !_detailsRevealed)
+            {
+                SettleDetailsClosed();
+                return;
+            }
+            _detailsHiding = true;
+            var duration = TimeSpan.FromMilliseconds(DetailsCloseMs);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+            var close = new DoubleAnimation(_detailsRow.Height, 0, duration) { EasingFunction = ease };
+            close.Completed += (_, __) =>
+            {
+                if (generation == _detailsGeneration)
+                    SettleDetailsClosed();
+            };
+            _detailsRow.BeginAnimation(HeightProperty, close);
+            _detailsPanel.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(_detailsPanel.Opacity, 0, duration) { EasingFunction = ease });
+            _detailsShift.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(_detailsShift.Y, _growUp ? 6 : -6, duration) { EasingFunction = ease });
+        }
+
+        private void SettleDetailsClosed()
+        {
+            _detailsRow.BeginAnimation(HeightProperty, null);
+            _detailsPanel.BeginAnimation(OpacityProperty, null);
+            _detailsShift.BeginAnimation(TranslateTransform.YProperty, null);
+            _detailsRow.Height = 0;
+            _detailsRow.Visibility = Visibility.Collapsed;
+            _detailsPanel.Opacity = 0;
+            _detailsPanel.SetEntries(ToastActivityLog.Freeze(null));
+            _detailsShift.Y = _growUp ? 6 : -6;
+            _detailsRevealed = _detailsHiding = false;
+        }
+
+        private void CancelDetailsRevealTimer()
+        {
+            _detailsRevealTimer?.Stop();
+            _detailsRevealTimer = null;
+        }
+
+        private void CancelDetailsHideTimer()
+        {
+            _detailsHideTimer?.Stop();
+            _detailsHideTimer = null;
         }
 
         private void BeginBrandReveal()
@@ -743,8 +1085,13 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 return;
             }
             _isClosing = true;
+            CancelDetailsRevealTimer();
+            CancelDetailsHideTimer();
             var duration = TimeSpan.FromMilliseconds(220);
             var ease = new QuadraticEase { EasingMode = EasingMode.EaseIn };
+            CancelHeaderDrag();
+            _slideTransform.BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation(_slideTransform.X, _alignRight ? 24 : -24, duration) { EasingFunction = ease });
             var fade = new DoubleAnimation(Opacity, 0, duration) { EasingFunction = ease };
             fade.Completed += (_, __) =>
             {
@@ -760,10 +1107,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 _lastSnapshot = snapshot;
 
             ViewModel = ToViewModel(snapshot);
-
-            _root.BorderBrush = snapshot.HasFailure
-                ? McpToastTheme.BuildAccentBrush(new McpToastViewModel { Success = false })
-                : McpToastTheme.BuildAccentBrush(new McpToastViewModel { Success = true });
+            _root.BorderBrush = McpToastTheme.BuildAccentBrush(new McpToastViewModel { Success = !snapshot.HasFailure });
             _iconText.Text = snapshot.LatestSuccess ? "\uE73E" : "\uE783";
             _iconText.Foreground = snapshot.HasFailure ? McpToastTheme.Error : McpToastTheme.Primary;
 
@@ -777,6 +1121,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 _bodyText.Visibility = Visibility.Visible;
                 _bodyText.Text = status.Body;
                 _bodyText.ToolTip = status.Body;
+                HideDetails(immediate: true);
                 ApplyThumbnail(null, animate);
             }
             else
@@ -791,8 +1136,20 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 _failedCount.SetValue(snapshot.Failed,
                     snapshot.Failed > 0 ? McpToastTheme.Error : McpToastTheme.TextSecondary, animate);
                 _captureCount.SetValue(snapshot.Images, McpToastTheme.Text, animate);
-                // Keep the last result available without adding another visible row.
-                _counterRow.ToolTip = snapshot.Body;
+                // No auto-popup result tooltip: outcomes require a deliberate hover.
+                _counterRow.ToolTip = null;
+                if (_detailsRevealed && !_isClosing)
+                {
+                    var previousRows = Math.Min(ToastActivityPanel.VisibleEntryCount, _detailsPanel.Entries.Count);
+                    _detailsPanel.UpdateEntries(snapshot.RecentEntries);
+                    var currentRows = Math.Min(ToastActivityPanel.VisibleEntryCount, _detailsPanel.Entries.Count);
+                    // The first/second incoming result may grow the viewport. Retarget from
+                    // the current animated height; never expose rows behind an old fixed clip.
+                    if (previousRows != currentRows && !_detailsHiding)
+                        BeginDetailsReveal();
+                }
+                if (_brandPointerOver && _brandPointerMoved)
+                    ScheduleDetailsReveal();
                 System.Windows.Automation.AutomationProperties.SetName(_counterRow,
                     $"{snapshot.Succeeded} {_successLabel.Text}, {snapshot.Failed} {_failedLabel.Text}, {snapshot.Images} {_captureLabel.Text}");
                 ApplyThumbnail(snapshot.ImagePath, animate);
@@ -801,7 +1158,12 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             _titleText.ToolTip = _titleText.Text;
             _titleText.TextWrapping = TextWrapping.NoWrap;
             _titleText.TextTrimming = TextTrimming.CharacterEllipsis;
-            _toolText.ToolTip = _toolText.Text;
+            _toolText.ToolTip = snapshot.IsStatus
+                ? _toolText.Text + "\n" + _bodyText.Text
+                : snapshot.RecentEntries.Count > 0
+                    ? snapshot.RecentEntries[snapshot.RecentEntries.Count - 1].TooltipText
+                    : ToastActivityEntry.Compact(snapshot.Title, ToastActivityEntry.TitleLimit)
+                        + "\n" + ToastActivityEntry.Compact(snapshot.Body, ToastActivityEntry.BodyLimit);
         }
 
         /// <summary>
@@ -870,6 +1232,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         /// <summary>No capture → capture: the frame grows from nothing while it fades in.</summary>
         private void RevealThumbnail(BitmapSource bitmap, bool animate)
         {
+            PrepareExpansion?.Invoke(ThumbnailRowHeight);
             var generation = ++_thumbnailStateGeneration;
             _thumbnailShown = true;
             _thumbnailSwapGeneration++;
@@ -1102,11 +1465,27 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             if (_handlersDetached)
                 return;
             _handlersDetached = true;
+            CancelHeaderDrag();
+            _dragHeader.PreviewMouseLeftButtonDown -= OnHeaderMouseDown;
+            PreviewMouseMove -= OnDragMouseMove;
+            PreviewMouseLeftButtonUp -= OnDragMouseUp;
+            LostMouseCapture -= OnDragCaptureLost;
+            PrepareExpansion = null;
+            ConstrainDrag = null;
+            DragCompleted = null;
+            BeginAnimation(TopProperty, null);
+            BeginAnimation(LeftProperty, null);
+            IsPositionAnimating = false;
+            ++_positionGeneration;
 
             if (_closeHost != null)
             {
                 _closeHost.MouseLeftButtonUp -= _closeHostMouseUpHandler;
             }
+            _detailsRow.MouseLeftButtonUp -= _detailsUpHandler;
+            HideDetails(immediate: true);
+            _detailsPanel.SetEntries(Array.AsReadOnly(new ToastActivityEntry[0]));
+            _lastSnapshot = null;
             _thumbnailHost.MouseLeftButtonUp -= _thumbnailUpHandler;
             _thumbnailStateGeneration++;
             _thumbnailSwapGeneration++;
@@ -1131,6 +1510,9 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             // late animation completion from retaining a closed window or re-entering the
             // manager after a force-close.
             BeginAnimation(OpacityProperty, null);
+            _slideTransform.BeginAnimation(TranslateTransform.XProperty, null);
+            _scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
             _brandSweep.BeginAnimation(TranslateTransform.XProperty, null);
             _shineSweep.BeginAnimation(TranslateTransform.XProperty, null);
             _successCount.StopAnimation();
@@ -1177,7 +1559,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 if (hwnd == IntPtr.Zero)
                     return;
                 var exStyle = GetWindowLongPtr(hwnd, GwlExStyle).ToInt64()
-                              | WsExNoActivate | WsExToolWindow;
+                              | WS_EX_NOACTIVATE | WsExToolWindow;
                 SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr(exStyle));
             }
             catch
@@ -1203,4 +1585,5 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         }
     }
 }
+
 #endif

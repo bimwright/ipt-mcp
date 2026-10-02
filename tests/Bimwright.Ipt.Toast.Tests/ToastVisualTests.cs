@@ -20,11 +20,6 @@ internal static class ToastVisualTests
         CheckOdometerRolling();
         CheckThumbnailFrame();
         CheckThumbnailMotion();
-        RunAfterThumbnail();
-    }
-
-    internal static void RunAfterThumbnail()
-    {
         CheckBrandReveal();
         CheckHiddenBrand();
         CheckReducedMotionAndStatus();
@@ -60,13 +55,13 @@ internal static class ToastVisualTests
 
             // A burst keeps retargeting one roll; the last value wins, without a queue of animations.
             for (var i = 11; i <= 110; i++)
-                window.Update(new ActivitySnapshot(1, false, i, 1, 2, "List Bodies", "Done", true, true));
+                window.Update(new ActivitySnapshot(1, false, i, 1, 2, "List Rooms", "Done", true, true));
             Pump(900);
             if (number.Value != 110 || number.IsRolling || number.ColumnCount != 3 || number.RollPosition != 110)
                 throw new Exception("A burst did not settle at the last counter value.");
             if (Math.Abs(window.ActualWidth - width) > .1 || Math.Abs(window.ActualHeight - height) > .1)
                 throw new Exception("Counter changes resized the card.");
-            window.Update(new ActivitySnapshot(1, false, int.MaxValue, 1, 2, "List Bodies", "Done", true, true));
+            window.Update(new ActivitySnapshot(1, false, int.MaxValue, 1, 2, "List Rooms", "Done", true, true));
             Pump(900);
             if (number.Value != int.MaxValue || number.ColumnCount != 10 || number.IsRolling
                 || Math.Abs(window.ActualWidth - width) > .1)
@@ -93,7 +88,7 @@ internal static class ToastVisualTests
             // Gaining a digit opens the new column gradually instead of shifting the row in one step.
             window.UpdateLayout();
             var oneDigit = number.ActualWidth;
-            window.Update(new ActivitySnapshot(1, false, 10, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 10, 0, 0, "List Rooms", "Done", true, false));
             var widths = Sample(() => { window.UpdateLayout(); return number.ActualWidth; }, () => !number.IsRolling);
             var twoDigits = widths[widths.Count - 1];
             if (twoDigits < oneDigit + 4)
@@ -103,26 +98,26 @@ internal static class ToastVisualTests
                 throw new Exception("The number did not settle after gaining a digit.");
 
             // Only the digits that change move: 10 -> 11 rolls the ones column, 19 -> 20 rolls both.
-            window.Update(new ActivitySnapshot(1, false, 11, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 11, 0, 0, "List Rooms", "Done", true, false));
             if (number.RollingColumnCount != 1)
                 throw new Exception($"10 -> 11 must roll only the ones digit, {number.RollingColumnCount} columns rolled.");
             Pump(900);
-            window.Update(new ActivitySnapshot(1, false, 19, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 19, 0, 0, "List Rooms", "Done", true, false));
             Pump(900);
-            window.Update(new ActivitySnapshot(1, false, 20, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 20, 0, 0, "List Rooms", "Done", true, false));
             if (number.RollingColumnCount != 2)
                 throw new Exception($"19 -> 20 must roll both digits, {number.RollingColumnCount} columns rolled.");
             Pump(900);
 
             // A result that arrives mid-roll continues from where the digit is; it never jumps back.
-            window.Update(new ActivitySnapshot(1, false, 21, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 21, 0, 0, "List Rooms", "Done", true, false));
             var clock = Stopwatch.StartNew();
             while (number.RollPosition < 20.15 && clock.ElapsedMilliseconds < 1000)
                 Pump(5);
             var before = number.RollPosition;
             if (before < 20.15 || before > 20.97)
                 throw new Exception($"Expected to catch the ones digit mid-roll, at {before}.");
-            window.Update(new ActivitySnapshot(1, false, 22, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 22, 0, 0, "List Rooms", "Done", true, false));
             var after = number.RollPosition;
             if (Math.Abs(after - before) > 0.02)
                 throw new Exception($"A new value must continue the roll, not restart it ({before} -> {after}).");
@@ -132,7 +127,7 @@ internal static class ToastVisualTests
                 throw new Exception("The roll did not settle on the newest value.");
 
             // A jump that adds several digits rolls each new digit in by one step, not through the alphabet.
-            window.Update(new ActivitySnapshot(1, false, 4000, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 4000, 0, 0, "List Rooms", "Done", true, false));
             if (number.ColumnCount != 4 || number.RollingColumnCount != 4)
                 throw new Exception($"22 -> 4000 must move all four columns ({number.RollingColumnCount} of {number.ColumnCount}).");
             Sample(() => number.RollPosition, () => !number.IsRolling);
@@ -145,15 +140,31 @@ internal static class ToastVisualTests
 
     private const double ThumbnailRow = 126; // 6 gap + 120 frame
 
-    /// <summary>Pumps in short steps until <paramref name="done"/>, recording <paramref name="read"/> after each one.</summary>
+    /// <summary>Sample rendered frames, rather than timer ticks between WPF animation-clock updates.</summary>
     private static List<double> Sample(Func<double> read, Func<bool> done, int maxMilliseconds = 2000)
     {
         var values = new List<double> { read() };
-        var clock = Stopwatch.StartNew();
-        while (!done() && clock.ElapsedMilliseconds < maxMilliseconds)
+        if (!done())
         {
-            Pump(8);
-            values.Add(read());
+            var frame = new DispatcherFrame();
+            var timeout = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(maxMilliseconds) };
+            EventHandler rendered = (_, __) =>
+            {
+                values.Add(read());
+                if (done()) frame.Continue = false;
+            };
+            timeout.Tick += (_, __) => frame.Continue = false;
+            CompositionTarget.Rendering += rendered;
+            try
+            {
+                timeout.Start();
+                Dispatcher.PushFrame(frame);
+            }
+            finally
+            {
+                timeout.Stop();
+                CompositionTarget.Rendering -= rendered;
+            }
         }
         if (!done())
             throw new Exception("The animation did not finish in time.");
@@ -205,8 +216,8 @@ internal static class ToastVisualTests
 
     private static void CheckThumbnailFrame()
     {
-        var wide = WritePng("iptmcp-toast-frame-wide.png", 400, 100);
-        var tall = WritePng("iptmcp-toast-frame-tall.png", 100, 400);
+        var wide = WritePng("rvtmcp-toast-frame-wide.png", 400, 100);
+        var tall = WritePng("rvtmcp-toast-frame-tall.png", 100, 400);
         var window = Create(motion: false);
         try
         {
@@ -247,8 +258,8 @@ internal static class ToastVisualTests
 
     internal static void CheckThumbnailMotion()
     {
-        var first = WritePng("iptmcp-toast-motion-a.png", 320, 200);
-        var second = WritePng("iptmcp-toast-motion-b.png", 200, 320);
+        var first = WritePng("rvtmcp-toast-motion-a.png", 320, 200);
+        var second = WritePng("rvtmcp-toast-motion-b.png", 200, 320);
         var window = Create();
         try
         {
@@ -363,7 +374,7 @@ internal static class ToastVisualTests
     {
         var cursor = new Point(10, 10);
         var window = new McpToastWindow(
-            new ActivitySnapshot(1, false, 9, 0, 0, "List Bodies", "Done", true, false),
+            new ActivitySnapshot(1, false, 9, 0, 0, "List Rooms", "Done", true, false),
             null, null, null, null, null, () => cursor, () => true);
         try
         {
@@ -407,7 +418,7 @@ internal static class ToastVisualTests
                 if (a + b < .79)
                     throw new Exception("The trailing crossfade must not blank the letters already revealed.");
             }
-            window.Update(new ActivitySnapshot(1, false, 10, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 10, 0, 0, "List Rooms", "Done", true, false));
             if (!ReferenceEquals(baseMask, Field<TextBlock>(window, "_brandText").OpacityMask))
                 throw new Exception("An activity update restarted the brand sweep.");
             Pump(700);
@@ -446,7 +457,7 @@ internal static class ToastVisualTests
     {
         var cursor = new Point(10, 10);
         var window = new McpToastWindow(
-            new ActivitySnapshot(1, false, 9, 0, 0, "List Bodies", "Done", true, false),
+            new ActivitySnapshot(1, false, 9, 0, 0, "List Rooms", "Done", true, false),
             null, null, null, null, null, () => cursor, () => true);
         try
         {
@@ -459,7 +470,7 @@ internal static class ToastVisualTests
             var tool = Field<TextBlock>(window, "_toolText");
             var footer = Field<Grid>(window, "_brandRow");
             window.UpdateLayout();
-            if (title.Text != "ipt-mcp" || tool.Text != "List Bodies" || footer.Visibility != Visibility.Hidden)
+            if (title.Text != "ipt-mcp" || tool.Text != "List Rooms" || footer.Visibility != Visibility.Hidden)
                 throw new Exception("Branding on keeps a blank brand row until hover.");
             var reservedHeight = window.ActualHeight;
 
@@ -517,7 +528,7 @@ internal static class ToastVisualTests
         {
             window.CapturePointerBaseline();
             window.SetPosition(50, 50); window.Show(); window.PlayEnterAnimation();
-            window.Update(new ActivitySnapshot(1, false, 10, 0, 0, "List Bodies", "Done", true, false));
+            window.Update(new ActivitySnapshot(1, false, 10, 0, 0, "List Rooms", "Done", true, false));
             var number = Field<RollingToastNumber>(window, "_successCount");
             if (window.Opacity != 1 || window.HasAnimatedProperties || number.IsRolling)
                 throw new Exception("Reduced motion must settle the toast and counters without animation.");
@@ -531,7 +542,7 @@ internal static class ToastVisualTests
 
         var reducedCursor = new Point(4, 4);
         var reduced = new McpToastWindow(
-            new ActivitySnapshot(1, false, 1, 0, 0, "List Bodies", "Done", true, false),
+            new ActivitySnapshot(1, false, 1, 0, 0, "List Rooms", "Done", true, false),
             null, null, null, null, null, () => reducedCursor, () => false);
         try
         {
@@ -587,7 +598,7 @@ internal static class ToastVisualTests
     }
 
     private static McpToastWindow Create(bool motion = true) => new McpToastWindow(
-        new ActivitySnapshot(1, false, 9, 0, 0, "List Bodies", "Done", true, false),
+        new ActivitySnapshot(1, false, 9, 0, 0, "List Rooms", "Done", true, false),
         null, null, null, null, null, () => new Point(-999, -999), () => motion);
 
     private static T Field<T>(object owner, string name) => (T)owner.GetType()

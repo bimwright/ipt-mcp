@@ -1,8 +1,10 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 #nullable disable
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using Bimwright.Ipt.Shared.Localization;
 
 namespace Bimwright.Ipt.Shared.Views.Toast
 {
@@ -10,13 +12,9 @@ namespace Bimwright.Ipt.Shared.Views.Toast
     /// Reconciles the WPF toast surface with the pure <see cref="ActivityAggregator"/>
     /// state machine. There is deliberately one window slot: the aggregator owns the
     /// card lifetime and the manager owns only WPF objects and their dispatcher timer.
-    /// Same contract as rvt-mcp's manager. Two Inventor-specific differences: the card is
-    /// never owned by an Inventor HWND (the toast thread is not Inventor's UI thread), and
-    /// its position comes from the host, which reads the Inventor frame and view.
     /// </summary>
     internal sealed class McpToastManager
     {
-        private const double EdgeMargin = 16;
         private const int TickMilliseconds = 100;
 
         private readonly Dispatcher _dispatcher;
@@ -26,13 +24,19 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         private readonly Func<bool> _showBranding;
         private readonly Func<string> _instanceIdentity;
         private readonly Func<bool> _motionEnabled;
-        private readonly Func<Point?> _position;
         private readonly DispatcherTimer _timer;
         private McpToastWindow _window;
-        private Point? _lastPosition;
+        private IntPtr _ownerHandle;
+        private readonly Func<ToastPositionOptions> _positionOptions;
+        private readonly Action<ToastPositionOptions> _positionChanged;
+        private readonly Func<Tuple<ToastBounds, ToastBounds>> _geometry;
+        private readonly Func<Point> _cursorPosition;
+        private readonly Func<Point?> _position;
+        private double _compactHeight;
+        private bool _growUp;
 
         /// <param name="isFrameUsable">
-        /// Returns whether the Inventor frame can display an activity card. The callback is
+        /// Returns whether the owner frame can display an activity card. The callback is
         /// evaluated on the toast dispatcher by the timer; it must be cheap and must not
         /// call back into this manager. A missing callback means that the frame is usable.
         /// </param>
@@ -44,10 +48,6 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         /// <param name="motionEnabled">
         /// Passed to each card window; null follows the Windows animation setting.
         /// </param>
-        /// <param name="position">
-        /// Top-left of the card in device-independent units, or null when the host has no
-        /// placement (the card then sits 16 units from the screen corner).
-        /// </param>
         public McpToastManager(
             Dispatcher dispatcher,
             ActivityAggregator aggregator,
@@ -56,7 +56,10 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             Func<bool> showBranding = null,
             Func<string> instanceIdentity = null,
             Func<bool> motionEnabled = null,
-            Func<Point?> position = null)
+            Func<ToastPositionOptions> positionOptions = null,
+            Action<ToastPositionOptions> positionChanged = null,
+            Func<Tuple<ToastBounds, ToastBounds>> geometry = null,
+            Func<Point> cursorPosition = null, Func<Point?> position = null)
         {
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             _aggregator = aggregator ?? throw new ArgumentNullException(nameof(aggregator));
@@ -65,6 +68,10 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             _showBranding = showBranding ?? (() => true);
             _instanceIdentity = instanceIdentity ?? (() => null);
             _motionEnabled = motionEnabled;
+            _positionOptions = positionOptions ?? (() => new ToastPositionOptions());
+            _positionChanged = positionChanged;
+            _geometry = geometry;
+            _cursorPosition = cursorPosition;
             _position = position;
 
             _timer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
@@ -74,14 +81,36 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             _timer.Tick += OnTimerTick;
         }
 
-        /// <summary>True while a card window exists (visible or fading).</summary>
-        public bool HasWindow => _window != null;
+        public void SetOwnerHandle(IntPtr hwnd)
+        {
+            if (hwnd != IntPtr.Zero)
+                _ownerHandle = hwnd;
+        }
 
         /// <summary>Apply the current branding preference to the open card, if any.</summary>
+        public bool HasWindow => _window != null;
+
+        public void Reposition()
+        {
+            EnsureDispatcher();
+            if (_window != null && !_window.IsDragging && !_window.IsPositionAnimating) PositionWindow(_window);
+        }
+
         public void ApplyShowBranding()
         {
             EnsureDispatcher();
             _window?.SetShowBranding(_showBranding());
+        }
+
+        /// <summary>Re-anchor the open card after the corner, drag or offset preference changed.</summary>
+        public void ApplyPosition()
+        {
+            EnsureDispatcher();
+            if (_window == null)
+                return;
+            _window.CancelHeaderDrag();
+            _growUp = _positionOptions().Bottom;
+            PositionWindow(_window, animate: true);
         }
 
         /// <summary>
@@ -112,7 +141,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         }
 
         /// <summary>
-        /// Allows the host to supply an explicit frame usability result.
+        /// Allows the host/Idling path to supply an explicit frame usability result.
         /// The timer uses the configured callback and calls this overload internally.
         /// </summary>
         internal void Tick(bool frameUsable)
@@ -123,21 +152,9 @@ namespace Bimwright.Ipt.Shared.Views.Toast
 
             if (_aggregator.Tick(frameUsable))
                 Render();
-        }
-
-        /// <summary>Follow the Inventor frame: move the open card when its anchor moved.</summary>
-        public void Reposition()
-        {
-            EnsureDispatcher();
-            var window = _window;
-            if (window == null)
-                return;
-
-            var target = ResolvePosition();
-            if (_lastPosition.HasValue && _lastPosition.Value == target)
-                return;
-            _lastPosition = target;
-            window.SetPosition(target.Y, target.X);
+            // Follow the owner when it moves or resizes, except while the user is dragging.
+            if (_window != null && !_window.IsDragging && !_window.IsPositionAnimating)
+                PositionWindow(_window);
         }
 
         /// <summary>
@@ -154,6 +171,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
 
             if (window != null)
             {
+                window.SizeChanged -= OnWindowSizeChanged;
                 try { window.CloseImmediate(); }
                 catch { }
             }
@@ -166,7 +184,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             _aggregator.TakeRender();
         }
 
-        /// <summary>Stop the timer before the host dies.</summary>
+        /// <summary>Detach the global localization subscription before the host dies.</summary>
         public void Dispose()
         {
             if (_dispatcher.CheckAccess())
@@ -232,16 +250,23 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 OnPointerEntered,
                 OnPointerLeft,
                 motionEnabled: _motionEnabled,
+                cursorPosition: _cursorPosition,
                 instanceIdentity: _instanceIdentity());
 
             _window = window;
             window.SetShowBranding(_showBranding());
+            var surface = (FrameworkElement)window.Content;
+            surface.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _compactHeight = surface.DesiredSize.Height;
+            _growUp = _positionOptions().Bottom;
+            window.PrepareExpansion = extra => PrepareExpansion(window, extra);
+            window.ConstrainDrag = point => ConstrainDrag(window, point);
+            window.DragCompleted = point => SaveDrag(window, point);
+            window.SizeChanged += OnWindowSizeChanged;
 
             // WPF initializes Window.Top/Left to NaN. Set finite coordinates before Show
             // so an early Loaded/close callback cannot animate from an invalid value.
-            var position = ResolvePosition();
-            _lastPosition = position;
-            window.SetPosition(position.Y, position.X);
+            PositionWindow(window);
             window.CapturePointerBaseline();
             window.Show();
             window.PlayEnterAnimation();
@@ -262,12 +287,38 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             Tick(frameUsable);
         }
 
+        private void OnLanguageChanged(object sender, EventArgs e)
+        {
+            if (_dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
+                return;
+
+            void Refresh()
+            {
+                if (_window != null)
+                    _window.RefreshLocalization();
+            }
+
+            try
+            {
+                if (_dispatcher.CheckAccess())
+                    Refresh();
+                else
+                    _dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(Refresh));
+            }
+            catch
+            {
+                // The watcher can race Inventor/WPF shutdown. A stale toast is safer
+                // than surfacing an exception from a best-effort localization refresh.
+            }
+        }
+
         private void OnWindowClosed(McpToastWindow window, long cardId)
         {
             EnsureDispatcher();
             if (!ReferenceEquals(_window, window) || window.CardId != cardId)
                 return;
 
+            window.SizeChanged -= OnWindowSizeChanged;
             _window = null;
             _aggregator.CardClosed(cardId);
             StopTimerIfNoWindow();
@@ -286,8 +337,8 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         private void OnPointerEntered(long cardId)
         {
             EnsureDispatcher();
-            if (_window != null && _window.CardId == cardId)
-                _aggregator.PointerEntered(cardId);
+            if (_window != null && _window.CardId == cardId && _aggregator.PointerEntered(cardId))
+                Render();
         }
 
         private void OnPointerLeft(long cardId)
@@ -304,6 +355,7 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 return;
 
             _window = null;
+            window.SizeChanged -= OnWindowSizeChanged;
             try { window.CloseImmediate(); }
             catch { }
             StopTimerIfNoWindow();
@@ -315,8 +367,8 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             if (_window == null || _window.CardId != cardId)
                 return;
 
-            // Opening History is supplied by the host, because the History window lives
-            // in the add-in and is absent from the WPF harness.
+            // Opening History is intentionally supplied by the host, because App.Instance
+            // lives in each Inventor-year shell and is absent from the WPF harness.
             try { _onClick?.Invoke(cardId); }
             catch { }
 
@@ -336,17 +388,156 @@ namespace Bimwright.Ipt.Shared.Views.Toast
                 _timer.Stop();
         }
 
-        private Point ResolvePosition()
+        private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            Point? placed = null;
-            try { placed = _position?.Invoke(); }
-            catch { }
+            if (ReferenceEquals(sender, _window) && !_window.IsDragging)
+                PositionWindow(_window);
+        }
 
-            // Guard both the host and fallback paths. Invalid DPI/rect data must never
-            // leak NaN or infinity into WPF dependency properties.
-            if (placed.HasValue && IsFinite(placed.Value.X) && IsFinite(placed.Value.Y))
-                return placed.Value;
-            return new Point(EdgeMargin, EdgeMargin);
+        /// <summary>Owner rectangle and the work area of the monitor holding it, both in DIPs.</summary>
+        private Tuple<ToastBounds, ToastBounds> GetGeometry()
+        {
+            if (_geometry != null)
+                return _geometry();
+
+            var owner = GetValidOwnerHandle();
+            var work = SystemParameters.WorkArea;
+            var ownerBounds = new ToastBounds(0, 0, work.Width, work.Height);
+            var workBounds = new ToastBounds(work.Left, work.Top, work.Width, work.Height);
+            if (owner != IntPtr.Zero && GetWindowRect(owner, out var rect))
+            {
+                GetOwnerDpiScale(owner, out var x, out var y);
+                ownerBounds = new ToastBounds(rect.Left * x, rect.Top * y,
+                    (rect.Right - rect.Left) * x, (rect.Bottom - rect.Top) * y);
+                var monitor = MonitorFromWindow(owner, 2);
+                var info = new MONITORINFO { Size = Marshal.SizeOf(typeof(MONITORINFO)) };
+                if (monitor != IntPtr.Zero && GetMonitorInfo(monitor, ref info))
+                    workBounds = new ToastBounds(info.Work.Left * x, info.Work.Top * y,
+                        (info.Work.Right - info.Work.Left) * x, (info.Work.Bottom - info.Work.Top) * y);
+            }
+            return Tuple.Create(ownerBounds, workBounds);
+        }
+
+        private static double WindowWidth(McpToastWindow window) =>
+            window.ActualWidth > 0 ? window.ActualWidth : ((FrameworkElement)window.Content).DesiredSize.Width;
+
+        private static double WindowHeight(McpToastWindow window) =>
+            window.ActualHeight > 0 ? window.ActualHeight : ((FrameworkElement)window.Content).DesiredSize.Height;
+
+        private void PositionWindow(McpToastWindow window, bool animate = false)
+        {
+            if (window.IsDragging)
+                return;
+
+            var options = _positionOptions();
+            window.SetPositionPreferences(options.DragEnabled, options.Right, _growUp);
+            var geometry = GetGeometry();
+            if (_position != null)
+            {
+                var point = _position();
+                if (point.HasValue && IsFinite(point.Value.X) && IsFinite(point.Value.Y))
+                { window.SetPosition(point.Value.Y, point.Value.X); return; }
+            }
+            var width = WindowWidth(window);
+            var height = WindowHeight(window);
+            var basis = _compactHeight > 0 ? _compactHeight : height;
+
+            // Anchor with the compact height so the fixed edge stays put while the card
+            // grows; growing upward then lifts the top by the extra height. Non-finite
+            // owner/DPI data is replaced by the work-area corner inside Clamp.
+            var anchor = ToastPlacement.Clamp(ToastPlacement.Anchor(geometry.Item1, width, basis, options), geometry.Item2);
+            var bounds = ToastPlacement.Clamp(new ToastBounds(anchor.Left,
+                anchor.Top - (_growUp ? height - basis : 0), width, height), geometry.Item2);
+
+            // Height may still be animating when a corner changes. Retarget the move
+            // from its current position instead of cancelling it with a jump.
+            if (animate || window.IsPositionAnimating)
+                window.MoveTo(bounds.Top, bounds.Left);
+            else if (!IsFinite(window.Top) || !IsFinite(window.Left)
+                || Math.Abs(window.Top - bounds.Top) > .1 || Math.Abs(window.Left - bounds.Left) > .1)
+                window.SetPosition(bounds.Top, bounds.Left);
+        }
+
+        private void PrepareExpansion(McpToastWindow window, double extra)
+        {
+            if (!ReferenceEquals(window, _window) || window.IsDragging || window.HasExpandedRows)
+                return;
+            var geometry = GetGeometry();
+            var current = new ToastBounds(window.Left, window.Top, WindowWidth(window), WindowHeight(window));
+            _growUp = ToastPlacement.GrowUp(current, geometry.Item2, extra, _positionOptions().Bottom);
+            PositionWindow(window);
+        }
+
+        private Point ConstrainDrag(McpToastWindow window, Point point)
+        {
+            var bounds = ToastPlacement.Clamp(new ToastBounds(point.X, point.Y, WindowWidth(window), WindowHeight(window)), GetGeometry().Item2);
+            return new Point(bounds.Left, bounds.Top);
+        }
+
+        private void SaveDrag(McpToastWindow window, Point point)
+        {
+            if (!ReferenceEquals(window, _window))
+                return;
+            var options = _positionOptions();
+            // Dragging collapses details; thumbnail/branding may still occupy space.
+            _compactHeight = WindowHeight(window);
+            _growUp = options.Bottom;
+            var anchor = ToastPlacement.Anchor(GetGeometry().Item1, WindowWidth(window), _compactHeight,
+                new ToastPositionOptions(options.Right, options.Bottom));
+            _positionChanged?.Invoke(options.WithOffset(point.X - anchor.Left, point.Y - anchor.Top));
+            PositionWindow(window);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MONITORINFO
+        {
+            public int Size;
+            public RECT Monitor;
+            public RECT Work;
+            public uint Flags;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+
+        private IntPtr GetValidOwnerHandle()
+        {
+            if (_ownerHandle != IntPtr.Zero && IsWindow(_ownerHandle))
+                return _ownerHandle;
+
+            // Keep the last known good owner rather than guessing a process main window;
+            // clear only when the native handle is truly invalid.
+            if (_ownerHandle != IntPtr.Zero && !IsWindow(_ownerHandle))
+                _ownerHandle = IntPtr.Zero;
+
+            return _ownerHandle;
+        }
+
+        private void GetOwnerDpiScale(IntPtr hwnd, out double dpiX, out double dpiY)
+        {
+            dpiX = 1.0;
+            dpiY = 1.0;
+
+            try
+            {
+                var dpi = GetDpiForWindow(hwnd);
+                if (dpi > 0)
+                {
+                    dpiX = 96.0 / dpi;
+                    dpiY = dpiX;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // Older Windows — retain the 96 DPI default.
+            }
+            catch
+            {
+                // DPI is a positioning hint; retain the safe default on failure.
+            }
         }
 
         private void EnsureDispatcher()
@@ -356,6 +547,22 @@ namespace Bimwright.Ipt.Shared.Views.Toast
         }
 
         private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left, Top, Right, Bottom;
+        }
     }
 }
+
 #endif
