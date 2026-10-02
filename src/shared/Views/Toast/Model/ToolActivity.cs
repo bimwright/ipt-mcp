@@ -21,7 +21,7 @@ public static class ToolActivityClassifier
     {
         if (!success) return "MCP · Failed";
         if (command != null && Scripts.Contains(command)) return "MCP · Script";
-        if (command == "capture_view") return "MCP · Snapshot";
+        if (command == "capture_view" || command == "capture_sheet") return "MCP · Snapshot";
         if (command != null && command.StartsWith("export_", StringComparison.Ordinal)) return "MCP · Export";
         return kind == ToolActivityKind.Write ? "MCP · Modified" : "MCP · Query";
     }

@@ -153,13 +153,13 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["error"] = null,
                 ["result"] = null
             };
-            ResponseSpillWriter.AttachStdout("send_code", ok, captured.ToString());
+            ResponseSpillWriter.AttachStdout("send_code", ok, captured.ToString(), ResponseSpillWriter.ForContext(ctx));
             if (state.ReturnValue is { } returnValue)
             {
                 var token = ScriptResultToken.ToResultToken(returnValue, out var resultError);
                 if (resultError is null)
                 {
-                    ResponseSpillWriter.AttachResult("send_code", ok, token);
+                    ResponseSpillWriter.AttachResult("send_code", ok, token, ResponseSpillWriter.ForContext(ctx));
                 }
                 else
                 {
@@ -179,7 +179,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["error"] = ErrorSanitizer.Sanitize(CompileErrorText(errors.Length > 0 ? errors : ex.Diagnostics.ToArray()))
             };
             AttachDiagnostics(data, errors);
-            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString());
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriter.ForContext(ctx));
             Echo(data, moduleEcho, silent);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
@@ -195,7 +195,7 @@ public sealed class SendCodeHandler : IInventorCommand
             AttachRuntimeLocation(data, inner, parts);
             var rule = SendCodeHints.Match("runtime", text);
             if (rule != null) data["hint"] = rule.Hint;
-            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString());
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriter.ForContext(ctx));
             Echo(data, moduleEcho, silent);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }

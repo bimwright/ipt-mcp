@@ -13,6 +13,7 @@ public sealed class InventorCommandContext
 
     /// <summary>Whether the <c>send_code</c> command is enabled on this add-in.</summary>
     public bool EnableSendCode { get; init; }
+    public int SpillRetentionHours {get;init;}=36;
 
     /// <summary>Inventor calendar year (2022-2027), captured from the compile symbol.</summary>
     public int InventorYear { get; init; }

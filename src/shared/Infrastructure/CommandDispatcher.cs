@@ -47,6 +47,9 @@ public sealed class CommandDispatcher
         {
             var result = cmd.Execute(ctx, env.Params ?? new JObject());
             Normalize(env, ctx, result, started);
+            if(DrawingInput.Commands.Contains(env.Command) && result.Data is JObject drawingData)
+                result.Data=DrawingResponsePolicy.Apply(env.Command,drawingData,Math.Min(ResponseSizeGuard.RejectBytes,_maxResponseBytes)-4096);
+            if (DrawingInput.Commands.Contains(env.Command)) DrawingResponsePolicy.NormalizeOutcome(result);
             SanitizeResult(result);
 
             // F3-a: three-tier guard on the compact payload. Above the reject budget the call

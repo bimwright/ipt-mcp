@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-95%20or%2099%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 - Inventor chuyển add-in desktop khỏi .NET Framework từ 2025: **.NET 8 cho 2025/2026, .NET 10 cho 2027**. (Add-in .NET 8 vẫn binary-compatible trên 2027, nhưng net10 là target native.)
 - Dùng **năm dương lịch 4 chữ số** (2022..2027) ở mọi nơi — không dùng version code cũ.
 
-> **Trạng thái: đã verify.** Giai đoạn 1-3 đã xong và green (84 MCP tools mặc định, hoặc 88 với send_code; server + tests build mà không cần Inventor), và phần thân handler Inventor-API đã được chạy thử trên một session Inventor thật. Như mọi khi, hãy test trên template của bạn trước khi tin dùng cho production model.
+> **Trạng thái: Drawing Phase 1 đang triển khai.** Đã thêm 11 tool drawing cho Inventor 2027; test không cần host và workflow handler trên fixture thật đã qua. Acceptance đầy đủ và release gate còn pending. Xem [kiểm thử drawing](docs/testing/drawing-phase1.md).
 
 ---
 
@@ -90,14 +90,27 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **84 công cụ** khi bật mọi platform toolset mặc định, hoặc **88 công cụ** khi bật toolset send_code (opt-in: `inventor_send_code` + 3 tool code module). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Toàn bộ surface là **95 công cụ** khi bật mọi platform toolset mặc định, hoặc **99 công cụ** khi bật toolset send_code (opt-in: `inventor_send_code` + 3 tool code module). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
 
 **Chọn document & occurrence.** Các tool cấp document nhận `document` tuỳ chọn (đường dẫn hoặc tên của document Inventor đang giữ trong bộ nhớ — cả part được assembly tham chiếu); không bao giờ tự mở/activate. Các tool assembly theo lô dùng chung selector `{names?: [glob], regex?, file?, path_contains?, leaf?, max_depth?, include_suppressed?, limit?}`; không khớp hoặc vượt `limit` là lỗi kèm gợi ý tên gần giống. Save/open/close/export chạy dưới `SilentOperation` mặc định để dialog ẩn không làm treo call; nếu vẫn timeout, `inventor_health` báo `modal_dialog {open, title}`.
 
-Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
+Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`, `drawing`, `drawing_query`.
 Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
 
 Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in tự chuyển sang centimét/radian nội bộ của Inventor.
+
+
+### drawing_query (1) / drawing (10) — Inventor 2027
+
+`inventor_get_drawing_info` is read-only. Drawing writes:
+`inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
+`inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
+`inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
+`inventor_capture_sheet`. Captures write PNG files and are excluded from read-only.
+
+[Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
+[Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
+[Generated read-only registration](docs/testing/readonly-tools.json).
 
 ### meta (3) — tool target phía server, không round-trip tới add-in; vẫn hiện dưới `--read-only`
 
@@ -278,7 +291,7 @@ Bật/tắt toast từ ribbon: **Bimwright ▸ MCP → Toasts** (Status mở dia
 
 Ngắn gọn: model của bạn ở lại trên máy bạn, và các tool write/nguy hiểm đều có gate.
 
-- **Read-only mode.** `--read-only` (hoặc `BIMWRIGHT_INVENTOR_READ_ONLY=1`) loại bỏ mọi write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`) nhưng giữ `meta` + `query` + `assembly_query` + read-only `toolbaker`, và **giữ `inventor_switch_target`**. Server gửi read-only mode trong mỗi command envelope; add-in cũng tôn trọng `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. `CommandDispatcher` của add-in là tuyến phòng thủ thứ hai: lệnh write dưới read-only trả về `READ_ONLY`.
+- **Read-only mode.** `--read-only` (hoặc `BIMWRIGHT_INVENTOR_READ_ONLY=1`) loại bỏ mọi write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`, `drawing`) nhưng giữ `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, và **giữ `inventor_switch_target`**. Server gửi read-only mode trong mỗi command envelope; add-in cũng tôn trọng `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. `CommandDispatcher` của add-in là tuyến phòng thủ thứ hai: lệnh write dưới read-only trả về `READ_ONLY`.
 - **send_code opt-in hai phía.** `inventor_send_code` **mặc định tắt**. Chỉ hiện khi **cả hai** gate được bật: server với `--enable-send-code` (hoặc `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **và** tiến trình add-in với `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Nếu không, dispatcher trả `SEND_CODE_DISABLED`. API bị cấm (file/process/network/environment) bị reject.
 - **Transport local, có xác thực.** TCP bind loopback; Named Pipe scoped local-machine. Mỗi descriptor theo session mang một auth token ngẫu nhiên.
 - **Error đã sanitize.** Error trả về model được sanitize để tránh leak absolute path/secret.

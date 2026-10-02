@@ -25,7 +25,7 @@
         },
         {
           "name": "BIMWRIGHT_INVENTOR_TOOLSETS",
-          "description": "Comma-separated toolsets to enable (meta,query,document,parameters,properties,sketch,feature,export,code,toolbaker,toolbaker_write); 'all' enables every known toolset.",
+          "description": "Comma-separated toolsets to enable (meta,query,document,parameters,properties,sketch,feature,export,assembly,assembly_query,drawing,drawing_query,code,toolbaker,toolbaker_write); 'all' enables every known toolset.",
           "isRequired": false
         },
         {

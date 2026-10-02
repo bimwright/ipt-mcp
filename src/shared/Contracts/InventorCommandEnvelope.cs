@@ -12,4 +12,6 @@ public sealed class InventorCommandEnvelope
     [JsonProperty("timeout_ms")] public int TimeoutMs { get; set; } = 30000;
     [JsonProperty("auth_token")] public string? AuthToken { get; set; }
     [JsonProperty("read_only")] public bool ReadOnly { get; set; }
+    [JsonProperty("spill_retention_hours")] public int SpillRetentionHours {get;set;}=36;
+    [JsonProperty("tool", NullValueHandling = NullValueHandling.Ignore)] public ToolMetadata? Tool { get; set; }
 }

@@ -26,6 +26,7 @@ public static partial class InventorCommandRegistry
         AddPlatform(d, o, Add);   // Phase 3 WS-C (send_code, run_baked_tool)
         AddAssembly(d, Add);      // Phase 3 Assembly
         AddAssemblyQuery(d, Add); // Phase 3 Assembly Query
+        AddDrawing(d, Add);
         return d;
     }
 
@@ -39,4 +40,5 @@ public static partial class InventorCommandRegistry
     static partial void AddPlatform(Dictionary<string, IInventorCommand> d, PluginOptions o, Action<IInventorCommand> add);
     static partial void AddAssembly(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddAssemblyQuery(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
+    static partial void AddDrawing(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
 }

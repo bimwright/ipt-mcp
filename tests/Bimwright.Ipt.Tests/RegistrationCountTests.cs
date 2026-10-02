@@ -9,12 +9,8 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Review-gate guard: locks the public tool count at exactly <b>88</b> MCP tools when
-/// every toolset is enabled (<c>--toolsets all --enable-send-code</c>) and pins the read-only subset.
-/// The 88 breaks down by toolset: meta 3 + query 7 (incl. report_task_result) +
-/// document 10 (incl. save_all/open_documents/close_documents) + parameters 4 + properties 4 + sketch 10 (incl. P3 draw_text) + feature 16 (incl. P2 loft/sweep + P3 work_point/bim_connector + create_part) + export 10 (incl. P2 derive_envelope + set_view_state) + code 4 (send_code + 3 module tools) +
-/// toolbaker 6 + assembly 8 + assembly_query 6 = 88. The read-only registration keeps only meta + query (QueryTools) +
-/// assembly_query (AssemblyQueryTools) + read-only ToolBaker, and drops every write/export/code/toolbaker_write type.
+/// Locks the built surface at 99 all-enabled tools: the existing 88 plus 11 drawing tools.
+/// Code-off exposes 95; read-only retains the drawing query and drops drawing writes.
 /// </summary>
 public sealed class RegistrationCountTests
 {
@@ -39,7 +35,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_88_tools()
+    public void All_toolsets_with_send_code_register_exactly_99_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -47,16 +43,20 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(88, names.Length);
+        Assert.Equal(99, names.Length);
     }
 
     [Fact]
-    public void The_88_tools_match_the_frozen_surface()
+    public void The_99_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
         var expected = new[]
         {
+            // drawing (11)
+            "inventor_get_drawing_info", "inventor_new_drawing", "inventor_add_sheet", "inventor_set_title_block",
+            "inventor_add_drawing_view", "inventor_add_section_view", "inventor_edit_drawing_view",
+            "inventor_add_drawing_dimension", "inventor_add_balloon", "inventor_export_drawing", "inventor_capture_sheet",
             // meta (3)
             "inventor_list_available_targets", "inventor_get_current_target", "inventor_switch_target",
             // query (7) + document (7)
@@ -97,10 +97,10 @@ public sealed class RegistrationCountTests
             "inventor_get_assembly_bom", "inventor_list_constraints", "inventor_list_occurrences",
         };
 
-        Assert.Equal(88, expected.Length);
+        Assert.Equal(99, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
-        // and nothing extra beyond the 88 expected
+        // and nothing extra beyond the 99 expected
         foreach (var n in names)
             Assert.True(expected.Contains(n), $"unexpected extra tool: {n}");
     }
@@ -128,7 +128,9 @@ public sealed class RegistrationCountTests
         Assert.Contains(typeof(QueryTools), types);
         Assert.Contains(typeof(AssemblyQueryTools), types);
         Assert.Contains(typeof(ToolBakerTools), types);
-        Assert.Equal(4, types.Length);
+        Assert.Contains(typeof(DrawingQueryTools), types);
+        Assert.DoesNotContain(typeof(DrawingTools), types);
+        Assert.Equal(5, types.Length);
 
         // Dropped: every write/export/code/toolbaker_write owner.
         Assert.DoesNotContain(typeof(DocumentTools), types);
@@ -152,11 +154,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_84_tools_without_send_code()
+    public void Default_config_registers_95_tools_without_send_code()
     {
-        // Default (no --enable-send-code) drops the 4 `code` tools (send_code + modules), leaving 84.
+        // Default (no --enable-send-code) drops the 4 `code` tools (send_code + modules), leaving 95.
         var names = ToolNames(new InventorMcpConfig());
         Assert.False(names.Contains("inventor_send_code"), "send_code must be off by default");
-        Assert.Equal(84, names.Length);
+        Assert.Equal(95, names.Length);
     }
 }

@@ -216,6 +216,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             var ctx = new InventorCommandContext
             {
                 ReadOnly = o.ReadOnly || env.ReadOnly,
+                SpillRetentionHours = env.SpillRetentionHours > 0 ? env.SpillRetentionHours : 36,
                 EnableSendCode = o.EnableSendCode,
                 InventorYear = o.Year,
                 TargetId = descriptor.TargetId,
@@ -437,7 +438,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         try
         {
             bool? isReadOnly = dispatcher.Commands.TryGetValue(env.Command ?? "", out var handler) ? handler.IsReadOnly : null;
-            return toasts.Notify(new ToastEvent(env.Command ?? "", ok, data, code, message, ms, isReadOnly));
+            return toasts.Notify(new ToastEvent(env.Command ?? "", ok, data, code, message, ms, isReadOnly,
+                env.Tool?.Name, env.Tool?.Toolset, env.Tool?.Description, env.Tool?.TimeoutMs));
         }
         catch
         {

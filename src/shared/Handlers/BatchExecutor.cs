@@ -32,6 +32,9 @@ public static class BatchExecutor
         "derive_envelope",  // also creates + activates a new document mid-transaction
         "create_part",      // creates, saves and may close a new part
         "save_all", "open_documents", "close_documents",
+        "get_drawing_info", "new_drawing", "add_sheet", "set_title_block", "add_drawing_view",
+        "add_section_view", "edit_drawing_view", "add_drawing_dimension", "add_balloon",
+        "export_drawing", "capture_sheet",
     };
 
     public sealed class Outcome

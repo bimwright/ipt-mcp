@@ -135,17 +135,17 @@ public sealed class ResponseSpillTests : IDisposable
     }
 
     [Fact]
-    public void Cleanup_DeletesExpiredThenEnforcesCap()
+    public void Cleanup_DeletesExpiredButNeverEvictsFreshFiles()
     {
         var w = new ResponseSpillWriter(_dir);
         Directory.CreateDirectory(_dir);
 
-        // 3 files backdated past the 24 h TTL
+        // 3 files backdated past the 36 h TTL
         for (var i = 0; i < 3; i++)
         {
             var p = Path.Combine(_dir, $"old-{i}.txt");
             File.WriteAllText(p, "x");
-            File.SetLastWriteTimeUtc(p, DateTime.UtcNow - TimeSpan.FromHours(25));
+            File.SetLastWriteTimeUtc(p, DateTime.UtcNow - TimeSpan.FromHours(37));
         }
         // MaxRetainedFiles + 5 fresh files
         for (var i = 0; i < ResponseSpillWriter.MaxRetainedFiles + 5; i++)
@@ -156,12 +156,12 @@ public sealed class ResponseSpillTests : IDisposable
         }
 
         var deleted = w.Cleanup(DateTime.UtcNow);
-        Assert.Equal(3 + 5, deleted);
-        Assert.Equal(ResponseSpillWriter.MaxRetainedFiles, Directory.GetFiles(_dir).Length);
-        // 50 survive — the 5 oldest fresh files (new-0000..new-0004) are deleted
+        Assert.Equal(3, deleted);
+        Assert.Equal(ResponseSpillWriter.MaxRetainedFiles + 5, Directory.GetFiles(_dir).Length);
+        // Every fresh spill survives, including the oldest, beyond the cleanup batch size.
         var names = Directory.GetFiles(_dir).Select(Path.GetFileName).ToArray();
         Assert.Contains("new-0054.txt", names);
-        Assert.DoesNotContain("new-0000.txt", names);
+        Assert.Contains("new-0000.txt", names);
     }
 
     [Fact]

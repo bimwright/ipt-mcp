@@ -147,7 +147,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 
 ### Read-only & opt-in gates
 - `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in). Its banned-API source scan is best-effort and file writes made through the Inventor API (`SaveAs`/`SaveCopyAs`/translators) bypass `ExportPathPolicy` by design — the two-sided opt-in is the trust boundary.
-- `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write`) but keeps `meta` + `query` + `assembly_query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
+- `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write, drawing`) but keeps `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 
 ### Config precedence
@@ -166,3 +166,5 @@ The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file 
 - **Server has no Inventor reference** — keeps the gateway buildable / testable on any machine; the API-agnostic contract files are the only shared source the server compiles.
 - **Per-version unique ClientId GUID** on each `InventorAddInServer` (matches the `.addin`), so only the matching year loads.
 ```
+
+Drawing Phase 1 adds 11 tools (99 all-enabled / 95 code-off / 20 read-only). The drawing implementation uses shared wire validation, registry/STA dispatch, persistent AttributeSets, atomic batches, per-call timeout, metadata catalog and truthful compact write responses. Inventor 2027 is the first host; older add-ins return UNSUPPORTED_HOST. See docs/testing/drawing-phase1.md for acceptance gaps and the disposable live fixture.

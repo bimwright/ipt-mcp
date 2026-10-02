@@ -34,6 +34,9 @@ docs/superpowers/
 docs/design/brainstorm/
 docs/reviews/
 docs/benchmarks/
+!docs/benchmarks/
+docs/benchmarks/*
+!docs/benchmarks/drawing-phase1-smoke.json
 docs/research-archive/
 docs/design/
 docs/archive/

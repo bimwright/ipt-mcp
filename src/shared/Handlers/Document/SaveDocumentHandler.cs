@@ -36,6 +36,16 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         {
             if (!string.IsNullOrWhiteSpace(path))
             {
+#if INVENTOR2027
+                // Drawing saves must not persist dirty referenced models as a side effect.
+                if (doc is DrawingDocument drawing)
+                {
+                    var options = app.TransientObjects.CreateNameValueMap();
+                    options.Add("SaveDependents", false);
+                    drawing.SaveAs2(path, false, options);
+                }
+                else
+#endif
                 doc.SaveAs(path, false);
             }
             else
@@ -45,6 +55,10 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
                 if (string.IsNullOrEmpty(existing))
                     return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT,
                         "document has never been saved; provide a path to save it");
+#if INVENTOR2027
+                if (doc is DrawingDocument drawing) drawing.Save2(false);
+                else
+#endif
                 doc.Save();
             }
         }

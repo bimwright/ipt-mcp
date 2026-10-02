@@ -101,6 +101,8 @@ internal static partial class Program
         if (toolType == typeof(ToolBakerWriteTools)) return mcp.WithTools<ToolBakerWriteTools>();
         if (toolType == typeof(AssemblyTools)) return mcp.WithTools<AssemblyTools>();
         if (toolType == typeof(AssemblyQueryTools)) return mcp.WithTools<AssemblyQueryTools>();
+        if (toolType == typeof(DrawingQueryTools)) return mcp.WithTools<DrawingQueryTools>();
+        if (toolType == typeof(DrawingTools)) return mcp.WithTools<DrawingTools>();
 
         throw new InvalidOperationException("Unsupported MCP tool type: " + toolType.FullName);
     }
@@ -134,6 +136,7 @@ internal static partial class Program
             "Tuning:",
             "  --timeout-ms <ms>       Per-command timeout (default 30000).",
             "  --max-response-bytes <n>  Response size cap (default 5000000).",
+            "  --spill-retention-hours <n>  Spill lifetime (default 36 hours).",
             "",
             "Env vars (override JSON, overridden by CLI):",
             "  BIMWRIGHT_INVENTOR_TARGET, BIMWRIGHT_INVENTOR_TOOLSETS,",
@@ -174,6 +177,8 @@ internal static partial class Program
         Add("toolbaker_write", typeof(ToolBakerWriteTools));
         Add("assembly",        typeof(AssemblyTools));
         Add("assembly_query",  typeof(AssemblyQueryTools));
+        Add("drawing_query", typeof(DrawingQueryTools));
+        Add("drawing", typeof(DrawingTools));
         return types;
     }
 }

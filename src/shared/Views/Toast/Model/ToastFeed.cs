@@ -64,7 +64,7 @@ public sealed class ToastFeed
                     Body = model.Summary + (model.Detail.Length == 0 ? "" : " · " + model.Detail),
                     Succeeded = _card.Succeeded + (model.Success ? 1 : 0),
                     Failed = _card.Failed + (model.Success ? 0 : 1),
-                    Captures = _card.Captures + (model.Success && (model.Command == "capture_view" || model.ThumbnailPath != null) ? 1 : 0),
+                    Captures = _card.Captures + (model.Success && (model.Command == "capture_view" || model.Command == "capture_sheet" || model.ThumbnailPath != null) ? 1 : 0),
                     LatestSuccess = model.Success,
                     HasFailure = _card.HasFailure || !model.Success,
                 };

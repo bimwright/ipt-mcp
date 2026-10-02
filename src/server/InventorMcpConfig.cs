@@ -14,6 +14,7 @@ public sealed class InventorMcpConfig
     public bool EnableAdaptiveBake { get; set; }
     public int TimeoutMs { get; set; } = 30000;
     public int MaxResponseBytes { get; set; } = 5_000_000;
+    public int SpillRetentionHours {get;set;}=36;
     public string? TargetId { get; set; }
     public List<string> Toolsets { get; set; } = new();
 
@@ -28,6 +29,7 @@ public sealed class InventorMcpConfig
         ApplyJson(config, args);   // lowest precedence
         ApplyEnv(config);          // middle
         ApplyCli(config, args);    // highest
+        if(config.SpillRetentionHours<=0)throw new ArgumentException("spillRetentionHours must be positive.");
         return config;
     }
 
@@ -43,6 +45,7 @@ public sealed class InventorMcpConfig
         if (o["enableAdaptiveBake"] is { } ab) c.EnableAdaptiveBake = ab.Value<bool>();
         if (o["timeoutMs"] is { } tm) c.TimeoutMs = tm.Value<int>();
         if (o["maxResponseBytes"] is { } mb) c.MaxResponseBytes = mb.Value<int>();
+        if (o["spillRetentionHours"] is { } sr) c.SpillRetentionHours = sr.Value<int>();
         if (o["target"] is { } tg) c.TargetId = tg.Value<string>();
         if (o["toolsets"] is JArray arr) c.Toolsets = arr.Select(x => x.Value<string>()!).ToList();
     }
@@ -56,6 +59,7 @@ public sealed class InventorMcpConfig
         if (Bool("BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE") is { } ab) c.EnableAdaptiveBake = ab;
         if (Int("BIMWRIGHT_INVENTOR_TIMEOUT_MS") is { } tm) c.TimeoutMs = tm;
         if (Int("BIMWRIGHT_INVENTOR_MAX_RESPONSE_BYTES") is { } mb) c.MaxResponseBytes = mb;
+        if (Int("BIMWRIGHT_INVENTOR_SPILL_RETENTION_HOURS") is { } sr) c.SpillRetentionHours = sr;
         var tg = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_TARGET");
         if (!string.IsNullOrWhiteSpace(tg)) c.TargetId = tg;
         var ts = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_TOOLSETS");
@@ -77,6 +81,7 @@ public sealed class InventorMcpConfig
                 case "--target":               c.TargetId = Next(args, ref i); break;
                 case "--timeout-ms":           if (int.TryParse(Next(args, ref i), out var t)) c.TimeoutMs = t; break;
                 case "--max-response-bytes":   if (int.TryParse(Next(args, ref i), out var m)) c.MaxResponseBytes = m; break;
+                case "--spill-retention-hours": if (int.TryParse(Next(args, ref i),out var hours)) c.SpillRetentionHours=hours; break;
             }
         }
     }

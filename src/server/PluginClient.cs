@@ -119,7 +119,9 @@ public sealed class PluginClient
                 Params = @params,
                 TimeoutMs = effectiveTimeoutMs,
                 AuthToken = target.AuthToken,
-                ReadOnly = _config.ReadOnly
+                ReadOnly = _config.ReadOnly,
+                SpillRetentionHours = _config.SpillRetentionHours,
+                Tool = ToolCatalog.ForCommand(command, effectiveTimeoutMs)
             };
 
             var line = JsonConvert.SerializeObject(env) + "\n";
@@ -137,6 +139,11 @@ public sealed class PluginClient
                 var code = result.Error?.Code ?? InventorErrorCodes.API_ERROR;
                 var message = result.Error?.Message ?? "unknown error";
                 err = code + ": " + message;
+                errCode = code;
+                // Drawing failures may contain rollback/partial-file effects. Preserve them
+                // for the caller while the journal still records a failed invocation.
+                if (DrawingInput.Commands.Contains(command) && result.Data is JObject drawing && drawing.Value<bool?>("ok") == false)
+                    return drawing;
                 throw new InventorGatewayException(code, message);
             }
 

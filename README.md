@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-95%20or%2099%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 - Inventor moved desktop add-in development off .NET Framework starting in 2025: **.NET 8 for 2025/2026, .NET 10 for 2027**. (.NET 8 add-ins remain binary-compatible on 2027, but net10 is the native target.)
 - Use **4-digit calendar years** (2022..2027) everywhere — never legacy version codes.
 
-> **Status: verified.** Phases 1-3 are complete and green (84 MCP tools by default, or 88 with send_code; server + tests build with no Inventor installed), and the Inventor-API handlers have been exercised against a live Inventor session. As always, test against your own templates before trusting it on production models.
+> **Status: drawing implementation in progress.** The existing core surface now includes 11 Inventor 2027 drawing tools. Generic live handler checks and host-free tests pass; full drawing acceptance and release gates remain pending. See [drawing checks](docs/testing/drawing-phase1.md).
 
 ---
 
@@ -109,9 +109,9 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **84 tools** by default when all platform toolsets are enabled, or **88 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **95 tools** by default when all platform toolsets are enabled, or **99 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
-Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`.
+Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`, `drawing`, `drawing_query`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
@@ -121,6 +121,19 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 **Occurrence selectors.** The bulk assembly tools pick occurrences with one shared selector: `{names?: [glob], regex?, file?: glob, path_contains?, leaf?: false, max_depth?, include_suppressed?: false, limit?}` (or just a name / array of names). Globs use `*`/`?`; a name glob containing `/` matches the occurrence path (`SUB:1/PART:2`). Zero matches or more than `limit` is an error that lists the closest names — results are never silently truncated.
 
 **Dialogs.** Save, open, close, export and the batch document tools run under `Application.SilentOperation` by default (`silent=true`), so Inventor answers its own prompts with their defaults instead of opening a hidden modal dialog that blocks the call. If a call still times out, the TIMEOUT message and `inventor_health` report `modal_dialog {open, title}` — probed without touching Inventor's main thread.
+
+
+### drawing_query (1) / drawing (10) — Inventor 2027
+
+`inventor_get_drawing_info` is read-only. Drawing writes:
+`inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
+`inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
+`inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
+`inventor_capture_sheet`. Captures write PNG files and are excluded from read-only.
+
+[Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
+[Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
+[Generated read-only registration](docs/testing/readonly-tools.json).
 
 ### meta (3) — server-side target tools, never round-trip to the add-in; stay exposed under `--read-only`
 
@@ -307,7 +320,7 @@ Every wire command is journaled to `%LOCALAPPDATA%\Bimwright\ipt-mcp\mcp-calls.j
 
 Short version: your model stays on your machine, and write/dangerous tools are gated.
 
-- **Read-only mode.** `--read-only` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`) removes every write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`) but keeps `meta` + `query` + `assembly_query` + read-only `toolbaker`, and **keeps `inventor_switch_target` exposed**. The server sends read-only mode in each command envelope; the add-in also honors `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. A write command under enforced read-only returns `READ_ONLY`.
+- **Read-only mode.** `--read-only` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`) removes every write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`, `drawing`) but keeps `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, and **keeps `inventor_switch_target` exposed**. The server sends read-only mode in each command envelope; the add-in also honors `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. A write command under enforced read-only returns `READ_ONLY`.
 - **send_code two-sided opt-in.** `inventor_send_code` is **disabled by default**. It is exposed only when **both** gates are set: the server with `--enable-send-code` (or `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **and** the add-in process with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Otherwise the dispatcher returns `SEND_CODE_DISABLED`. Banned APIs (file/process/network/environment/dynamic-invocation) are rejected by a best-effort source scan — note that file writes made *through the Inventor API* (`SaveAs`, `SaveCopyAs`, translators) are **not** constrained by the export-root policy below; the two-sided opt-in is the trust boundary.
 - **Local, authenticated transport.** TCP binds loopback; Named Pipe is local-machine scoped. Each per-session descriptor carries a random auth token, but MCP meta tools never return it.
 - **Sanitized errors.** Error messages returned to the model are sanitized to avoid leaking absolute paths/secrets.

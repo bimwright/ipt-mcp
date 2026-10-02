@@ -29,6 +29,20 @@ namespace Bimwright.Ipt.Shared.Logging
                         return FormatCount(result, "documents");
                     case "capture_view":
                         return "view snapshot";
+                    case "capture_sheet":
+                        return "sheet snapshot";
+                    case "new_drawing":
+                        return Truncate("drawing " + result?.Value<string>("document"), MaxLength);
+                    case "get_drawing_info":
+                        return Truncate(result?.Value<string>("document") + " · " + result?["sheets"]?.Value<int>("total") + " sheets", MaxLength);
+                    case "add_sheet": case "add_drawing_view": case "add_section_view": case "edit_drawing_view":
+                        return Truncate(result?.Value<string>("name") ?? toolName, MaxLength);
+                    case "set_title_block":
+                        return Truncate("title block " + result?.Value<string>("title_block"), MaxLength);
+                    case "add_drawing_dimension": case "add_balloon":
+                        return (result?.Value<int>("created_count") ?? 0) + " created / " + (result?.Value<int>("count") ?? 0) + " items";
+                    case "export_drawing":
+                        return (result?.Value<int>("completed_count") ?? 0) + " files · " + result?.Value<string>("format");
                     case "report_task_result":
                         return FormatTaskResult(result, parms);
                     default:

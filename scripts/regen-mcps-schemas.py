@@ -39,17 +39,23 @@ def read_msg(proc, timeout=30):
 def main():
     exe = DEFAULT_EXE
     out = os.path.abspath(DEFAULT_OUT)
+    allowlist_file = None
     args = sys.argv[1:]
+    read_only = "--read-only" in args
     for i, a in enumerate(args):
         if a == "--exe":
             exe = args[i + 1]
         elif a == "--out":
             out = os.path.abspath(args[i + 1])
+        elif a == "--allowlist-file":
+            allowlist_file = os.path.abspath(args[i + 1])
+    if allowlist_file and not read_only:
+        sys.exit("--allowlist-file requires --read-only")
     if not os.path.isfile(exe):
         sys.exit(f"server exe not found: {exe}\nBuild: dotnet build src/server -c Release")
 
     proc = subprocess.Popen(
-        [exe, "--toolsets", "all", "--enable-send-code"],
+        [exe, "--toolsets", "all", "--enable-send-code"] + (["--read-only"] if read_only else []),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, text=True, encoding="utf-8")
     try:
@@ -93,6 +99,12 @@ def main():
             json.dump(t, fh, indent=1, ensure_ascii=False)
             fh.write("\n")
     print(f"wrote {len(tools)} tool schemas -> {out}")
+    if allowlist_file:
+        os.makedirs(os.path.dirname(allowlist_file), exist_ok=True)
+        with open(allowlist_file, "w", encoding="utf-8") as fh:
+            json.dump({"profile": "read-only", "source": "built server tools/list",
+                       "tools": sorted(names)}, fh, indent=2)
+            fh.write("\n")
     if removed:
         print(f"removed {len(removed)} stale: {', '.join(sorted(removed))}")
 

@@ -14,7 +14,11 @@ public sealed record ToastEvent(
     string? ErrorCode,
     string? ErrorMessage,
     long DurationMs,
-    bool? HandlerIsReadOnly);
+    bool? HandlerIsReadOnly,
+    string? ToolName = null,
+    string? Toolset = null,
+    string? Description = null,
+    int? TimeoutMs = null);
 
 /// <summary>Display copy for one toast.</summary>
 public sealed record ToastModel(
@@ -86,6 +90,7 @@ public static class ToastContentBuilder
         if (success)
         {
             (summary, detail, thumb) = Describe(command, data);
+            if (detail.Length == 0 && e.Description != null) detail = e.Description;
         }
         else
         {
@@ -95,7 +100,7 @@ public static class ToastContentBuilder
 
         return new ToastModel(
             command,
-            ToolNameFormatter.Format(command),
+            ToolNameFormatter.Format(e.ToolName?.StartsWith("inventor_", StringComparison.Ordinal) == true ? e.ToolName.Substring(9) : command),
             ToolActivityClassifier.Category(command, kind, success),
             Truncate(summary, SummaryMax),
             Truncate(detail, DetailMax),
@@ -112,7 +117,7 @@ public static class ToastContentBuilder
     {
         if (data == null) return null;
         if (data["ok"] is JValue { Type: JTokenType.Boolean } ok && !(bool)ok)
-            return Preview(data["error"]) ?? "The script reported a failure";
+            return Str(data["error"] as JObject, "message") ?? Preview(data["error"]) ?? "The tool reported a failure";
         if (command == "batch_execute" && data["rolled_back"] is JValue { Type: JTokenType.Boolean } rb && (bool)rb)
             return "Batch rolled back after a failed step";
         return null;
@@ -123,7 +128,22 @@ public static class ToastContentBuilder
         switch (command)
         {
             case "capture_view":
+            case "capture_sheet":
                 return Capture(data);
+            case "get_drawing_info":
+                return ("Drawing " + (Str(data,"document") ?? "") + " · " + (Int(data?["sheets"] as JObject,"total") ?? 0) + " sheets", "", null);
+            case "new_drawing":
+                return ((data?.Value<bool?>("created") == false ? "Reused " : "Created ") + (Str(data,"document") ?? "drawing"), "Unsaved drawing", null);
+            case "add_sheet":
+                return ((data?.Value<bool?>("created") == false ? "Reused sheet " : "Added sheet ") + (Str(data,"name") ?? ""), Str(data,"code") ?? "", null);
+            case "set_title_block":
+                return ("Updated " + (Str(data,"title_block") ?? "title block"), Str(data,"sheet") ?? "", null);
+            case "add_drawing_view": case "add_section_view": case "edit_drawing_view":
+                return ((command == "edit_drawing_view" ? "Updated view " : data?.Value<bool?>("created") == false ? "Reused view " : "Added view ") + (Str(data,"name") ?? ""), "Scale " + Num(Dbl(data,"scale"),"0.###"), null);
+            case "add_drawing_dimension": case "add_balloon":
+                return ((Int(data,"created_count") ?? 0) + " created · " + (Int(data,"count") ?? 0) + (command == "add_balloon" ? " balloons" : " dimensions"), "", null);
+            case "export_drawing":
+                return ((Int(data,"completed_count") ?? 0) + " files exported", Str(data,"format") ?? "", null);
             case "send_code":
                 return (Preview(data?["result"]) ?? Preview(data?["stdout"]) ?? "Script finished", "C# script ran in Inventor", null);
             case "run_baked_tool":

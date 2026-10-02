@@ -72,7 +72,7 @@ public sealed class BatchExecuteHandler : HandlerBase, IInventorCommand
                 ["executed"] = outcome.Results.Count,
                 ["rolled_back"] = rolledBack,
             };
-            ResponseSpillWriter.AttachResults("batch_execute", data, outcome.Results);
+            ResponseSpillWriter.AttachResults("batch_execute", data, outcome.Results, ResponseSpillWriter.ForContext(ctx));
             return Ok(ctx, data);
         }
         catch (Exception ex)

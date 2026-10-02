@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-84%20or%2088%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-95%20or%2099%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 - Inventor は 2025 年以降、デスクトップアドイン開発を .NET Framework から移行しました: **2025/2026 は .NET 8、2027 は .NET 10**。（.NET 8 アドインは 2027 でもバイナリ互換ですが、net10 がネイティブターゲットです。）
 - すべての場所で **4 桁の西暦**（2022..2027）を使用してください — レガシーバージョンコードは使用しないでください。
 
-> **ステータス: 検証済み。** フェーズ 1〜3 は完了し、健全です（デフォルト **84** MCP ツール、`send_code` 有効時 **88**；サーバーおよびテストは Inventor がインストールされていなくてもビルド可能）。Inventor API ハンドラーは実際の Inventor セッションに対して動作確認済みです。本番モデルで使用する前に、ご自身のテンプレートでテストすることをお勧めします。
+> **ステータス: Drawing Phase 1 は実装中です。** Inventor 2027 向け drawing tools を 11 個追加しました。ホスト不要テストとライブ fixture の基本検証は成功しました。完全な受け入れ検証と release gate は保留中です。[検証状況](docs/testing/drawing-phase1.md)。
 
 ---
 
@@ -90,12 +90,25 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **84 ツール**です（send_code ツールセットが有効な場合は **88 ツール**：`inventor_send_code` と 3 つのコードモジュールツール）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **95 ツール**です（send_code ツールセットが有効な場合は **99 ツール**：`inventor_send_code` と 3 つのコードモジュールツール）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
 
-デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
+デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`、`drawing`、`drawing_query`。
 デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
 
 すべての長さ入力は **mm**、角度は **度** 単位です。アドインが Inventor 内部のセンチメートル/ラジアンに変換します。
+
+
+### drawing_query (1) / drawing (10) — Inventor 2027
+
+`inventor_get_drawing_info` is read-only. Drawing writes:
+`inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
+`inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
+`inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
+`inventor_capture_sheet`. Captures write PNG files and are excluded from read-only.
+
+[Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
+[Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
+[Generated read-only registration](docs/testing/readonly-tools.json).
 
 ### meta (3) — サーバーサイドターゲットツール。アドインへのラウンドトリップなし。`--read-only` でも公開
 
@@ -276,7 +289,7 @@ Toast は **専用 STA UI スレッド上のコードのみで構築した WPF**
 
 簡潔に言えば、モデルはユーザーのマシン上に留まり、書き込み/危険なツールは制限されます。
 
-- **読み取り専用モード。** `--read-only`（または `BIMWRIGHT_INVENTOR_READ_ONLY=1`）は、すべての書き込み可能ツールセット（`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`code`、`toolbaker_write`）を削除しますが、`meta` + `query` + `assembly_query` + 読み取り専用 `toolbaker` は維持し、**`inventor_switch_target` は公開したままにします**。サーバーは各コマンドエンベロープに読み取り専用モードを送信します。アドインも `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1` を尊重します。強制された読み取り専用下での書き込みコマンドは `READ_ONLY` を返します。
+- **読み取り専用モード。** `--read-only`（または `BIMWRIGHT_INVENTOR_READ_ONLY=1`）は、すべての書き込み可能ツールセット（`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`code`、`toolbaker_write`、`drawing`）を削除しますが、`meta` + `query` + `assembly_query` + `drawing_query` + 読み取り専用 `toolbaker` は維持し、**`inventor_switch_target` は公開したままにします**。サーバーは各コマンドエンベロープに読み取り専用モードを送信します。アドインも `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1` を尊重します。強制された読み取り専用下での書き込みコマンドは `READ_ONLY` を返します。
 - **send_code の二方向オプトイン。** `inventor_send_code` は**デフォルトで無効**です。サーバー側で `--enable-send-code`（または `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`）**かつ**アドインプロセス側で `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` の**両方**が設定された場合のみ公開されます。それ以外の場合、ディスパッチャーは `SEND_CODE_DISABLED` を返します。禁止 API（ファイル/プロセス/ネットワーク/環境）は拒否されます。
 - **ローカルで認証付きのトランスポート。** TCP はループバックにバインドされ、Named Pipe はローカルマシンスコープです。各セッションごとのディスクリプタにはランダムな認証トークンが含まれますが、MCP メタツールがそれを返すことはありません。
 - **サニタイズされたエラー。** モデルに返されるエラーメッセージは、絶対パスやシークレットの漏洩を防ぐためにサニタイズされています。

@@ -10,7 +10,8 @@ namespace Bimwright.Ipt.Shared.Infrastructure;
 /// Writes oversized command output to local, agent-readable spill files under
 /// <c>%LOCALAPPDATA%\Bimwright\ipt-mcp\spill\</c> (spec F3-b — the ipt-mcp cut of rvt-mcp's
 /// spill machinery: text/JSON artifacts only, no sqlite/ndjson autoformat). Files expire
-/// after 24 h and the directory keeps at most 50 of them. API-agnostic so the test suite
+/// after 36 h by default. A cleanup deletes at most 50 expired files and never evicts
+/// a fresh file because of a count limit. API-agnostic so the test suite
 /// exercises it without Inventor.
 /// </summary>
 public sealed class ResponseSpillWriter
@@ -22,22 +23,27 @@ public sealed class ResponseSpillWriter
     public const int InlineKeepBytes = 8 * 1024;
 
     public const int MaxRetainedFiles = 50;
-    public static readonly TimeSpan MaxFileAge = TimeSpan.FromHours(24);
+    public static readonly TimeSpan MaxFileAge = TimeSpan.FromHours(36);
 
     private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
     private readonly string _directory;
+    private readonly TimeSpan _retention;
 
     public ResponseSpillWriter()
         : this(DefaultDirectory)
     {
     }
 
-    public ResponseSpillWriter(string directory)
+    public ResponseSpillWriter(string directory,int retentionHours=36)
     {
         if (string.IsNullOrWhiteSpace(directory))
             throw new ArgumentException("Spill directory is required.", nameof(directory));
         _directory = Path.GetFullPath(directory);
+        if(retentionHours<=0)throw new ArgumentOutOfRangeException(nameof(retentionHours));
+        _retention=TimeSpan.FromHours(retentionHours);
     }
+
+    public static ResponseSpillWriter ForContext(InventorCommandContext ctx) => new(DefaultDirectory,ctx.SpillRetentionHours);
 
     public static string DefaultDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -80,27 +86,19 @@ public sealed class ResponseSpillWriter
         return path;
     }
 
-    /// <summary>Deletes files older than <see cref="MaxFileAge"/>, then oldest-first beyond
-    /// <see cref="MaxRetainedFiles"/>. Returns how many files were deleted.</summary>
+    /// <summary>Deletes at most <see cref="MaxRetainedFiles"/> expired files, oldest first.
+    /// Fresh files are retained even when their count exceeds this cleanup batch size.</summary>
     public int Cleanup(DateTime utcNow)
     {
         if (!Directory.Exists(_directory)) return 0;
         var deleted = 0;
         var dir = new DirectoryInfo(_directory);
 
-        foreach (var f in dir.GetFiles().Where(f => utcNow - f.LastWriteTimeUtc > MaxFileAge))
+        foreach (var f in dir.GetFiles().Where(f => utcNow - f.LastWriteTimeUtc > _retention).OrderBy(f=>f.LastWriteTimeUtc).Take(MaxRetainedFiles))
         {
             try { f.Delete(); deleted++; } catch { /* locked file — skip */ }
         }
 
-        // Re-enumerate: net48 FileInfo.Delete() doesn't invalidate the cached Exists.
-        var remaining = dir.GetFiles()
-            .OrderByDescending(f => f.LastWriteTimeUtc)
-            .ToList();
-        foreach (var f in remaining.Skip(MaxRetainedFiles))
-        {
-            try { f.Delete(); deleted++; } catch { /* locked file — skip */ }
-        }
         return deleted;
     }
 
