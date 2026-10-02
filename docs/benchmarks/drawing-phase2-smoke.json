@@ -2,7 +2,7 @@
   "schema_version": 1,
   "date": "2026-10-02",
   "phase": "drawing-phase2",
-  "acceptance_status": "owned handler workflow pass; installed Codex acceptance pending",
+  "acceptance_status": "pass; accepted supported Drawing Phase 2 scope",
   "source": {
     "clean_at_test_build": false,
     "base_commit": "35d38fca3c790abd014c49c8d75051b0dc324139"

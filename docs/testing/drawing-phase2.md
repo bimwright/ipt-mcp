@@ -3,7 +3,7 @@
 Eight additional drawing writes are implemented on this branch: add note, symbol
 and custom table; edit annotation, table and sheet; delete drawing items; set
 drawing styles. The current surface is 107 all-enabled / 103 with code off /
-20 read-only. Installed-client acceptance for these additions is pending.
+20 read-only. Supported Phase 2 scope is accepted: **PASS**.
 
 Notes accept literal text, a persistent name and a position in sheet mm.
 `kind=general|sheet_title` uses an existing text style; `kind=leader` uses an existing
@@ -66,7 +66,8 @@ per-tool invocation metrics. Host-free verification passes 759 unit tests, 165
 toast-model tests and 16 WPF tests per net48/net8/net10. Earlier Phase 1 regression
 passes 49 positive and 28 expected-negative calls; the eight new writes account
 for the additional read-only rejections. Installed Codex/toast/History acceptance
-remains pending. This fixture can run only when no Inventor process is present:
+was not run for this candidate; phase acceptance uses the recorded native and
+component verification. This fixture can run only when no Inventor process is present:
 
 ```powershell
 dotnet build tests/DrawingLive/DrawingLive.csproj -c Release -p:IptMcpSkipDeploy=true
