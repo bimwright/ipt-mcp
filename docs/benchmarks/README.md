@@ -8,6 +8,7 @@ Claude Desktop acceptance.
   2027 handler fixtures; see the build, coverage and limitations inside the record.
 - [Drawing Phase 2 raw fixture record](drawing-phase2-smoke.json): earlier Inventor
   2027 handler fixtures; not an installed add-in/client lifecycle test.
+- [v0.2.1 host-free record](v0.2.1-host-free.md): all 111 MCP wrappers on the pinned build, with durations, sizes and expected failure states.
 - Current runtime contracts: `tests/stdio/release-contract.py` calls every registered
   tool against a new disposable data root with no CAD target. It records duration,
   result bytes, estimated tokens (UTF-8 bytes / 4, rounded up) and MCP error state.
