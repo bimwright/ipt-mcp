@@ -39,8 +39,18 @@ namespace Bimwright.Ipt.Shared.Logging
                         return Truncate(result?.Value<string>("name") ?? toolName, MaxLength);
                     case "set_title_block":
                         return Truncate("title block " + result?.Value<string>("title_block"), MaxLength);
-                    case "add_drawing_note": case "add_drawing_table":
+                    case "add_drawing_note": case "add_drawing_table": case "add_drawing_symbol":
                         return Truncate((result?.Value<bool>("created") == true ? "created " : "existing ") + result?.Value<string>("name"), MaxLength);
+                    case "edit_drawing_annotation":
+                        return (result?.Value<int>("updated_count") ?? 0) + " annotations updated";
+                    case "delete_drawing_items":
+                        return (result?.Value<bool>("dry_run") == true ? "preview " + result?.Value<int>("count") : "deleted " + result?.Value<int>("deleted_count")) + " items";
+                    case "edit_drawing_table":
+                        return Truncate((result?.Value<bool>("rebuilt") == true ? "rebuilt " : "updated ") + result?.Value<string>("name"), MaxLength);
+                    case "set_drawing_styles":
+                        return result?.Value<int>("count") + " styles / " + result?.Value<int>("affected_count") + " affected items";
+                    case "edit_sheet":
+                        return Truncate(result?.Value<bool>("deleted") == true ? "deleted sheet " + result?.Value<string>("sheet") : "updated sheet " + result?.Value<string>("name"), MaxLength);
                     case "add_drawing_dimension": case "add_balloon":
                         return (result?.Value<int>("created_count") ?? 0) + " created / " + (result?.Value<int>("count") ?? 0) + " items";
                     case "export_drawing":

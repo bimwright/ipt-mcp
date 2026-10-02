@@ -12,7 +12,8 @@ public static class DrawingInput
     public static readonly string[] Commands = {
         "get_drawing_info", "new_drawing", "add_sheet", "set_title_block", "add_drawing_view",
         "add_section_view", "edit_drawing_view", "add_drawing_dimension", "add_balloon",
-        "export_drawing", "capture_sheet", "add_drawing_note", "add_drawing_table"
+        "export_drawing", "capture_sheet", "add_drawing_note", "add_drawing_table", "add_drawing_symbol", "edit_drawing_annotation",
+        "delete_drawing_items", "edit_drawing_table", "set_drawing_styles", "edit_sheet"
     };
 
     public static JObject Normalize(string command, JObject input)
@@ -32,6 +33,10 @@ public static class DrawingInput
             case "capture_sheet": Default("width", 1600); Default("height", 1100); Default("inline", false); break;
             case "add_drawing_note": Default("kind", "general"); break;
             case "add_drawing_table": Default("anchor", "top_left"); break;
+            case "add_drawing_symbol": Default("rotation_deg", 0); Default("scale", 1); break;
+            case "edit_drawing_annotation": Default("rebuild", false); break;
+            case "edit_drawing_table": Default("rebuild", false); break;
+            case "delete_drawing_items": Default("dry_run", true); break;
         }
         if ((command == "add_drawing_dimension" || command == "add_balloon") && p["items"] is JArray items) foreach (var item in items.OfType<JObject>()) if (!Present(item, "tolerance_mm")) item["tolerance_mm"] = 0.5;
         return p;
@@ -54,7 +59,7 @@ public static class DrawingInput
             "export_drawing" => "document timeout_ms format output_path sheets all_sheets dpi overwrite_existing silent",
             "add_drawing_note" => "document sheet timeout_ms name text position_mm kind style layer view intent box_mm",
             "add_drawing_table" => "document sheet timeout_ms name columns rows position_mm title style anchor row_heights_mm",
-            _ => "document sheet timeout_ms region_mm width height inline output_path"
+            _ => DrawingPhase2Input.Fields(command) ?? "document sheet timeout_ms region_mm width height inline output_path"
         };
         var allowed = fields.Split(' ');
         foreach (var property in p.Properties()) if (!allowed.Contains(property.Name)) throw new ArgumentException("Unknown parameter: " + property.Name);
@@ -62,6 +67,7 @@ public static class DrawingInput
         foreach (var field in new[] { "name", "code", "view", "parent_view" }) if (Present(p, field) && (p[field]!.Type != JTokenType.String || ((string)p[field]!).Length > 128 || ((string)p[field]!).IndexOfAny(new[] { '\r', '\n' }) >= 0)) throw new ArgumentException(field + " must be a single-line name of at most 128 characters.");
         if (p["timeout_ms"] is { Type: not JTokenType.Null }) Range(p, "timeout_ms", 1000, 600000);
         Finite(p);
+        if (DrawingPhase2Input.Fields(command) != null) { DrawingPhase2Input.Validate(command, p); return; }
         foreach (var field in new[] { "annotation_defaults", "prompts", "detail_region_mm", "inherit_3d", "align", "crop", "layout", "region_mm" })
             if (Present(p, field) && p[field] is not JObject) throw new ArgumentException(field + " must be an object.");
         if (Present(p, "iproperties") && p["iproperties"] is not JArray) throw new ArgumentException("iproperties must be an array.");

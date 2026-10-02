@@ -17,6 +17,7 @@ public sealed class DrawingTests : IDisposable
     [InlineData("add_drawing_view")][InlineData("add_section_view")][InlineData("edit_drawing_view")]
     [InlineData("add_drawing_dimension")][InlineData("add_balloon")][InlineData("export_drawing")][InlineData("capture_sheet")]
     [InlineData("add_drawing_note")][InlineData("add_drawing_table")]
+    [InlineData("add_drawing_symbol")][InlineData("edit_drawing_annotation")][InlineData("delete_drawing_items")][InlineData("edit_drawing_table")][InlineData("set_drawing_styles")][InlineData("edit_sheet")]
     public void Direct_write_handler_rejects_readonly_before_validation_or_host_access(string command)
     {
         var handler = new Bimwright.Ipt.Shared.Handlers.Drawing.DrawingCommandHandler(command);
@@ -69,6 +70,7 @@ public sealed class DrawingTests : IDisposable
     [InlineData("export_drawing")]
     [InlineData("capture_sheet")]
     [InlineData("add_drawing_note")][InlineData("add_drawing_table")]
+    [InlineData("add_drawing_symbol")][InlineData("edit_drawing_annotation")][InlineData("delete_drawing_items")][InlineData("edit_drawing_table")][InlineData("set_drawing_styles")][InlineData("edit_sheet")]
     public async Task Every_wrapper_invokes_transport_and_preserves_timeout_and_snake_case(string command)
     {
         using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
@@ -91,6 +93,12 @@ public sealed class DrawingTests : IDisposable
             "export_drawing" => tools.ExportDrawing("D.idw", "pdf", Path.Combine(_dir, "out.pdf"), all_sheets: true, timeout_ms: timeout),
             "add_drawing_note" => tools.AddDrawingNote("Note", "Text", [80, 80], timeout_ms: timeout),
             "add_drawing_table" => tools.AddDrawingTable("Table", [new DrawingTableColumn { Heading = "ITEM", WidthMm = 30 }], [["A"]], [80, 80], timeout_ms: timeout),
+            "add_drawing_symbol" => tools.AddDrawingSymbol("Level", "symbol", definition: "Level", position_mm: [80, 80], timeout_ms: timeout),
+            "edit_drawing_annotation" => tools.EditDrawingAnnotation([JsonDocument.Parse("{\"kind\":\"note\",\"name\":\"Note\",\"changes\":{\"text_override\":\"Updated\"}}").RootElement.Clone()], timeout_ms: timeout),
+            "delete_drawing_items" => tools.DeleteDrawingItems("D.idw", "S", selector: JsonDocument.Parse("{\"kind\":\"all\"}").RootElement.Clone(), timeout_ms: timeout),
+            "edit_drawing_table" => tools.EditDrawingTable("Table", JsonDocument.Parse("{\"title\":\"Updated\"}").RootElement.Clone(), timeout_ms: timeout),
+            "set_drawing_styles" => tools.SetDrawingStyles(JsonDocument.Parse("{\"text_styles\":[{\"name\":\"Text\",\"bold\":true}]}").RootElement.Clone(), timeout_ms: timeout),
+            "edit_sheet" => tools.EditSheet("S", JsonDocument.Parse("{\"active\":true}").RootElement.Clone(), timeout_ms: timeout),
             "capture_sheet" => tools.CaptureSheet("D.idw", "Sheet2", timeout_ms: timeout),
             _ => throw new Exception()
         };
@@ -115,7 +123,7 @@ public sealed class DrawingTests : IDisposable
     {
         var config = new InventorMcpConfig { ReadOnly = true, Toolsets = { "all" }, EnableSendCode = true }; var types = Program.ResolveToolTypesForRegistration(config);
         Assert.Contains(typeof(DrawingQueryTools), types); Assert.DoesNotContain(typeof(DrawingTools), types);
-        var methods = new[] { typeof(DrawingTools), typeof(DrawingQueryTools) }.SelectMany(t => t.GetMethods()).Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null).ToArray(); Assert.Equal(13, methods.Length);
+        var methods = new[] { typeof(DrawingTools), typeof(DrawingQueryTools) }.SelectMany(t => t.GetMethods()).Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null).ToArray(); Assert.Equal(19, methods.Length);
         foreach (var m in methods)
         {
             var declaration = m.CustomAttributes.Single(a => a.AttributeType == typeof(McpServerToolAttribute));

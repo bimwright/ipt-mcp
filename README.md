@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-97%20or%20101%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-103%20or%20107%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -111,7 +111,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **97 tools** by default when all platform toolsets are enabled, or **101 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+The full surface is **103 tools** by default when all platform toolsets are enabled, or **107 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
 
 Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`, `drawing`, `drawing_query`.
 Off by default: `code` (the `send_code` escape hatch — opt-in only).
@@ -125,16 +125,18 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 **Dialogs.** Save, open, close, export and the batch document tools run under `Application.SilentOperation` by default (`silent=true`), so Inventor answers its own prompts with their defaults instead of opening a hidden modal dialog that blocks the call. If a call still times out, the TIMEOUT message and `inventor_health` report `modal_dialog {open, title}` — probed without touching Inventor's main thread.
 
 
-### drawing_query (1) / drawing (12) — Inventor 2027
+### drawing_query (1) / drawing (18) — Inventor 2027
 
 `inventor_get_drawing_info` is read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
 `inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
 `inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
-`inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`. Captures write PNG files and are excluded from read-only.
+`inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`,
+`inventor_add_drawing_symbol`, `inventor_edit_drawing_annotation`, `inventor_delete_drawing_items`,
+`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`. Captures write PNG files and are excluded from read-only.
 
 [Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
-[Notes and custom tables](docs/testing/drawing-phase2.md) ·
+[Drawing annotations, tables and sheets](docs/testing/drawing-phase2.md) ·
 [Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
 [Generated read-only registration](docs/testing/readonly-tools.json).
 

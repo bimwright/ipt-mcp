@@ -9,8 +9,8 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Locks the built surface at 101 all-enabled tools: the existing 88 plus 13 drawing tools.
-/// Code-off exposes 97; read-only retains the drawing query and drops drawing writes.
+/// Locks the built surface at 107 all-enabled tools: the existing 88 plus 19 drawing tools.
+/// Code-off exposes 103; read-only retains the drawing query and drops drawing writes.
 /// </summary>
 public sealed class RegistrationCountTests
 {
@@ -35,7 +35,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_101_tools()
+    public void All_toolsets_with_send_code_register_exactly_107_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -43,11 +43,11 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(101, names.Length);
+        Assert.Equal(107, names.Length);
     }
 
     [Fact]
-    public void The_101_tools_match_the_frozen_surface()
+    public void The_107_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
@@ -56,7 +56,7 @@ public sealed class RegistrationCountTests
             // drawing (13)
             "inventor_get_drawing_info", "inventor_new_drawing", "inventor_add_sheet", "inventor_set_title_block",
             "inventor_add_drawing_view", "inventor_add_section_view", "inventor_edit_drawing_view",
-            "inventor_add_drawing_dimension", "inventor_add_balloon", "inventor_export_drawing", "inventor_capture_sheet", "inventor_add_drawing_note", "inventor_add_drawing_table",
+            "inventor_add_drawing_dimension", "inventor_add_balloon", "inventor_export_drawing", "inventor_capture_sheet", "inventor_add_drawing_note", "inventor_add_drawing_table", "inventor_add_drawing_symbol", "inventor_edit_drawing_annotation", "inventor_delete_drawing_items", "inventor_edit_drawing_table", "inventor_set_drawing_styles", "inventor_edit_sheet",
             // meta (3)
             "inventor_list_available_targets", "inventor_get_current_target", "inventor_switch_target",
             // query (7) + document (7)
@@ -97,10 +97,10 @@ public sealed class RegistrationCountTests
             "inventor_get_assembly_bom", "inventor_list_constraints", "inventor_list_occurrences",
         };
 
-        Assert.Equal(101, expected.Length);
+        Assert.Equal(107, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
-        // and nothing extra beyond the 101 expected
+        // and nothing extra beyond the 107 expected
         foreach (var n in names)
             Assert.True(expected.Contains(n), $"unexpected extra tool: {n}");
     }
@@ -154,11 +154,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_97_tools_without_send_code()
+    public void Default_config_registers_103_tools_without_send_code()
     {
-        // Default (no --enable-send-code) drops the 4 `code` tools (send_code + modules), leaving 97.
+        // Default (no --enable-send-code) drops the 4 `code` tools (send_code + modules), leaving 103.
         var names = ToolNames(new InventorMcpConfig());
         Assert.False(names.Contains("inventor_send_code"), "send_code must be off by default");
-        Assert.Equal(97, names.Length);
+        Assert.Equal(103, names.Length);
     }
 }

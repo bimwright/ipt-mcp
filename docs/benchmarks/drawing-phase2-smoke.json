@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-02",
+  "phase": "drawing-phase2",
+  "acceptance_status": "owned handler workflow pass; installed Codex acceptance pending",
+  "source": {
+    "clean_at_test_build": false,
+    "base_commit": "35d38fca3c790abd014c49c8d75051b0dc324139"
+  },
+  "runtime": {
+    "host": "Inventor 2027",
+    "handler_assembly_sha256": "38085c3a4f7dfa6aaa1f2a5be2cf7f50c814713f6d46ae0964fbeaffbe07e936",
+    "framework": "net10.0-windows7.0"
+  },
+  "fixture": {
+    "geometry": "Generated diameter 40 mm disc, native angular/linear sketch probes, prompted symbols, notes, custom tables and two sheets",
+    "expected_negative_calls": 25,
+    "installed_addin_or_client_acceptance": false,
+    "send_code": false,
+    "invocation_path": "Registry and CommandDispatcher on owned STA; every MCP wrapper separately tested over a named pipe",
+    "positive_calls": 57
+  },
+  "surface": {
+    "source": "actual unit registration; candidate tools/list verified separately before installation",
+    "all_code_enabled": 107,
+    "default": 103,
+    "read_only": 20
+  },
+  "tests": {
+    "unit": {
+      "failed": 0,
+      "passed": 759
+    },
+    "wpf": {
+      "net48": 16,
+      "net8": 16,
+      "net10": 16
+    },
+    "toast_model": {
+      "failed": 0,
+      "passed": 165
+    }
+  },
+  "metrics_note": "response_bytes is compact UTF-8 command-result JSON reserialized from fixture output; tokens_estimate is ceil(bytes/4), not measured tokenizer usage",
+  "invocations": [
+    {
+      "tool": "inventor_add_drawing_note",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 336,
+      "response_bytes": 528,
+      "tokens_estimate": 132,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 8,
+      "expected_negative_invocations": 4
+    },
+    {
+      "tool": "inventor_add_drawing_table",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 381,
+      "response_bytes": 535,
+      "tokens_estimate": 134,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 7,
+      "expected_negative_invocations": 4
+    },
+    {
+      "tool": "inventor_add_drawing_symbol",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 359,
+      "response_bytes": 945,
+      "tokens_estimate": 237,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 6,
+      "expected_negative_invocations": 2
+    },
+    {
+      "tool": "inventor_edit_drawing_annotation",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 348,
+      "response_bytes": 1093,
+      "tokens_estimate": 274,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 10,
+      "expected_negative_invocations": 4
+    },
+    {
+      "tool": "inventor_delete_drawing_items",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 270,
+      "response_bytes": 478,
+      "tokens_estimate": 120,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 7,
+      "expected_negative_invocations": 5
+    },
+    {
+      "tool": "inventor_edit_drawing_table",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 254,
+      "response_bytes": 764,
+      "tokens_estimate": 191,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 4,
+      "expected_negative_invocations": 2
+    },
+    {
+      "tool": "inventor_set_drawing_styles",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 564,
+      "response_bytes": 1135,
+      "tokens_estimate": 284,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 2,
+      "expected_negative_invocations": 1
+    },
+    {
+      "tool": "inventor_edit_sheet",
+      "status": "Success",
+      "scope": "first positive owned generic handler invocation; additional variants counted separately",
+      "duration_ms": 76,
+      "response_bytes": 573,
+      "tokens_estimate": 144,
+      "size_policy": "within_fixture_budget",
+      "positive_invocations": 6,
+      "expected_negative_invocations": 3
+    }
+  ]
+}

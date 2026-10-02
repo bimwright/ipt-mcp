@@ -11,7 +11,8 @@ $publicDocs = @(
     'docs/releasing.md', 'docs/toolbaker.md',
     'docs/testing/manual-smoke.md', 'docs/testing/smart-toasts.md',
     'docs/testing/drawing-phase1.md', 'docs/testing/readonly-tools.json',
-    'docs/benchmarks/drawing-phase1-smoke.json'
+    'docs/testing/drawing-phase2.md',
+    'docs/benchmarks/drawing-phase1-smoke.json', 'docs/benchmarks/drawing-phase2-smoke.json'
 )
 $privatePath = '(^|/)(\.(artifacts[^/]*|worktrees|claude|cursor|kilo|agents|openclaude)|internal-docs|analysis|artifacts|runs|spikes)(/|$)|^docs/(superpowers|design|reviews|benchmarks|research-archive|archive)/|(^|/)codemap\.md$'
 $paths = @(& git -c core.quotepath=false -C $RepoRoot ls-files --cached --others --exclude-standard --deduplicate)

@@ -37,6 +37,12 @@ internal static partial class DrawingOperations
                 "capture_sheet" => Capture(ctx, d, s, p),
                 "add_drawing_note" => AddNote(ctx, d, s, p),
                 "add_drawing_table" => AddTable(ctx, d, s, p),
+                "add_drawing_symbol" => AddSymbol(ctx, d, s, p),
+                "edit_drawing_annotation" => EditAnnotations(ctx, d, s, p),
+                "delete_drawing_items" => DeleteItems(ctx, d, s, p),
+                "edit_drawing_table" => EditTable(ctx, d, s, p),
+                "set_drawing_styles" => SetStyles(ctx, d, p),
+                "edit_sheet" => EditSheet(ctx, d, s, p),
                 _ => throw new ArgumentException("Unknown drawing command.")
             };
         }
@@ -64,7 +70,7 @@ internal static partial class DrawingOperations
             row["annotation_data_available"] = annotationsAvailable;
             if (!annotationsAvailable)
             {
-                foreach (var key in new[] { "dimension_count", "symbol_count", "balloon_count", "note_count", "table_count" }) row[key] = JValue.CreateNull();
+                foreach (var key in new[] { "dimension_count", "symbol_count", "balloon_count", "note_count", "table_count", "centermark_count" }) row[key] = JValue.CreateNull();
                 row["readback_hint"] = "Activate the sheet in Inventor, then query again. Do not recreate annotations from unavailable data.";
             }
             row["views"] = Page(s.DrawingViews.Cast<DrawingView>().Select(v => (JToken)DrawingSupport.ViewInfo(v)), max, offset);
@@ -72,18 +78,30 @@ internal static partial class DrawingOperations
             {
                 row["dimensions"] = JValue.CreateNull(); row["symbols"] = JValue.CreateNull();
                 row["notes"] = JValue.CreateNull(); row["tables"] = JValue.CreateNull();
+                row["centermarks"] = JValue.CreateNull(); row["balloons"] = JValue.CreateNull(); row["contents"] = JValue.CreateNull();
             }
             else if ((string?)p["include"] == "items")
             {
-                row["dimensions"] = Page(s.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name"), ["kind"] = v.Type.ToString(), ["value"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? v.ModelValue * 180 / Math.PI : v.ModelValue * 10, ["unit"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? "deg" : "mm", ["attached"] = v.Attached }), max, offset);
-                row["symbols"] = Page(s.SketchedSymbols.Cast<SketchedSymbol>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name") ?? v.Name, ["definition"] = v.Definition.Name, ["position_mm"] = new JArray(v.Position.X * 10, v.Position.Y * 10) }), max, offset);
-                row["notes"] = Page(s.DrawingNotes.GeneralNotes.Cast<GeneralNote>().Select(x => (JToken)NoteInfo(x)).Concat(s.DrawingNotes.LeaderNotes.Cast<LeaderNote>().Select(x => (JToken)NoteInfo(x))), max, offset);
-                row["tables"] = Page(s.CustomTables.Cast<CustomTable>().Select(x => (JToken)TableQueryInfo(x, max, offset)), max, offset);
+                var inventory = Inventory(s);
+                row["contents"] = Page(Inventory(s, true).Select(i => (JToken)i.Target(d, s)), max, offset);
+                row["dimensions"] = Page(inventory.Where(i => i.Kind == "dimension").Select(i => { var info = ItemInfo(d, s, i); info["kind"] = ((GeneralDimension)i.Entity).Type.ToString(); return (JToken)info; }), max, offset);
+                row["symbols"] = Page(inventory.Where(i => i.Entity is SketchedSymbol).Select(i => (JToken)ItemInfo(d, s, i)), max, offset);
+                row["notes"] = Page(inventory.Where(i => i.Kind == "note").Select(i => (JToken)ItemInfo(d, s, i)), max, offset);
+                row["centermarks"] = Page(inventory.Where(i => i.Kind == "centermark").Select(i => (JToken)ItemInfo(d, s, i)), max, offset);
+                row["balloons"] = Page(inventory.Where(i => i.Kind == "balloon").Select(i => (JToken)ItemInfo(d, s, i)), max, offset);
+                row["tables"] = Page(inventory.Where(i => i.Kind == "table").Select(i => { var info = TableQueryInfo((CustomTable)i.Entity, max, offset); info["selection"] = i.Target(d, s); info["locator"] = info["selection"]!["locator"]?.DeepClone(); return (JToken)info; }), max, offset);
             }
             sheetInfo.Add(row);
         }
         var result = new JObject { ["document"] = d.DisplayName, ["path"] = d.FullFileName, ["dirty"] = d.Dirty, ["type"] = d.DocumentType.ToString(), ["projection"] = d.StylesManager.ActiveStandardStyle.FirstAngleProjection ? "first_angle" : "third_angle", ["sheets"] = Page(sheetInfo, max, offset), ["title_block_definitions"] = Page(d.TitleBlockDefinitions.Cast<TitleBlockDefinition>().Select(x => (JToken)new JValue(x.Name)), max, offset), ["border_definitions"] = Page(d.BorderDefinitions.Cast<BorderDefinition>().Select(x => (JToken)new JValue(x.Name)), max, offset), ["symbol_definitions"] = Page(d.SketchedSymbolDefinitions.Cast<SketchedSymbolDefinition>().Select(x => (JToken)new JValue(x.Name)), max, offset), ["dimension_styles"] = Page(d.StylesManager.DimensionStyles.Cast<DimensionStyle>().Select(x => (JToken)new JValue(x.Name)), max, offset) };
         if (p.Value<bool?>("references") != false) result["references"] = Page(d.ReferencedDocumentDescriptors.Cast<DocumentDescriptor>().Select(x => (JToken)new JObject { ["path"] = x.FullDocumentName, ["missing"] = x.ReferenceMissing }), max, offset);
+        result["styles"] = new JObject {
+            ["text_styles"] = Page(d.StylesManager.TextStyles.Cast<TextStyle>().Select(x => (JToken)new JObject { ["name"] = x.Name, ["location"] = x.StyleLocation.ToString() }), max, offset),
+            ["layers"] = Page(d.StylesManager.Layers.Cast<Layer>().Select(x => (JToken)new JObject { ["name"] = x.Name, ["location"] = x.StyleLocation.ToString() }), max, offset),
+            ["leader_styles"] = Page(d.StylesManager.LeaderStyles.Cast<LeaderStyle>().Select(x => (JToken)new JObject { ["name"] = x.Name, ["location"] = x.StyleLocation.ToString() }), max, offset),
+            ["centermark_styles"] = Page(d.StylesManager.CentermarkStyles.Cast<CentermarkStyle>().Select(x => (JToken)new JObject { ["name"] = x.Name, ["location"] = x.StyleLocation.ToString() }), max, offset),
+            ["table_styles"] = Page(d.StylesManager.TableStyles.Cast<TableStyle>().Select(x => (JToken)new JObject { ["name"] = x.Name, ["location"] = x.StyleLocation.ToString() }), max, offset)
+        };
         return result;
     }
     private static InventorCommandResult NewDrawing(InventorCommandContext ctx, JObject p)
