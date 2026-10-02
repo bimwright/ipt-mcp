@@ -23,6 +23,9 @@ The [smoke record](../benchmarks/drawing-phase1-smoke.json) summarizes invocatio
 the actual registry/dispatcher/handlers against generated geometry, with send-code disabled.
 Host-free tests invoke every MCP wrapper over a named pipe and check wire DTOs/timeouts,
 annotations, read-only registration, input failures and response compaction.
+Installed Codex/Inventor 2027 checks at `ccb2681` passed all eleven tool paths, save/reopen,
+exports and capture, native leader/dimension attachment and exception-after-create rollback.
+The user observed drawing toasts; the add-in journal recorded successful and failed outcomes.
 The [read-only allowlist](readonly-tools.json) is generated from the built server's
 `tools/list`; it describes registration, not a claim of legacy annotation/add-in parity.
 
@@ -42,7 +45,7 @@ This is **partial implementation acceptance**, not a release verdict or producti
   Queued timeout containment, further template variants and deployed add-in toast/History behavior
   still need acceptance evidence.
 - Legacy annotation/read-only/catalog parity, global configurable response guarding,
-  packaging/installer/client lifecycle and the release gate remain separate dependencies.
+  whole-product release artifacts/MCPB/client lifecycle and the release gate remain separate dependencies.
 
 ## Run the disposable fixture
 

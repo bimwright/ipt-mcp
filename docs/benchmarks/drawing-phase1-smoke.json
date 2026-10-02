@@ -190,5 +190,39 @@
     "Older Inventor live support, packaging/installer/MCPB and canonical release gate",
     "Legacy hints/read-only/catalog parity and global configurable output guarding"
   ],
-  "release_verdict": "not run"
+  "release_verdict": "not run",
+  "codex_acceptance": {
+    "date": "2026-10-02",
+    "commit": "ccb2681780d6e02ccea030f59422cf88634c1047",
+    "clean_at_package_build": true,
+    "host": "Inventor 2027",
+    "client": "Codex desktop",
+    "invocation": "actual connected MCP tool calls through installed add-in and STA dispatcher",
+    "registered_tools": 95,
+    "drawing_tools_passed": 11,
+    "positive_calls": 29,
+    "expected_negative_calls": 3,
+    "disposable_fixture": {
+      "positive_calls": 47,
+      "expected_negative_calls": 18
+    },
+    "drawing_contract_tests": {
+      "passed": 43,
+      "failed": 0
+    },
+    "verified": [
+      "Dimension create/query values agree in mm/deg before and after save/reopen",
+      "Native dimension and symbol-leader attachment after edits and reopen",
+      "Capture, all/subset/ordered PDF, per-sheet DWG and native IDW copy",
+      "Dirty model reference and its disk bytes preserved",
+      "Native exception after view creation rolls back without item-count changes",
+      "Installed journal records success and failure; owner observed drawing toasts"
+    ],
+    "pending": [
+      "Controlled queued-timeout containment; 1000 ms capture probe completed in 399 ms",
+      "Specific Failed/Capture/History UI interaction matrix",
+      "Legacy parity and whole-product release gates"
+    ],
+    "release_verdict": "not run"
+  }
 }
