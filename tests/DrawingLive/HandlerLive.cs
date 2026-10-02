@@ -89,6 +89,9 @@ static class HandlerLive
             if ((string?)balloonReadback["items"]![0]!["text"]! != "1") throw new Exception("Balloon prompt readback mismatch.");
             var layoutBalloon = (JObject)balloons.DeepClone(); layoutBalloon["items"]![0]!["name"] = "balloon-layout"; ((JObject)layoutBalloon["items"]![0]!).Remove("position_mm"); layoutBalloon["items"]![0]!["target_region_mm"] = new JObject { ["min"] = new JArray(250, 40), ["max"] = new JArray(310, 90) };
             layoutBalloon["layout"] = new JObject { ["column_x_mm"] = 360, ["start_y_mm"] = 95, ["spacing_mm"] = 15, ["leader_angle_deg"] = 30 }; Call("add_balloon", layoutBalloon);
+            Call("edit_drawing_view",new JObject{["document"]=doc,["sheet"]=sh,["view"]="assembly",["scale"]=0.6,["position_mm"]=new JArray(285,70)});
+            foreach(SketchedSymbol symbol in front.SketchedSymbols)
+                if(!symbol.Leader.AllLeafNodes.Cast<LeaderNode>().Any(node=>node.AttachedEntity?.Geometry is DrawingCurve curve && curve.Parent.Name=="assembly"))throw new Exception("Balloon lost attachment after assembly view scale/move.");
             Call("edit_drawing_view", new JObject { ["document"] = doc, ["sheet"] = sh, ["view"] = "front", ["scale"] = 0.8, ["position_mm"] = new JArray(125, 125) });
             Call("add_drawing_view", baseInput, true);
             foreach (var command in Bimwright.Ipt.Shared.Contracts.DrawingInput.Commands.Where(x => x != "get_drawing_info")) { var failure = Call(command, new JObject(), true, true); if ((string?)failure["error"]?["code"] != "READ_ONLY") throw new Exception("Read-only write rejection failed."); }
@@ -119,6 +122,8 @@ static class HandlerLive
             d.Close(true); var reopened = (DrawingDocument)app.Documents.Open(Path.Combine(root, "saved.idw"), true); Console.WriteLine("REOPEN sheets=" + reopened.Sheets.Count + " missing=" + reopened.HasReferencesMissing); if (reopened.Sheets.Count != 2 || reopened.HasReferencesMissing) throw new Exception("Reopen lost sheets/references.");
             addSheet["document"] = reopened.DisplayName; var reused = Call("add_sheet", addSheet); if (reused.Value<bool>("created")) throw new Exception("Sheet identity did not survive save/reopen.");
             var afterScale = reopened.Sheets.Cast<Sheet>().Single(x => x.Name == sh); if (afterScale.SketchedSymbols.Count != 2 || afterScale.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Any(x => !x.Attached)) throw new Exception("Annotations lost after edit/save/reopen.");
+            foreach(SketchedSymbol symbol in afterScale.SketchedSymbols)
+                if(!symbol.Leader.AllLeafNodes.Cast<LeaderNode>().Any(node=>node.AttachedEntity?.Geometry is DrawingCurve curve && curve.Parent.Name=="assembly"))throw new Exception("Balloon lost attachment after reopen.");
             Console.WriteLine("ROOT " + root);
         }
         catch (Exception ex) { Console.WriteLine(ex); System.Environment.ExitCode = 1; }

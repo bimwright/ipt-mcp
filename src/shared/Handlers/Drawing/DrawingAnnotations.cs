@@ -136,8 +136,10 @@ internal static partial class DrawingOperations
                     if (plan.Elbow != null) points.Add(plan.Elbow);
                     points.Add(plan.Intent!.Intent); symbol = s.SketchedSymbols.AddWithLeader(definition, points, PromptStrings: plan.Prompts); DrawingSupport.Mark(symbol.AttributeSets, (string)plan.Input["name"]!, plan.Signature); DrawingSupport.Write(symbol.AttributeSets, "view", (string)plan.Input["view"]!); created++;
                 }
+                var attached = symbol.Leader.AllLeafNodes.Cast<LeaderNode>().Any(node => node.AttachedEntity?.Geometry is DrawingCurve curve && curve.Parent.Name == (string)plan.Input["view"]!);
+                if (!attached) throw new InvalidOperationException("Balloon leader is not attached to the requested view.");
                 var actualPrompts = new JObject(); foreach (var box in PromptBoxes(definition.Sketch)) actualPrompts[PromptLabel(box)] = symbol.GetResultText(box);
-                rows.Add(new JObject { ["name"] = (string)plan.Input["name"]!, ["created"] = plan.Existing == null, ["view"] = (string)plan.Input["view"]!, ["occurrence_path"] = (string)plan.Input["occurrence_path"]!, ["text"] = actualPrompts.Count == 1 ? actualPrompts.Properties().First().Value.DeepClone() : null, ["prompts"] = actualPrompts, ["position_mm"] = new JArray(symbol.Position.X * 10, symbol.Position.Y * 10), ["mode"] = "symbol", ["definition"] = definition.Name, ["model_bom_changed"] = false });
+                rows.Add(new JObject { ["name"] = (string)plan.Input["name"]!, ["created"] = plan.Existing == null, ["view"] = (string)plan.Input["view"]!, ["occurrence_path"] = (string)plan.Input["occurrence_path"]!, ["text"] = actualPrompts.Count == 1 ? actualPrompts.Properties().First().Value.DeepClone() : null, ["prompts"] = actualPrompts, ["position_mm"] = new JArray(symbol.Position.X * 10, symbol.Position.Y * 10), ["mode"] = "symbol", ["attached"] = attached, ["definition"] = definition.Name, ["model_bom_changed"] = false });
             }
             return new JObject { ["ok"] = true, ["count"] = rows.Count, ["created_count"] = created, ["items"] = rows, ["model_bom_changed"] = false };
         });
