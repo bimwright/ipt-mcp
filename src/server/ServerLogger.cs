@@ -139,9 +139,7 @@ internal static class ServerLogger
 
     internal static string ResolveLogPath(string? envOverride) =>
         string.IsNullOrWhiteSpace(envOverride)
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Bimwright", "ipt-mcp-calls.jsonl")
+            ? Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").GatewayLogPath
             : envOverride;
 
     internal static string? TruncateError(string? s, int max = MaxDataErrorChars) =>

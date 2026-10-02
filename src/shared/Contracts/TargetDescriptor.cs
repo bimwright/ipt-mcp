@@ -16,4 +16,5 @@ public sealed class TargetDescriptor
     [JsonProperty("document_title")] public string? DocumentTitle { get; set; }
     [JsonProperty("document_path")] public string? DocumentPath { get; set; }
     [JsonProperty("last_heartbeat_utc")] public DateTimeOffset LastHeartbeatUtc { get; set; }
+    [JsonProperty("setup_identity", NullValueHandling = NullValueHandling.Ignore)] public Newtonsoft.Json.Linq.JObject? SetupIdentity { get; set; }
 }

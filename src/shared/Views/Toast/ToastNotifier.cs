@@ -1,17 +1,20 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
+using Bimwright.Ipt.Shared.Localization;
 
 namespace Bimwright.Ipt.Shared.Views.Toast;
 
 /// <summary>
 /// Listener-side front door. All host data is captured as a DTO on Inventor's STA; notifications
-/// and task reports never wait for the Inventor command queue. No localization dependency.
+/// and task reports never wait for the Inventor command queue.
 /// </summary>
 internal sealed class ToastNotifier : IDisposable
 {
+    private const int ConnectionSeconds = 6;
+    private const int ToggleSeconds = 3;
+
     private readonly object _gate = new();
-    private readonly ToastTheme _theme;
-    private readonly ToastFeed _feed = new();
+    private readonly ActivityAggregator _activity = new();
     private readonly string _identity;
     private readonly Action _openHistory;
     private ToastHost? _host;
@@ -21,10 +24,9 @@ internal sealed class ToastNotifier : IDisposable
     private volatile InventorUiSnapshot _ui = InventorUiSnapshot.Empty;
     private string? _pendingConnection;
 
-    public ToastNotifier(ToastSettings settings, string identity, Action openHistory)
+    public ToastNotifier(bool enabled, string identity, Action openHistory)
     {
-        _enabled = settings.EnableToast;
-        _theme = settings.Theme;
+        _enabled = enabled;
         _identity = identity;
         _openHistory = openHistory;
     }
@@ -39,7 +41,7 @@ internal sealed class ToastNotifier : IDisposable
                 if (_disposed) return;
                 _enabled = value;
                 _pendingConnection = null;
-                if (_feed.Reset()) _host?.RequestRender();
+                if (_activity.Reset()) _host?.RequestRender();
             }
         }
     }
@@ -49,7 +51,6 @@ internal sealed class ToastNotifier : IDisposable
         set { lock (_gate) { _showBranding = value; _host?.SetShowBranding(value); } }
     }
     public bool HasVisibleSnapshot => _ui.AppVisible && _ui.MainHwnd != 0;
-    public string? LastPaletteDecision { get { lock (_gate) return _host?.LastDecision; } }
 
     public void UpdateSnapshot(InventorUiSnapshot ui)
     {
@@ -58,7 +59,7 @@ internal sealed class ToastNotifier : IDisposable
             if (_disposed) return;
             _ui = ui;
             _host?.SetSnapshot(ui);
-            if (_pendingConnection != null && CanCreate())
+            if (_pendingConnection != null && CanShowStatus())
             {
                 var info = _pendingConnection;
                 _pendingConnection = null;
@@ -75,9 +76,10 @@ internal sealed class ToastNotifier : IDisposable
             lock (_gate)
             {
                 if (!_enabled || _disposed) return false;
-                if (!CanCreate()) { _pendingConnection = connectionInfo; return false; }
+                if (!CanShowStatus()) { _pendingConnection = connectionInfo; return false; }
                 var host = EnsureHost();
-                var post = _feed.ShowStatus("Agent connected", "ipt-mcp is ready · " + connectionInfo, 6, ToastHost.FrameUsable(_ui));
+                var summary = L.T("toast.connected.summary") + " · " + connectionInfo;
+                var post = _activity.ShowConnectionStatus(L.T("toast.connected.title"), summary, ConnectionSeconds);
                 if (post) host.RequestRender();
                 return post;
             }
@@ -94,12 +96,11 @@ internal sealed class ToastNotifier : IDisposable
             {
                 if (_disposed || !CanCreate()) return;
                 var host = EnsureHost();
+                var key = _enabled ? "toast.status.enabled" : "toast.status.disabled";
+                var body = L.T(key + ".summary") + (persisted ? "" : " · " + L.T("toast.status.saveFailed"));
+                _activity.ShowStatus(L.T(key), body, ToggleSeconds);
                 // Reset and status can share one coalesced render, but startup may not have had a host
                 // when Reset claimed it. Always post here so the status cannot get stranded.
-                _feed.ShowStatus(_enabled ? "Toast notifications enabled" : "Toast notifications disabled",
-                    (_enabled ? "New activity will appear here." : "New activity is hidden until enabled.")
-                    + (persisted ? "" : " Preference could not be saved; this session still uses the new state."),
-                    3, ToastHost.FrameUsable(_ui));
                 host.RequestRender();
             }
         }
@@ -120,20 +121,23 @@ internal sealed class ToastNotifier : IDisposable
                 if (!_enabled || _disposed || !CanCreate()) return false;
                 var model = ToastContentBuilder.Build(e); // includes soft-failure normalization
                 var host = EnsureHost();
-                if (_feed.Record(model, ToastHost.FrameUsable(_ui))) host.RequestRender();
+                if (_activity.Record(model, ToastHost.FrameUsable(_ui))) host.RequestRender();
                 return true;
             }
         }
         catch { return false; }
     }
 
-    public void Retheme() { lock (_gate) _host?.Retheme(); }
     private bool CanCreate() => ToastVisibility.ShouldCreate(_ui.AppVisible, _ui.MainHwnd,
         ToastNative.MainState(new IntPtr(_ui.MainHwnd)));
+
+    /// <summary>A status card is not parked, so it waits for a frame that is on screen and usable.</summary>
+    private bool CanShowStatus() => CanCreate() && ToastHost.FrameUsable(_ui);
+
     private ToastHost EnsureHost()
     {
         if (_host != null) return _host;
-        _host = new ToastHost(_theme, _ui, _feed, _identity, _openHistory, _showBranding);
+        _host = new ToastHost(_ui, _activity, _identity, _openHistory, _showBranding);
         _host.RequestRender(); // drains a Reset that claimed the render slot before the host existed
         return _host;
     }
@@ -145,7 +149,7 @@ internal sealed class ToastNotifier : IDisposable
         {
             _disposed = true;
             _pendingConnection = null;
-            _feed.Reset();
+            _activity.Reset();
             host = _host;
             _host = null;
         }

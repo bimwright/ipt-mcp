@@ -28,6 +28,8 @@ public sealed class InventorGatewayException : Exception
 /// </summary>
 public sealed class PluginClient
 {
+    private static readonly Lazy<JObject> SetupIdentity = new(() => SetupRuntimeIdentity.Capture(
+        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"), typeof(PluginClient).Assembly, "gateway"));
     private readonly InventorMcpConfig _config;
     private readonly TargetRegistry _registry;
     private TargetDescriptor? _current;
@@ -141,6 +143,8 @@ public sealed class PluginClient
             }
 
             ok = true;
+            if (command == "health" && result.Data is JObject healthData)
+                healthData["setup_gateway"] = SetupIdentity.Value.DeepClone();
             return result.Data ?? JValue.CreateNull();
         }
         catch (Exception ex)

@@ -56,11 +56,28 @@ public sealed class ToastSourcePolicyTests
     [Fact]
     public void Toast_window_never_takes_activation_and_is_never_owned()
     {
-        var window = ReadToast("ToastWindow.cs");
+        // The card is rvt-mcp's McpToastWindow, which blocks activation itself. Owning it by an Inventor HWND
+        // would tie the toast thread's input queue to Inventor's, so neither file may set an owner.
+        var window = ReadToast("McpToastWindow.cs");
         Assert.Contains("ShowActivated = false", window);
-        Assert.Contains("ToastNative.MakeNoActivate(", window);
+        Assert.Contains("WS_EX_NOACTIVATE", window);
         Assert.DoesNotContain(".Owner =", window);
-        Assert.Contains("WS_EX_NOACTIVATE", ReadToast("ToastNative.cs"));
+        Assert.DoesNotContain(".Owner =", ReadToast("McpToastManager.cs"));
+        Assert.DoesNotContain("WindowInteropHelper", ReadToast("McpToastManager.cs"));
+    }
+
+    [Fact]
+    public void Toast_has_no_theme_or_backdrop_sampling()
+    {
+        Assert.False(File.Exists(Path.Combine(ToastDir, "ScreenSampler.cs")));
+        Assert.False(File.Exists(Path.Combine(ToastDir, "Model", "ToastPalette.cs")));
+        foreach (var file in Directory.EnumerateFiles(ToastDir, "*.cs", SearchOption.AllDirectories))
+        {
+            var text = File.ReadAllText(file);
+            Assert.DoesNotMatch(@"ToastTheme", text);
+            Assert.DoesNotContain("BackdropHint", text);
+            Assert.DoesNotContain("CopyFromScreen", text);
+        }
     }
 
     [Fact]

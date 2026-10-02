@@ -33,27 +33,6 @@ public sealed record ToastModel(
 
     /// <summary>The agent-reported outcome (completed, failed, cancelled); null for tool results.</summary>
     public string? Outcome { get; init; }
-
-    /// <summary>A cancelled job ended on purpose: neutral, neither a tick nor an error mark.</summary>
-    public ToastIcon Icon => !Success ? ToastIcon.Error : Outcome == "cancelled" ? ToastIcon.Neutral : ToastIcon.Success;
-}
-
-public enum ToastIcon
-{
-    Success,
-    Error,
-    Neutral,
-}
-
-/// <summary>Segoe MDL2 Assets glyphs. Escaped, not literal: editors silently drop private-use characters.</summary>
-public static class ToastGlyph
-{
-    public static string For(ToastIcon icon) => icon switch
-    {
-        ToastIcon.Error => "\uE783",     // ErrorBadge
-        ToastIcon.Neutral => "\uE733",   // Blocked
-        _ => "\uE73E",                   // CheckMark
-    };
 }
 
 /// <summary>Turns an Inventor command result into toast copy. Cheap: never serializes large payloads.</summary>
@@ -156,6 +135,12 @@ public static class ToastContentBuilder
         if (name != null) return (name, "", null);
         return (Str(data, "message") ?? "Completed", "", null);
     }
+
+    /// <summary>
+    /// The card only ever loads a thumbnail from a local image file: a real, non-UNC path with an image
+    /// extension. The path comes from a successful capture_view result, so the handler's path policy has run.
+    /// </summary>
+    internal static bool IsSafeImagePath(string? path) => ToastThumbnail.PathIfImage(path) != null;
 
     private static (string Summary, string Detail, string? Thumb) Capture(JObject? data)
     {

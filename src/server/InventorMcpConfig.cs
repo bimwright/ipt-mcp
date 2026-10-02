@@ -17,10 +17,9 @@ public sealed class InventorMcpConfig
     public string? TargetId { get; set; }
     public List<string> Toolsets { get; set; } = new();
 
-    public string DescriptorDirectory { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "ipt-mcp");
+    public string DescriptorDirectory { get; set; } = Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").RuntimeRoot;
     public string BakeDirectory { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "ipt-mcp", "baked");
+        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot, "baked");
 
     public static InventorMcpConfig Load(string[] args)
     {

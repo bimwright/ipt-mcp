@@ -35,10 +35,7 @@ public static class CaptureImagePolicy
         }
         catch { /* malformed env value — fall back to the default root */ }
 
-        // GetFolderPath can return "" on a broken profile — GetTempPath is still user-scoped.
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrEmpty(local)) local = Path.GetTempPath();
-        return Path.Combine(local, "Bimwright", "ipt-mcp");
+        return Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot;
     }
 
     /// <summary>Drive-absolute (<c>C:\…</c>/<c>C:/…</c>) or UNC (<c>\\srv\share</c>) — net48-safe

@@ -31,11 +31,13 @@ jobs:
         run: dotnet build src/server -c Release
       - name: Test (server-only)
         run: dotnet test tests/Bimwright.Ipt.Tests -c Release
-      # Host-free model tests use net8.0. Real STA/WPF tests cover net48, net8 and net10;
-      # windows-latest supplies .NET Framework 4.8, and setup-dotnet installs both modern SDKs.
-      - name: Test (toast model)
-        run: dotnet test tests/Bimwright.Ipt.Toast.Tests -c Release
-      - name: Test (toast WPF)
+      # The host-free toast model tests are part of Bimwright.Ipt.Tests above. Two WPF checks follow:
+      # the card regression harness shared with rvt-mcp and dwg-mcp (a console app, exit code 0 = pass),
+      # and the Inventor toast host tests on net48, net8 and net10. windows-latest supplies
+      # .NET Framework 4.8, and setup-dotnet installs both modern SDKs.
+      - name: Toast card regression (WPF harness)
+        run: dotnet run --project tests/Bimwright.Ipt.Toast.Tests -c Release
+      - name: Test (toast host, WPF)
         run: dotnet test tests/Bimwright.Ipt.Toast.Wpf.Tests -c Release
 
   installer:

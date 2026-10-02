@@ -24,7 +24,6 @@ public static class ToastLayout
     public const double HomeTopDip = 150;
     public const double GapDip = 4;
     public const double MinViewHeightDip = 120;
-    public const double SampleHeightDip = 80;
     public const int MaxToasts = 1;
 
     public static int Px(double dip, uint dpi)
@@ -57,14 +56,6 @@ public static class ToastLayout
         }
         return list;
     }
-
-    /// <summary>Where the first toast of a stack will sit: sampled before it is shown.</summary>
-    public static PxRect SampleRect(PxPoint anchor, uint dpi)
-        => new(anchor.X, anchor.Y, anchor.X + Px(CardWidthDip, dpi), anchor.Y + Px(SampleHeightDip, dpi));
-
-    /// <summary>Toasts cover their own backdrop, so a re-theme samples a strip just to the right of the stack.</summary>
-    public static PxRect StripRightOf(PxRect stack, uint dpi)
-        => new(stack.Right + Px(4, dpi), stack.Top, stack.Right + Px(60, dpi), stack.Bottom);
 
     public static PxRect? Union(IEnumerable<PxRect> rects)
     {
@@ -101,7 +92,7 @@ public static class ToastVisibility
 }
 
 /// <summary>What the toast thread knows about Inventor. Read on the Inventor STA after each command.</summary>
-public sealed record InventorUiSnapshot(bool AppVisible, long MainHwnd, long ViewHwnd, BackdropHint Hint)
+public sealed record InventorUiSnapshot(bool AppVisible, long MainHwnd, long ViewHwnd)
 {
-    public static readonly InventorUiSnapshot Empty = new(false, 0, 0, BackdropHint.None);
+    public static readonly InventorUiSnapshot Empty = new(false, 0, 0);
 }
