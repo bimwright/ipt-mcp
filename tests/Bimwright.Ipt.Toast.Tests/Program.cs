@@ -14,12 +14,22 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--thumbnail-motion")
+            {
+                ToastVisualTests.CheckThumbnailMotion();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--demo")
                 return ToastPreview.Run();
-            CheckCompactBody();
-            CheckCloseHover();
-            CheckCompactLayout();
-            ToastVisualTests.Run();
+            if (args.Length == 1 && args[0] == "--after-thumbnail")
+                ToastVisualTests.RunAfterThumbnail();
+            else
+            {
+                CheckCompactBody();
+                CheckCloseHover();
+                CheckCompactLayout();
+                ToastVisualTests.Run();
+            }
             CheckNaNSafePlacement();
             CheckBrandingFollowsPreference();
             CheckIdentityRow();

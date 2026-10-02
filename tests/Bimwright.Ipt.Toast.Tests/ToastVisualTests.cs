@@ -20,6 +20,11 @@ internal static class ToastVisualTests
         CheckOdometerRolling();
         CheckThumbnailFrame();
         CheckThumbnailMotion();
+        RunAfterThumbnail();
+    }
+
+    internal static void RunAfterThumbnail()
+    {
         CheckBrandReveal();
         CheckHiddenBrand();
         CheckReducedMotionAndStatus();
@@ -240,7 +245,7 @@ internal static class ToastVisualTests
         Console.WriteLine("PASS: thumbnail is centred on both axes in one fixed frame, whatever the capture shape");
     }
 
-    private static void CheckThumbnailMotion()
+    internal static void CheckThumbnailMotion()
     {
         var first = WritePng("iptmcp-toast-motion-a.png", 320, 200);
         var second = WritePng("iptmcp-toast-motion-b.png", 200, 320);
