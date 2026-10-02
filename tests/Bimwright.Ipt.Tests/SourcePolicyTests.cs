@@ -28,7 +28,7 @@ public sealed class SourcePolicyTests
         var text = Read(@"src\shared\Handlers\Code\SendCodeHandler.cs");
 
         Assert.DoesNotContain("new Thread", text);
-        Assert.DoesNotContain(".Abort(", text);
+        Assert.DoesNotContain("Thread.Abort(", text);
     }
 
     [Fact]

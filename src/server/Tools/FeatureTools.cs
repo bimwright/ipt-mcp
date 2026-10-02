@@ -57,12 +57,13 @@ public class HoleTappedDto
 /// internal centimetres/radians.
 /// </summary>
 [McpServerToolType]
+[Toolset("feature")]
 public sealed class FeatureTools
 {
     private readonly PluginClient _client;
     public FeatureTools(PluginClient client) => _client = client;
 
-    [McpServerTool(Name = "inventor_extrude"),
+    [McpServerTool(Name = "inventor_extrude", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Extrude the profile of a named sketch. distance: number (mm) or an expression string ('40 mm', 'plate_thk'). operation=join|cut|intersect|new_body; direction=positive|negative|symmetric. name renames the created feature (with new_body the body is named '<name>_body'). affected_bodies (['1','body:2','BodyName']) scopes join/cut on multi-body parts (invalid with new_body). Requires an active part document. Returns the feature name and body volume mm^3.")]
     public Task<string> Extrude(string sketchName, System.Text.Json.JsonElement distance, string operation = "join", string direction = "positive", string? name = null, string[]? affected_bodies = null, CancellationToken ct = default)
     {
@@ -78,7 +79,7 @@ public sealed class FeatureTools
         return Call("extrude", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_combine"),
+    [McpServerTool(Name = "inventor_combine", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Boolean solid bodies in the active part: base_body + tool_bodies (['1','body:2','BodyName']) with operation=join|cut|intersect. keep_tool_bodies (default false) retains tool bodies. name renames the feature. Returns the result body_names — names can change across a combine, so use the response, don't assume pre-combine names survive. Requires ≥2 solid bodies.")]
     public Task<string> Combine(string base_body, string[] tool_bodies, string operation = "join", bool keep_tool_bodies = false, string? name = null, CancellationToken ct = default)
     {
@@ -93,7 +94,7 @@ public sealed class FeatureTools
         return Call("combine", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_batch_execute"),
+    [McpServerTool(Name = "inventor_batch_execute", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Run up to 20 commands in one Inventor transaction (a single undo step). commands=[{command, params}] using WIRE command names — unprefixed snake_case like extrude, create_work_plane, create_sketch, draw_rectangle, close_sketch, list_bodies (the wire names inside each tool's params, not inventor_* names). Stops at the first error and rolls the batch back unless continue_on_error=true. send_code/run_baked_tool/apply_bake/batch_execute and document-lifecycle commands (new_part/new_assembly/open_document/close_document/save_document/derive_envelope) are not allowed inside. Per-step ok is wire-level — data payloads with their own ok/health fields (e.g. constraint health) still need checking. Returns per-step {index, ok, data|error}, executed count, rolled_back.")]
     public Task<string> BatchExecute(System.Text.Json.JsonElement commands, bool continue_on_error = false, CancellationToken ct = default)
     {
@@ -106,7 +107,7 @@ public sealed class FeatureTools
         }, ct, timeoutMs: 120_000);   // 20 steps share one budget — raise over the 30 s default
     }
 
-    [McpServerTool(Name = "inventor_loft"),
+    [McpServerTool(Name = "inventor_loft", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Loft an ordered list of sketch profiles into a feature. profiles: sketch names in loft order ('SketchName' or 'SketchName:N' for the Nth profile of a multi-profile sketch), at least 2. operation=join|cut|intersect|new_body (with new_body the body is named '<name>_body'). centerline: optional sketch name whose first curve drives a centerline loft. merge_tangent_faces (default true), closed (default false, periodic loft). name renames the feature. Returns feature name, section count and feature-body volume mm^3.")]
     public Task<string> Loft(string[] profiles, string operation = "join", string? centerline = null,
         bool merge_tangent_faces = true, bool closed = false, string? name = null, CancellationToken ct = default)
@@ -123,7 +124,7 @@ public sealed class FeatureTools
         return Call("loft", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_sweep"),
+    [McpServerTool(Name = "inventor_sweep", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Sweep a sketch profile along a sketch path. profile: section sketch ('SketchName' or 'SketchName:N'). path: path sketch name — its first curve is used and connected segments chain automatically (path_entity_count in the response shows the resolved segment count). operation=join|cut|intersect|new_body (with new_body the body is named '<name>_body'). orientation=normal_to_path|parallel. name renames the feature. Returns feature name, path entity count and feature-body volume mm^3.")]
     public Task<string> Sweep(string profile, string path, string operation = "join",
         string orientation = "normal_to_path", string? name = null, CancellationToken ct = default)
@@ -139,7 +140,7 @@ public sealed class FeatureTools
         return Call("sweep", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_revolve"),
+    [McpServerTool(Name = "inventor_revolve", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Revolve the profile of a named sketch about an axis (axis_id = a sketch line entity id or an origin axis XAxis|YAxis|ZAxis). angle in degrees; operation=join|cut|intersect. Returns the new feature name.")]
     public Task<string> Revolve(string sketchName, string axisId, double angle, string operation = "join", CancellationToken ct = default)
         => Call("revolve", new JObject
@@ -150,7 +151,7 @@ public sealed class FeatureTools
             ["operation"] = operation,
         }, ct);
 
-    [McpServerTool(Name = "inventor_fillet"),
+    [McpServerTool(Name = "inventor_fillet", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add a constant-radius edge fillet. radius in mm. Pick edges either with edgeIds ([\"1\",\"body:2/edge:3\"]) or an edges value — a plain id array or a selector object {kind:'circular', radius_mm?, radius_tol_mm?, center_mm?, center_tol_mm?, on_body?, adjacent_surface_types?}; edges wins when both are given. Circular edges are filtered by radius, circle center, body, and the surface types of BOTH adjacent faces (plane|cylinder|cone|torus|sphere|bspline|elliptical_cylinder|elliptical_cone). Returns feature_name and matched_edges so you can verify what was filleted.")]
     public Task<string> Fillet(double radius, string[]? edgeIds = null, System.Text.Json.JsonElement? edges = null, CancellationToken ct = default)
     {
@@ -165,12 +166,12 @@ public sealed class FeatureTools
         return Call("fillet", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_chamfer"),
+    [McpServerTool(Name = "inventor_chamfer", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add an equal-distance edge chamfer over the given model edge_ids. distance in mm. Returns the new chamfer feature name.")]
     public Task<string> Chamfer(string[] edgeIds, double distance, CancellationToken ct = default)
         => Call("chamfer", new JObject { ["edge_ids"] = new JArray(edgeIds), ["distance_mm"] = distance }, ct);
 
-    [McpServerTool(Name = "inventor_create_work_plane"),
+    [McpServerTool(Name = "inventor_create_work_plane", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Create a work plane. type=offset (refs=[plane_or_face_id], offset mm) | three_points (refs=[3 point ids]) | tangent (refs=[face_id, plane_id]) | fixed (origin/x_axis/y_axis as {x,y,z} or [x,y,z] — origin in mm, axes are direction vectors auto-normalized; refs unused). Optional name/visible apply to every type. Returns the new work-plane name.")]
     public Task<string> CreateWorkPlane(string type, string[]? refs = null, double? offset = null,
         System.Text.Json.JsonElement? origin = null, System.Text.Json.JsonElement? x_axis = null,
@@ -191,7 +192,7 @@ public sealed class FeatureTools
         return Call("create_work_plane", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_create_work_point"),
+    [McpServerTool(Name = "inventor_create_work_point", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Create a fixed work point at position ({x,y,z} or [x,y,z], mm). construction (default false) marks it a construction point — note Inventor does not allow naming construction points (name_applied=false reports that). name/visible optional. Returns the work-point name.")]
     public Task<string> CreateWorkPoint(System.Text.Json.JsonElement position, bool construction = false,
         string? name = null, bool? visible = null, CancellationToken ct = default)
@@ -206,7 +207,7 @@ public sealed class FeatureTools
         return Call("create_work_point", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_create_bim_connector"),
+    [McpServerTool(Name = "inventor_create_bim_connector", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Author a BIM pipe connector on a circular port edge. geometry is an edge ref ('body:1/edge:3' — e.g. from inventor_probe_brep). kind='pipe' only for now. Optional: name, nominal_diameter_mm, system_type (domestic_cold|domestic_hot|sanitary|hydronic_supply|hydronic_return|fire_protection|other), flow_direction (in|out|bidirectional), connection_type (threaded|flanged|welded|glued|compression|other), description. Returns the connector name.")]
     public Task<string> CreateBimConnector(string geometry, string kind = "pipe", string? name = null,
         double? nominal_diameter_mm = null, string? system_type = null, string? flow_direction = null,
@@ -226,12 +227,12 @@ public sealed class FeatureTools
         return Call("create_bim_connector", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_create_work_axis"),
+    [McpServerTool(Name = "inventor_create_work_axis", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Create a work axis. type=two_points (refs=[2 point ids]) | edge (refs=[edge_id]) | plane_intersection (refs=[2 plane ids]) | normal_to_face_through_point (refs=[face_id, point_id]). Returns the new work-axis name.")]
     public Task<string> CreateWorkAxis(string type, string[] refs, CancellationToken ct = default)
         => Call("create_work_axis", new JObject { ["type"] = type, ["refs"] = new JArray(refs) }, ct);
 
-    [McpServerTool(Name = "inventor_hole"),
+    [McpServerTool(Name = "inventor_hole", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Create holes on the ACTIVE PART: pick a planar face with the deterministic selector (face_normal +X|-X|+Y|-Y|+Z|-Z, face_extreme max|min, optional face_near_mm), give hole centers as a nested array of coordinates [[x1,y1,z1],[x2,y2,z2],...] lying ON that face plane, diameter_mm and kind=drilled|counterbore|countersink. through=true OR depth_mm (exclusive). Optional tap metadata: tapped_designation (e.g. 'M6x1') marks the hole tapped. Returns feature_names + hole_count.")]
     public Task<string> Hole(
         HoleFaceDto face,
@@ -293,7 +294,7 @@ public sealed class FeatureTools
         return Call("hole", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_circular_pattern"),
+    [McpServerTool(Name = "inventor_circular_pattern", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Circular-pattern part features around a named axis of the ACTIVE PART (work axis name or origin 'X Axis'|'Y Axis'|'Z Axis'). count instances over angle_deg (default full 360). Returns pattern feature name.")]
     public Task<string> CircularPattern(
         string[] feature_names,
@@ -308,7 +309,7 @@ public sealed class FeatureTools
             ["count"] = count, ["angle_deg"] = angle_deg, ["natural_direction"] = natural_direction,
         }, ct);
 
-    [McpServerTool(Name = "inventor_rectangular_pattern"),
+    [McpServerTool(Name = "inventor_rectangular_pattern", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Rectangular-pattern part features along one or two named axes of the ACTIVE PART (work axis or origin axis names). count1/spacing_mm1 along dir1; optional dir2/count2/spacing_mm2. Returns pattern feature name.")]
     public Task<string> RectangularPattern(
         string[] feature_names,
@@ -335,7 +336,7 @@ public sealed class FeatureTools
         }, ct);
     }
 
-    [McpServerTool(Name = "inventor_create_part"),
+    [McpServerTool(Name = "inventor_create_part", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Build a complete part from a JSON recipe in ONE call (new part -> parameters -> sketches -> extrude/hole/fillet/chamfer -> material + iProperties -> silent save_as), instead of a C# script. Any failing step closes the new part unsaved and names the recipe path (e.g. features[2].extrude.distance). dry_run=true validates and returns the step plan without touching Inventor. " +
                  "recipe = {template?, save_as? (absolute .ipt; overwrite?:false), close_after?, material?, iproperties?: {\"Part Number\": \"...\", \"Description\": \"...\", \"Set:Prop\": \"...\"}, parameters?: [{name, expression, unit?='mm'}], features: [ " +
                  "{sketch: {name?, plane: 'XY'|'XZ'|'YZ'|<work plane name>|{origin_mm, x_axis, y_axis}, profile: shape | [shape...]}}, " +

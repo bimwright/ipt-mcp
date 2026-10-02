@@ -28,6 +28,41 @@ public sealed class InventorGatewayException : Exception
 /// </summary>
 public sealed class PluginClient
 {
+    private static readonly System.Threading.AsyncLocal<System.Runtime.CompilerServices.StrongBox<bool>?> ForwardedCall = new();
+    private static readonly AsyncLocal<string?> ActivityCommand = new();
+    internal static System.Runtime.CompilerServices.StrongBox<bool> BeginActivity(string? toolName)
+    {
+        ActivityCommand.Value = toolName?.StartsWith("inventor_", StringComparison.Ordinal) == true ? toolName.Substring(9) : toolName;
+        return ForwardedCall.Value = new System.Runtime.CompilerServices.StrongBox<bool>(false);
+    }
+
+    internal async Task ReportServerActivityAsync(string name, object? arguments,
+        ModelContextProtocol.Protocol.CallToolResult? result, string? error, long durationMs)
+    {
+        var target = CurrentTarget;
+        if (target == null) return;
+        try
+        {
+            var command = name.StartsWith("inventor_", StringComparison.Ordinal) ? name.Substring(9) : name;
+            var text = result?.Content?.OfType<ModelContextProtocol.Protocol.TextContentBlock>().FirstOrDefault()?.Text;
+            JToken? data = null;
+            try { if (text != null) data = JToken.Parse(text); } catch (JsonReaderException) { }
+            if (text?.Length > 10240) data = new JObject { ["summary"] = "Output returned to the MCP client", ["response_bytes"] = Encoding.UTF8.GetByteCount(text) };
+            var envelope = new InventorCommandEnvelope {
+                Id = Guid.NewGuid(), Command = "report_tool_activity", AuthToken = target.AuthToken,
+                TimeoutMs = 300, RecordCalls = _config.EnableCallLog,
+                Tool = ToolCatalog.ForCommand(command, _config.TimeoutMs),
+                Params = new JObject {
+                    ["command"] = command, ["ok"] = error == null && result?.IsError != true,
+                    ["arguments"] = arguments == null ? null : JToken.FromObject(ServerLogger.MaskParams(arguments)!),
+                    ["result"] = data, ["error"] = error, ["duration_ms"] = durationMs
+                }
+            };
+            using var timeout = new CancellationTokenSource(300);
+            await SendLineAsync(target, JsonConvert.SerializeObject(envelope) + "\n", timeout.Token, 300);
+        }
+        catch { /* Activity delivery must not change a server-only tool's result. */ }
+    }
     private static readonly Lazy<JObject> SetupIdentity = new(() => SetupRuntimeIdentity.Capture(
         Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"), typeof(PluginClient).Assembly, "gateway"));
     private readonly InventorMcpConfig _config;
@@ -94,6 +129,7 @@ public sealed class PluginClient
     public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct, int? timeoutMs = null,
         JObject? logParams = null)
     {
+        if (ForwardedCall.Value is { } activity) activity.Value = true;
         // LogStart before target resolution so NO_TARGET calls still leave a journal entry (spec F1-R1).
         var requestId = Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
@@ -122,8 +158,9 @@ public sealed class PluginClient
                 TimeoutMs = effectiveTimeoutMs,
                 AuthToken = target.AuthToken,
                 ReadOnly = _config.ReadOnly,
+                RecordCalls = _config.EnableCallLog,
                 SpillRetentionHours = _config.SpillRetentionHours,
-                Tool = ToolCatalog.ForCommand(command, effectiveTimeoutMs)
+                Tool = ToolCatalog.ForCommand(ActivityCommand.Value ?? command, effectiveTimeoutMs)
             };
 
             var line = JsonConvert.SerializeObject(env) + "\n";

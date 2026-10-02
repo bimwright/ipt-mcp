@@ -94,7 +94,7 @@ public sealed class PlaceOccurrencesHandler : HandlerBase, IInventorCommand
                 ["failed"] = Count(results, false),
                 ["rolled_back"] = rolledBack,
             };
-            ResponseSpillWriter.AttachResults(Name, data, results, ResponseSpillWriter.ForContext(ctx));
+            ResponseSpillWriter.AttachResults(Name, data, results, ResponseSpillWriterFactory.ForContext(ctx));
             return Ok(ctx, data);
         }
         catch (Exception ex)

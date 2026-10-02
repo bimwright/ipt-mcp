@@ -13,52 +13,53 @@ namespace Bimwright.Ipt.Server.Tools;
 /// centimetres/radians.
 /// </summary>
 [McpServerToolType]
+[Toolset("sketch")]
 public sealed class SketchTools
 {
     private readonly PluginClient _client;
     public SketchTools(PluginClient client) => _client = client;
 
-    [McpServerTool(Name = "inventor_create_sketch"),
+    [McpServerTool(Name = "inventor_create_sketch", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Create a new 2D sketch on a plane. plane=XY|XZ|YZ for an origin work plane, or a face/work-plane reference id. Requires an active part document. Returns the new sketch name.")]
     public Task<string> CreateSketch(string plane = "XY", CancellationToken ct = default)
         => Call("create_sketch", new JObject { ["plane"] = plane }, ct);
 
-    [McpServerTool(Name = "inventor_project_geometry"),
+    [McpServerTool(Name = "inventor_project_geometry", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Project model edges/vertices (by edge_ids) into the active sketch. Returns the count of projected curves.")]
     public Task<string> ProjectGeometry(string[] edgeIds, CancellationToken ct = default)
         => Call("project_geometry", new JObject { ["edge_ids"] = new JArray(edgeIds) }, ct);
 
-    [McpServerTool(Name = "inventor_draw_line"),
+    [McpServerTool(Name = "inventor_draw_line", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Draw a sketch line from (x1,y1) to (x2,y2) in mm in the active sketch. Returns the new sketch-line entity id.")]
     public Task<string> DrawLine(double x1, double y1, double x2, double y2, CancellationToken ct = default)
         => Call("draw_line", new JObject { ["x1"] = x1, ["y1"] = y1, ["x2"] = x2, ["y2"] = y2 }, ct);
 
-    [McpServerTool(Name = "inventor_draw_circle"),
+    [McpServerTool(Name = "inventor_draw_circle", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Draw a sketch circle centered at (cx,cy) with the given radius (all mm) in the active sketch. Returns the new circle entity id.")]
     public Task<string> DrawCircle(double cx, double cy, double radius, CancellationToken ct = default)
         => Call("draw_circle", new JObject { ["cx"] = cx, ["cy"] = cy, ["radius"] = radius }, ct);
 
-    [McpServerTool(Name = "inventor_draw_rectangle"),
+    [McpServerTool(Name = "inventor_draw_rectangle", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Draw a two-point sketch rectangle with opposite corners (x1,y1) and (x2,y2) in mm. Returns the four new line entity ids.")]
     public Task<string> DrawRectangle(double x1, double y1, double x2, double y2, CancellationToken ct = default)
         => Call("draw_rectangle", new JObject { ["x1"] = x1, ["y1"] = y1, ["x2"] = x2, ["y2"] = y2 }, ct);
 
-    [McpServerTool(Name = "inventor_draw_arc"),
+    [McpServerTool(Name = "inventor_draw_arc", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Draw a sketch arc centered at (cx,cy) with radius (mm), sweeping from start_deg to end_deg (degrees, CCW). Returns the new arc entity id.")]
     public Task<string> DrawArc(double cx, double cy, double radius, double startDeg, double endDeg, CancellationToken ct = default)
         => Call("draw_arc", new JObject { ["cx"] = cx, ["cy"] = cy, ["radius"] = radius, ["start_deg"] = startDeg, ["end_deg"] = endDeg }, ct);
 
-    [McpServerTool(Name = "inventor_add_sketch_dimension"),
+    [McpServerTool(Name = "inventor_add_sketch_dimension", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add a dimension constraint driving a sketch entity (by entity_id) to value mm. Returns the dimension constraint name.")]
     public Task<string> AddSketchDimension(string entityId, double value, CancellationToken ct = default)
         => Call("add_sketch_dimension", new JObject { ["entity_id"] = entityId, ["value_mm"] = value }, ct);
 
-    [McpServerTool(Name = "inventor_add_sketch_constraint"),
+    [McpServerTool(Name = "inventor_add_sketch_constraint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add a geometric sketch constraint over entity_ids. type=coincident|parallel|perpendicular|horizontal|vertical|tangent|concentric|equal|collinear|symmetric. Returns the constraint name.")]
     public Task<string> AddSketchConstraint(string type, string[] entityIds, CancellationToken ct = default)
         => Call("add_sketch_constraint", new JObject { ["type"] = type, ["entity_ids"] = new JArray(entityIds) }, ct);
 
-    [McpServerTool(Name = "inventor_draw_text"),
+    [McpServerTool(Name = "inventor_draw_text", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add a fitted text box to the target sketch (sketch_name optional, defaults to the most recent sketch). position [x,y] in mm is the text origin. font_size_mm overrides the size via a style override; rotation_deg must be a multiple of 90 (Inventor's TextBox.Rotation rejects arbitrary angles). Returns the sketch name and position.")]
     public Task<string> DrawText(string text, double[] position, string? sketch_name = null,
         double? font_size_mm = null, double rotation_deg = 0, CancellationToken ct = default)
@@ -74,7 +75,7 @@ public sealed class SketchTools
         return Call("draw_text", p, ct);
     }
 
-    [McpServerTool(Name = "inventor_close_sketch"),
+    [McpServerTool(Name = "inventor_close_sketch", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Finish editing a sketch (exit sketch edit mode). sketch_name optional; defaults to the active sketch. Returns the closed sketch name.")]
     public Task<string> CloseSketch(string? sketchName = null, CancellationToken ct = default)
         => Call("close_sketch", new JObject { ["sketch_name"] = sketchName }, ct);

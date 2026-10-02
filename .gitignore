@@ -36,6 +36,7 @@ docs/reviews/
 docs/benchmarks/
 !docs/benchmarks/
 docs/benchmarks/*
+!docs/benchmarks/*.md
 !docs/benchmarks/drawing-phase1-smoke.json
 !docs/benchmarks/drawing-phase2-smoke.json
 docs/research-archive/

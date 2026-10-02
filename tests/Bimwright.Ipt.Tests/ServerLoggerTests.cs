@@ -18,8 +18,10 @@ namespace Bimwright.Ipt.Tests;
 /// response size, add-in duration and target. New keys are always present (null when not
 /// applicable) so journal analysis sees stable keys.
 /// </summary>
+[Collection("CallLog")]
 public sealed class ServerLoggerTests : IDisposable
 {
+    public ServerLoggerTests() => ServerLogger.Configure(true);
     private const string Session = "server-20260915T040830Z-18244";
 
     private static readonly string[] NullableFinishKeys =
@@ -235,10 +237,8 @@ public sealed class ServerLoggerTests : IDisposable
         Assert.Equal("***", (string?)masked["auth_token"]);
         Assert.Equal("sketch1", (string?)masked["name"]);
         Assert.Equal("***", (string?)masked.SelectToken("nested.list[0].api_key"));
-        var code = (string?)masked["code"]!;
-        Assert.Contains("Bearer ***", code);
-        Assert.Contains("password=\"***\"", code);
-        Assert.Contains("var n = 3;", code);                    // non-secret code survives
+        Assert.Equal(p["code"]!.Value<string>()!.Length, masked["code"]!["length"]!.Value<int>());
+        Assert.Equal(Bimwright.Ipt.Shared.Contracts.SendCodeSource.Hash(p["code"]!.Value<string>()!), masked["code"]!["sha256"]!.Value<string>());
         var text = masked.ToString(Formatting.None);
         Assert.DoesNotContain(secret, text);
         Assert.DoesNotContain("hunter2", text);
@@ -367,6 +367,7 @@ public sealed class ServerLoggerTests : IDisposable
 
     public void Dispose()
     {
+        ServerLogger.Configure(false);
         foreach (var dir in _descriptorDirs)
         {
             try { dir.Delete(recursive: true); } catch (IOException) { /* best effort */ }

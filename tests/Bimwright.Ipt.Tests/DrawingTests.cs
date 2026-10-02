@@ -188,6 +188,6 @@ public sealed class DrawingTests : IDisposable
     public void Spill_retention_is_forwarded_and_custom_cleanup_never_deletes_younger_files()
     {
         var config = InventorMcpConfig.Load(["--spill-retention-hours", "48"]); Assert.Equal(48, config.SpillRetentionHours);
-        var writer = new Bimwright.Ipt.Shared.Infrastructure.ResponseSpillWriter(_dir, 48); var path = Path.Combine(_dir, "fresh.txt"); File.WriteAllText(path, "fixture"); File.SetLastWriteTimeUtc(path, DateTime.UtcNow - TimeSpan.FromHours(40)); Assert.Equal(0, writer.Cleanup(DateTime.UtcNow)); Assert.True(File.Exists(path)); Assert.Throws<ArgumentException>(() => InventorMcpConfig.Load(["--spill-retention-hours", "0"]));
+        var writer = new Bimwright.Ipt.Shared.Infrastructure.ResponseSpillWriter(_dir, 48); var path = Path.Combine(_dir, "fresh.txt"); File.WriteAllText(path, "fixture"); File.SetLastWriteTimeUtc(path, DateTime.UtcNow - TimeSpan.FromHours(40)); Assert.Equal(0, writer.Cleanup(DateTime.UtcNow)); Assert.True(File.Exists(path)); Assert.Equal(36, InventorMcpConfig.Load(["--spill-retention-hours", "0"]).SpillRetentionHours);
     }
 }

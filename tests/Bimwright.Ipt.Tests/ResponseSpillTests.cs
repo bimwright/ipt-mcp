@@ -62,7 +62,7 @@ public sealed class ResponseSpillTests : IDisposable
     [Fact]
     public void AttachStdout_LargeOutputSpillsWithPrefix()
     {
-        var stdout = new string('y', ResponseSpillWriter.SpillThresholdBytes + 1000);
+        var stdout = new string('.', ResponseSpillWriter.SpillThresholdBytes + 1000);
         var data = new JObject();
         ResponseSpillWriter.AttachStdout("send_code", data, stdout, new ResponseSpillWriter(_dir));
 
@@ -147,17 +147,17 @@ public sealed class ResponseSpillTests : IDisposable
             File.WriteAllText(p, "x");
             File.SetLastWriteTimeUtc(p, DateTime.UtcNow - TimeSpan.FromHours(37));
         }
-        // MaxRetainedFiles + 5 fresh files
-        for (var i = 0; i < ResponseSpillWriter.MaxRetainedFiles + 5; i++)
+        // Eighty young files exceed the cleanup cap without permitting early eviction.
+        for (var i = 0; i < 80; i++)
         {
             var p = Path.Combine(_dir, $"new-{i:D4}.txt");
             File.WriteAllText(p, "x");
-            File.SetLastWriteTimeUtc(p, DateTime.UtcNow - TimeSpan.FromMinutes(ResponseSpillWriter.MaxRetainedFiles + 5 - i));
+            File.SetLastWriteTimeUtc(p, DateTime.UtcNow - TimeSpan.FromMinutes(80 - i));
         }
 
         var deleted = w.Cleanup(DateTime.UtcNow);
         Assert.Equal(3, deleted);
-        Assert.Equal(ResponseSpillWriter.MaxRetainedFiles + 5, Directory.GetFiles(_dir).Length);
+        Assert.Equal(80, Directory.GetFiles(_dir).Length);
         // Every fresh spill survives, including the oldest, beyond the cleanup batch size.
         var names = Directory.GetFiles(_dir).Select(Path.GetFileName).ToArray();
         Assert.Contains("new-0054.txt", names);

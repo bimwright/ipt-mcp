@@ -39,11 +39,17 @@ public sealed class ResponseSpillWriter
         if (string.IsNullOrWhiteSpace(directory))
             throw new ArgumentException("Spill directory is required.", nameof(directory));
         _directory = Path.GetFullPath(directory);
-        if(retentionHours<=0)throw new ArgumentOutOfRangeException(nameof(retentionHours));
+        if (retentionHours <= 0) retentionHours = 36;
         _retention=TimeSpan.FromHours(retentionHours);
     }
 
-    public static ResponseSpillWriter ForContext(InventorCommandContext ctx) => new(DefaultDirectory,ctx.SpillRetentionHours);
+    private static void AttachSpillContract(Newtonsoft.Json.Linq.JObject data, string format, string command)
+    {
+        data["spill_schema"] = new Newtonsoft.Json.Linq.JObject { ["version"] = 1, ["format"] = format };
+        data["readback_required"] = true;
+        data["size_warning"] = "Read the spill file for details; do not re-run this operation to recover output.";
+        if (command == "send_code" || command == "run_baked_tool") data["mutation_applied"] = Newtonsoft.Json.Linq.JValue.CreateNull();
+    }
 
     public static string DefaultDirectory => Path.Combine(
         Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot, "spill");
@@ -113,10 +119,12 @@ public sealed class ResponseSpillWriter
         if (!ShouldSpill(stdout)) return;
         try
         {
-            var file = (writer ?? new ResponseSpillWriter()).Write(commandName, ".txt", stdout);
-            data["stdout"] = Utf8Prefix(stdout, InlineKeepBytes);
+            var safeOutput = SecretMasker.Mask(stdout);
+            var file = (writer ?? new ResponseSpillWriter()).Write(commandName, ".txt", safeOutput);
+            data["stdout"] = Utf8Prefix(safeOutput, InlineKeepBytes);
             data["stdout_truncated"] = true;
             data["stdout_file"] = file;
+            AttachSpillContract(data, "text/plain", commandName);
         }
         catch { /* keep full stdout inline */ }
     }
@@ -145,6 +153,7 @@ public sealed class ResponseSpillWriter
             data["results_file"] = file;
             data["results_count"] = results.Count;
             data["results_preview"] = Utf8Prefix(serialized, InlineKeepBytes);
+            AttachSpillContract(data, "application/json", commandName);
         }
         catch { /* keep full results inline */ }
     }
@@ -172,6 +181,7 @@ public sealed class ResponseSpillWriter
             data["result_file"] = file;
             data["result_bytes"] = Encoding.UTF8.GetByteCount(raw);
             data["result_preview"] = Utf8Prefix(serialized, InlineKeepBytes);
+            AttachSpillContract(data, "application/json", commandName);
         }
         catch { /* keep full result inline */ }
     }

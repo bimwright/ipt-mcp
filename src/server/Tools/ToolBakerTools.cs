@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using Bimwright.Ipt.Server.Bake;
 using Bimwright.Ipt.Server.Handlers;
@@ -12,6 +13,7 @@ namespace Bimwright.Ipt.Server.Tools;
 /// purely on the server-side bake database and never round-trip to the add-in. Ported from nwd-mcp.
 /// </summary>
 [McpServerToolType]
+[Toolset("toolbaker")]
 public sealed class ToolBakerTools
 {
     private readonly InventorMcpConfig _config;
@@ -21,12 +23,11 @@ public sealed class ToolBakerTools
         _config = config;
     }
 
-    [McpServerTool(Name = "inventor_list_baked_tools"), Description("List all verified, compiled, and registered baked Inventor tools.")]
+    [McpServerTool(Name = "inventor_list_baked_tools", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false), Description("List all verified, compiled, and registered baked Inventor tools.")]
     public string ListBakedTools()
     {
-        BakePaths.EnsureDir(_config);
-        using var db = new BakeDb(BakePaths.Db(_config));
-        db.Migrate();
+        if (!File.Exists(BakePaths.Db(_config))) return ToolResponse.Serialize(new { tools = new object[0] });
+        using var db = new BakeDb(BakePaths.Db(_config), readOnly: true);
         var tools = db.ReadRegistryRecords()
             .Select(record => new
             {
@@ -41,21 +42,19 @@ public sealed class ToolBakerTools
         return ToolResponse.Serialize(new { tools });
     }
 
-    [McpServerTool(Name = "inventor_list_bake_suggestions"), Description("List active ToolBaker suggestions generated from recurrent Inventor workflows.")]
+    [McpServerTool(Name = "inventor_list_bake_suggestions", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false), Description("List active ToolBaker suggestions generated from recurrent Inventor workflows.")]
     public string ListBakeSuggestions()
     {
-        BakePaths.EnsureDir(_config);
-        using var db = new BakeDb(BakePaths.Db(_config));
-        db.Migrate();
+        if (!File.Exists(BakePaths.Db(_config))) return ToolResponse.Serialize(new { suggestions = new object[0] });
+        using var db = new BakeDb(BakePaths.Db(_config), readOnly: true);
         return ListBakeSuggestionsHandler.Handle(db);
     }
 
-    [McpServerTool(Name = "inventor_create_bake_issue_draft"), Description("Create a GitHub issue draft for a ToolBaker suggestion without submitting it.")]
+    [McpServerTool(Name = "inventor_create_bake_issue_draft", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false), Description("Create a GitHub issue draft for a ToolBaker suggestion without submitting it.")]
     public string CreateBakeIssueDraft([Description("Suggestion id from inventor_list_bake_suggestions.")] string id)
     {
-        BakePaths.EnsureDir(_config);
-        using var db = new BakeDb(BakePaths.Db(_config));
-        db.Migrate();
+        if (!File.Exists(BakePaths.Db(_config))) return ToolResponse.Error("not_found", "Bake suggestion was not found.");
+        using var db = new BakeDb(BakePaths.Db(_config), readOnly: true);
         var suggestion = db.GetSuggestion(id);
         if (suggestion == null)
         {

@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#supported-inventor-versions"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#tool-surface"><img src="https://img.shields.io/badge/MCP-111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -79,7 +79,7 @@ Do **not** `dotnet tool install -g Bimwright.Ipt.Server` — that is not the sup
 
 Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. With more than one Inventor open, call `inventor_list_available_targets` then `inventor_switch_target`.
 
-`inventor_send_code` stays **off** unless both server (`--enable-send-code` / `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) and plugin (`BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`) opt in — see [Safety](#safety).
+`inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it.
 
 ---
 
@@ -111,10 +111,9 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The full surface is **107 tools** by default when all platform toolsets are enabled, or **111 tools** when the send_code toolset is enabled (opt-in: `inventor_send_code` + 3 code-module tools). Every MCP-facing name is prefixed `inventor_`. Tools are grouped into toolset classes; `--toolsets sketch,feature` and `--read-only` gate which ones register so weak models never see disabled tools.
+Full mode exposes **111 tools** by default (`--toolsets all`); `--disable-send-code` exposes **107 tools**, and `--read-only` exposes **28 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface.
 
-Default-on toolsets: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`, `drawing`, `drawing_query`.
-Off by default: `code` (the `send_code` escape hatch — opt-in only).
+All 15 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
 
@@ -127,7 +126,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/drawing-phase3.md). These records predate v0.2.1 runtime changes; live acceptance must be renewed.
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -275,11 +274,11 @@ Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server 
 | `inventor_get_assembly_bom` | BOM + occurrence tree with grounded flag and translation/rotation degrees of freedom. |
 | `inventor_list_constraints` | Read back every constraint with type, `health`, suppressed flag and the two occurrence names. |
 
-### code (4) — opt-in escape hatch (OFF by default)
+### code (4) — C# scripts and code modules
 
 | Tool | Description |
 |---|---|
-| `inventor_send_code` | **Dangerous, opt-in only.** Execute a C# snippet in-process against `Inventor.Application`. Disabled unless both server and add-in opt in (else `SEND_CODE_DISABLED`); banned APIs are rejected (fully-qualified `System.IO.Path` string helpers are allowed). Returns the script's `result` (spilled to a file above 64 KiB) + captured `stdout`; `modules` loads saved helper modules; `silent=true` runs under SilentOperation; `timeout_ms` overrides the per-call timeout. Failures carry `diagnostics[{source, line, code, message, hint}]` or a runtime `location` + `hint`. |
+| `inventor_send_code` | `inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it. |
 | `inventor_save_code_module` | Save a reusable C# helper module (declarations only); policy-checked and dry-compiled in the add-in before it is stored; `requires` other modules. |
 | `inventor_list_code_modules` | List saved modules with hash, description and declared signatures. |
 | `inventor_delete_code_module` | Delete a saved module (refused while another module requires it). |
@@ -318,7 +317,7 @@ Toggle toasts from the ribbon: **Bimwright ▸ MCP → Toasts** (Status opens a 
 
 ## MCP Command History
 
-Every wire command is journaled to `%LOCALAPPDATA%\Bimwright\ipt-mcp\mcp-calls.jsonl` (one JSON line per call — timestamp, per-launch `session_id`, tool, success, duration, sanitized error, redacted params, capped result; rotated at 5 MB) and appended to a bounded in-memory session log (1000 entries, oldest evicted). **Bimwright ▸ MCP → History (N)** shows the live session count and opens **BIMwright · MCP Command History**: search, success/failure and read/write kind filters, a detail pane (WHAT/INPUT/OUTPUT, JSON pretty-print, numbered code view), Clear Session, Open logs, and **Load past sessions** — rotated archives plus the current journal merge back as read-only rows tagged by session and deduplicated against the live tail. **Re-run** re-executes a live entry on Inventor's STA thread and diffs numeric result fields; historical and params-truncated entries are view-only.
+Call-log files are disabled by default. Enable them with `--enable-call-log`; the plug-in records redacted calls in `%LOCALAPPDATA%\Bimwright\ipt-mcp\mcp-calls.jsonl`. In-memory History stays available when file logging is off.
 
 `send_code` bodies are redacted to `{code_hash, code_length}` by default. `BIMWRIGHT_CACHE_SEND_CODE_BODIES=1` keeps bodies in memory for display and re-run; `BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1` (+ optional `BIMWRIGHT_PERSIST_SEND_CODE_BODIES_TTL`, e.g. `4h`/`2d`, default 4 h) writes bake-redacted bodies to `send-code-journal.jsonl` so re-run can recover them — the window warns that a recovered body is redacted and may behave differently than the original.
 
@@ -328,8 +327,8 @@ Every wire command is journaled to `%LOCALAPPDATA%\Bimwright\ipt-mcp\mcp-calls.j
 
 Short version: your model stays on your machine, and write/dangerous tools are gated.
 
-- **Read-only mode.** `--read-only` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`) removes every write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`, `drawing`) but keeps `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, and **keeps `inventor_switch_target` exposed**. The server sends read-only mode in each command envelope; the add-in also honors `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. A write command under enforced read-only returns `READ_ONLY`.
-- **send_code two-sided opt-in.** `inventor_send_code` is **disabled by default**. It is exposed only when **both** gates are set: the server with `--enable-send-code` (or `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **and** the add-in process with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Otherwise the dispatcher returns `SEND_CODE_DISABLED`. Banned APIs (file/process/network/environment/dynamic-invocation) are rejected by a best-effort source scan — note that file writes made *through the Inventor API* (`SaveAs`, `SaveCopyAs`, translators) are **not** constrained by the export-root policy below; the two-sided opt-in is the trust boundary.
+- **Read-only mode.** `--read-only` keeps only tools annotated `ReadOnly = true`: no document or file writes. Parameter/property reads, view fit and code-module listing remain available. The add-in also enforces `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
+- **send_code.** `inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it.
 - **Local, authenticated transport.** TCP binds loopback; Named Pipe is local-machine scoped. Each per-session descriptor carries a random auth token, but MCP meta tools never return it.
 - **Sanitized errors.** Error messages returned to the model are sanitized to avoid leaking absolute paths/secrets.
 - **ToolBaker controls.** ToolBaker is enabled by default. It can be completely disabled by passing the --disable-toolbaker CLI flag or setting BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0.
@@ -367,3 +366,65 @@ See [how the gateway names are chosen](https://github.com/bimwright/.github/blob
 [Apache-2.0](LICENSE). See [LICENSE](LICENSE).
 
 Inventor and Autodesk are registered trademarks of Autodesk, Inc. bimwright is an independent open-source project and is not affiliated with, sponsored by, or endorsed by Autodesk, Inc.
+
+## Permissions & auto mode
+
+The allow list below is generated from the 28 read-only annotations and checked against the running server. Replace `ipt-mcp` with your exact client server ID. Do not use `mcp__ipt-mcp__*` or other server-wide wildcards. `inventor_send_code` has no annotations and no forced-interaction metadata; its exact allow rule is a separate user choice. Actual client permission persistence must be tested in that client.
+
+<!-- BEGIN GENERATED READONLY -->
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__ipt-mcp__inventor_check_interference",
+      "mcp__ipt-mcp__inventor_create_bake_issue_draft",
+      "mcp__ipt-mcp__inventor_find_view_geometry",
+      "mcp__ipt-mcp__inventor_get_assembly_bom",
+      "mcp__ipt-mcp__inventor_get_current_target",
+      "mcp__ipt-mcp__inventor_get_document_info",
+      "mcp__ipt-mcp__inventor_get_drawing_info",
+      "mcp__ipt-mcp__inventor_get_iproperty",
+      "mcp__ipt-mcp__inventor_get_mass_properties",
+      "mcp__ipt-mcp__inventor_get_parameter",
+      "mcp__ipt-mcp__inventor_health",
+      "mcp__ipt-mcp__inventor_list_available_targets",
+      "mcp__ipt-mcp__inventor_list_bake_suggestions",
+      "mcp__ipt-mcp__inventor_list_baked_tools",
+      "mcp__ipt-mcp__inventor_list_bodies",
+      "mcp__ipt-mcp__inventor_list_code_modules",
+      "mcp__ipt-mcp__inventor_list_constraints",
+      "mcp__ipt-mcp__inventor_list_features",
+      "mcp__ipt-mcp__inventor_list_interfaces",
+      "mcp__ipt-mcp__inventor_list_iproperty_sets",
+      "mcp__ipt-mcp__inventor_list_occurrences",
+      "mcp__ipt-mcp__inventor_list_open_documents",
+      "mcp__ipt-mcp__inventor_list_parameters",
+      "mcp__ipt-mcp__inventor_measure_min_distance",
+      "mcp__ipt-mcp__inventor_probe_brep",
+      "mcp__ipt-mcp__inventor_report_task_result",
+      "mcp__ipt-mcp__inventor_switch_target",
+      "mcp__ipt-mcp__inventor_view_fit"
+    ]
+  }
+}
+```
+<!-- END GENERATED READONLY -->
+
+### Runtime settings (v0.2.1)
+
+| Setting | Default | CLI / JSON |
+|---|---|---|
+| send_code | on | `--enable-send-code` / `--disable-send-code`; `enableSendCode` |
+| Call-log files | off | `--enable-call-log` / `--disable-call-log`; `enableCallLog` |
+| Toolsets | all | `--toolsets all`; `toolsets` |
+| Read-only | off | `--read-only`; `readOnly` |
+| Response guard | on | `--enable-output-guard` / `--disable-output-guard`; `enableOutputGuard` |
+| Warning / strong warning / budget | 65536 / 262144 / 1048576 bytes | `--output-warning-bytes`, `--output-strong-warning-bytes`, `--output-budget-bytes`; `outputWarningBytes`, `outputStrongWarningBytes`, `outputBudgetBytes` |
+| Transport cap | 5000000 bytes | `--max-response-bytes`; `maxResponseBytes` |
+| Spill retention | 36 hours | `--spill-retention-hours`; `spillRetentionHours` (invalid values: 36) |
+
+CLI overrides environment, which overrides `--config` JSON. The server's logging switch reaches the plug-in; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG=1` can veto it. History re-runs do not persist call logs. In-memory History is independent. Body caching (`BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`) and body journaling (`BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1`, TTL default 4 hours) are separate opt-ins; journaling also requires call logging. Enabled call logs keep source length/hash, never source bodies. Saved code modules are explicit user-requested storage.
+
+`send_code` provides `app` and nullable `doc`, accepts a script body with `return` and optional helper declarations, and imports `System`, `System.Collections.Generic`, `System.Linq`, `Inventor`. Writes to the active document share one undo transaction; errors abort it and warnings are returned. New/closed documents, other documents and external files are outside that rollback scope. Oversized script output includes a file, preview, schema and `mutation_applied: null`; read the file and do not re-run the script. Spill files live under `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill` and fresh files are never evicted by a count cap.
+
+[Benchmark records and verification scope](docs/benchmarks/README.md).

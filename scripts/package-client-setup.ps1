@@ -175,5 +175,7 @@ $manifest | ConvertTo-Json -Depth 20 | Set-Content (Join-Path $stageRoot 'manife
 $setupZip = Join-Path $OutputDir ("IptMcp.Setup-{0}-win-x64.zip" -f $displayVersion)
 if (Test-Path $setupZip) { Remove-Item $setupZip -Force }
 Compress-Archive -Path (Join-Path $stageRoot '*') -DestinationPath $setupZip -Force
+$checksum = "$(Get-Sha256Lower $setupZip)  $([IO.Path]::GetFileName($setupZip))"
+[IO.File]::WriteAllText("$setupZip.sha256", $checksum + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 Write-Host "Output : $setupZip"
 Write-Host "Years  : $($years -join ', ')"

@@ -1,6 +1,7 @@
 name: build
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, master ]
   pull_request:
@@ -31,6 +32,11 @@ jobs:
         run: dotnet build src/server -c Release
       - name: Test (server-only)
         run: dotnet test tests/Bimwright.Ipt.Tests -c Release
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test every MCP tool over isolated stdio
+        run: python tests/stdio/release-contract.py --server src/server/bin/Release/net8.0/Bimwright.Ipt.Server.dll --output artifacts/stdio
       # The host-free toast model tests are part of Bimwright.Ipt.Tests above. Two WPF checks follow:
       # the card regression harness shared with rvt-mcp and dwg-mcp (a console app, exit code 0 = pass),
       # and the Inventor toast host tests on net48, net8 and net10. windows-latest supplies

@@ -14,18 +14,20 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>bimwright-ipt</ToolCommandName>
     <PackageId>Bimwright.Ipt.Server</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>Khoa Le</Authors>
     <Description>MCP gateway for Autodesk Inventor 2022-2027</Description>
     <PackageProjectUrl>https://github.com/bimwright/ipt-mcp</PackageProjectUrl>
     <RepositoryUrl>https://github.com/bimwright/ipt-mcp</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageTags>mcp;inventor;cad;ipt;iam;ai</PackageTags>
     <Copyright>Copyright 2026 Khoa Le</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
     <InternalsVisibleTo Include="Bimwright.Ipt.Tests" />
   </ItemGroup>
 
@@ -34,6 +36,7 @@
     <Compile Include="..\shared\Security\*.cs" LinkBase="Shared\Security" />
     <Compile Include="..\shared\ToolBaker\*.cs" LinkBase="Shared\ToolBaker" />
     <Compile Include="..\shared\Setup\*.cs" LinkBase="Shared\Setup" />
+    <Compile Include="..\shared\Infrastructure\ResponseSpillWriter.cs" Link="Shared\Infrastructure\ResponseSpillWriter.cs" />
     <EmbeddedResource Include="..\shared\Contracts\send-code-hints.json" LogicalName="Bimwright.Ipt.SendCodeHints.json" />
   </ItemGroup>
 

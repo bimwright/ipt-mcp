@@ -61,7 +61,7 @@ public sealed class RunBakedToolHandler : IInventorCommand
             ["ok"] = true,
             ["tool_name"] = record.Name,
         };
-        ResponseSpillWriter.AttachResults("run_baked_tool", data, results, ResponseSpillWriter.ForContext(ctx));
+        ResponseSpillWriter.AttachResults("run_baked_tool", data, results, ResponseSpillWriterFactory.ForContext(ctx));
         return InventorCommandResult.Success(Guid.Empty, data, meta);
     }
 

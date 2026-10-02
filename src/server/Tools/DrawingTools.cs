@@ -90,7 +90,7 @@ public sealed class DrawingTools
         => DrawingWire.Call(_client, "sketch_on_view", new { name, entities, document, sheet, view, space, layer, color_rgb, weight_mm }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_hide_view_edges", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
-     Description("Hide currently visible native curve segments in one explicit drawing document/sheet/view. Supply occurrences (existing occurrence selector) and/or max_model_size_mm (projected curve length divided by view scale); criteria combine with AND. Suppressed/invisible occurrences are excluded. dry_run=true returns candidates without writing; default false. At most 20000 segments. Direct segment visibility API, one transaction, no UI command or selection changes, no automatic retry/save. Return candidate/hidden counts, stage timings and new geometry revision; already hidden segments are skipped. Inventor 2027.")]
+     Description("Changes are undoable through Inventor Undo after the transaction completes. Hide currently visible native curve segments in one explicit drawing document/sheet/view. Supply occurrences (existing occurrence selector) and/or max_model_size_mm (projected curve length divided by view scale); criteria combine with AND. Suppressed/invisible occurrences are excluded. dry_run=true returns candidates without writing; default false. At most 20000 segments. Direct segment visibility API, one transaction, no UI command or selection changes, no automatic retry/save. Return candidate/hidden counts, stage timings and new geometry revision; already hidden segments are skipped. Inventor 2027.")]
     public Task<string> HideViewEdges(string document, string sheet, string view, JsonElement? occurrences = null, double? max_model_size_mm = null, bool dry_run = false, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "hide_view_edges", new { document, sheet, view, occurrences, max_model_size_mm, dry_run }, timeout_ms, ct);
 
@@ -105,7 +105,7 @@ public sealed class DrawingTools
         => DrawingWire.Call(_client, "add_sheet", new { name, document, code, size, orientation, width_mm, height_mm, border, title_block, prompts }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_set_title_block", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
-     Description("Update a drawing title block/prompts/iProperties in one transaction. Explicit document required. Definition and prompt labels must already exist. iProperties entries are {set?,name,value}; Title resolves to Summary Information. Returns applied values; never saves.")]
+     Description("Changes are undoable through Inventor Undo after the transaction completes. Update a drawing title block/prompts/iProperties in one transaction. Explicit document required. Definition and prompt labels must already exist. iProperties entries are {set?,name,value}; Title resolves to Summary Information. Returns applied values; never saves.")]
     public Task<string> SetTitleBlock(string document, string? sheet = null, string? title_block = null, Dictionary<string, string>? prompts = null, JsonElement? iproperties = null, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "set_title_block", new { document, sheet, title_block, prompts, iproperties }, timeout_ms, ct);
 
@@ -120,7 +120,7 @@ public sealed class DrawingTools
         => DrawingWire.Call(_client, "add_section_view", new { name, parent_view, cut_line_mm, position_mm, document, sheet, direction, depth_mm, scale, style, rotation_deg, label, inherit_3d }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_edit_drawing_view", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
-     Description("Edit an explicitly scoped drawing view. Positions mm, rotation degrees, scale ratio. align={axis:x|y,with_view,offset_mm}; crop={region_mm:{min,max}}. Reject operations that would lose dependent views/annotations. Shaded moves requiring recreation need rebuild=true and verified dependency preservation. No save.")]
+     Description("Changes are undoable through Inventor Undo after the transaction completes. Edit an explicitly scoped drawing view. Positions mm, rotation degrees, scale ratio. align={axis:x|y,with_view,offset_mm}; crop={region_mm:{min,max}}. Reject operations that would lose dependent views/annotations. Shaded moves requiring recreation need rebuild=true and verified dependency preservation. No save.")]
     public Task<string> EditDrawingView(string document, string sheet, string view, double[]? position_mm = null, JsonElement? align = null, double? scale = null, string? style = null, string? label = null, string? design_view = null, bool? suppressed = null, double? rotation_deg = null, JsonElement? crop = null, bool rebuild = false, string? reference_display = null, double? margin_mm = null, bool? hidden_line_all_bodies = null, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "edit_drawing_view", new { document, sheet, view, position_mm, align, scale, style, label, design_view, suppressed, rotation_deg, crop, rebuild, reference_display, margin_mm, hidden_line_all_bodies }, timeout_ms, ct);
 
@@ -135,7 +135,7 @@ public sealed class DrawingTools
         => DrawingWire.Call(_client, "add_balloon", new { items, document, sheet, mode, symbol, prompts, layout, allow_model_bom_change }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_export_drawing", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
-     Description("Export an explicitly scoped drawing to PDF, per-sheet AutoCAD DWG, or whole native IDW copy. output_path must be absolute and allowlisted. Select sheets or all_sheets=true for translators. Existing files require overwrite_existing=true. Per-file statuses and partial failure are explicit. Native copy never renames the source; no model save.")]
+     Description("Overwriting exported files cannot be undone in Inventor; retain a backup. Export an explicitly scoped drawing to PDF, per-sheet AutoCAD DWG, or whole native IDW copy. output_path must be absolute and allowlisted. Select sheets or all_sheets=true for translators. Existing files require overwrite_existing=true. Per-file statuses and partial failure are explicit. Native copy never renames the source; no model save.")]
     public Task<string> ExportDrawing(string document, string format, string output_path, string[]? sheets = null, bool all_sheets = false, int dpi = 300, bool overwrite_existing = false, bool silent = true, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "export_drawing", new { document, format, output_path, sheets, all_sheets, dpi, overwrite_existing, silent }, timeout_ms, ct);
 
@@ -160,7 +160,7 @@ public sealed class DrawingTools
         => DrawingWire.Call(_client, "add_drawing_symbol", new { name, kind, document, sheet, definition, position_mm, prompts, rotation_deg, scale, view, intent, style, layer }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_edit_drawing_annotation", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
-     Description("Edit 1..100 exact annotations atomically: items={kind:dimension|balloon|note|symbol,name OR locator,changes}. changes: text_position_mm,text_override,precision (dimension only),style,layer,leader_arrowhead=open|closed|filled|none (attached leader note/symbol only). Symbol text_override requires one prompt. Moving a leadered symbol requires rebuild=true and an unbranched attached leader; recreation preserves prompts/style/layer and returns a new locator. Arrowheads use private document-local style copies, never mutate unrelated objects. Native BOM balloon edits are unavailable. Return actual fields/attachment; no save.")]
+     Description("Changes are undoable through Inventor Undo after the transaction completes. Edit 1..100 exact annotations atomically: items={kind:dimension|balloon|note|symbol,name OR locator,changes}. changes: text_position_mm,text_override,precision (dimension only),style,layer,leader_arrowhead=open|closed|filled|none (attached leader note/symbol only). Symbol text_override requires one prompt. Moving a leadered symbol requires rebuild=true and an unbranched attached leader; recreation preserves prompts/style/layer and returns a new locator. Arrowheads use private document-local style copies, never mutate unrelated objects. Native BOM balloon edits are unavailable. Return actual fields/attachment; no save.")]
     public Task<string> EditDrawingAnnotation(JsonElement[] items, string? document = null, string? sheet = null, bool rebuild = false, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "edit_drawing_annotation", new { items, document, sheet, rebuild }, timeout_ms, ct);
 

@@ -249,6 +249,19 @@ public class SessionLogTests : IDisposable
     // ---------- McpLogger + SendCodeJournal + HistoryLoader (file-backed) ----------
 
     [Fact]
+    public void Disabled_call_logging_neither_creates_nor_appends_a_file()
+    {
+        McpLogger.Log("health", "{}", true, 1, enabled: false);
+        Assert.False(Directory.Exists(_dir));
+        McpLogger.Initialize();
+        McpLogger.Log("health", "{}", true, 1, enabled: true);
+        var path = Path.Combine(_dir, "mcp-calls.jsonl");
+        var before = File.ReadAllBytes(path);
+        McpLogger.Log("health", "{}", true, 1, enabled: false);
+        Assert.Equal(before, File.ReadAllBytes(path));
+    }
+
+    [Fact]
     public void Journal_writes_sanitized_lines_and_loader_reads_them_back()
     {
         McpLogger.Initialize();

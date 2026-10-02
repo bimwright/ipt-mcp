@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#phiên-bản-inventor-được-hỗ-trợ"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#bề-mặt-công-cụ"><img src="https://img.shields.io/badge/MCP-111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -60,7 +60,7 @@ Guard chung đo UTF-8 tại kết quả MCP cuối: cảnh báo 64/256 KiB, budg
 
 Tải [GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest) (`IptMcp.Setup-*-win-x64.zip`). v0.1.0 gồm Inventor **2025** và **2027**. `install.ps1` trong ZIP; trỏ MCP vào `ipt-mcp.exe`. Không `dotnet tool install -g Bimwright.Ipt.Server`.
 
-Discovery: `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. `inventor_send_code` cần opt-in hai phía — xem [An toàn](#an-toàn).
+`inventor_send_code` mặc định bật. `--disable-send-code` ẩn nhóm code; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` chặn thực thi ở host. Chế độ read-only luôn loại bỏ thực thi code.
 
 ---
 
@@ -92,19 +92,18 @@ dotnet build src/plugin-inv27 -c Debug   # compile interop 2027 thật; cần .N
 
 ## Bề mặt công cụ
 
-Toàn bộ surface là **107 công cụ** khi bật mọi platform toolset mặc định, hoặc **111 công cụ** khi bật toolset send_code (opt-in: `inventor_send_code` + 3 tool code module). Mọi tên MCP đều có prefix `inventor_`. Các tool được nhóm theo toolset class; `--toolsets sketch,feature` và `--read-only` kiểm soát tool nào được đăng ký để agent yếu không nhìn thấy tool đã tắt.
+Chế độ đầy đủ mặc định có **111 công cụ** (`--toolsets all`); `--disable-send-code` còn **107 công cụ**, và `--read-only` còn **28 công cụ**. Tên MCP đều bắt đầu bằng `inventor_`; có thể thu hẹp bằng bộ lọc toolset.
 
 **Chọn document & occurrence.** Các tool cấp document nhận `document` tuỳ chọn (đường dẫn hoặc tên của document Inventor đang giữ trong bộ nhớ — cả part được assembly tham chiếu); không bao giờ tự mở/activate. Các tool assembly theo lô dùng chung selector `{names?: [glob], regex?, file?, path_contains?, leaf?, max_depth?, include_suppressed?, limit?}`; không khớp hoặc vượt `limit` là lỗi kèm gợi ý tên gần giống. Save/open/close/export chạy dưới `SilentOperation` mặc định để dialog ẩn không làm treo call; nếu vẫn timeout, `inventor_health` báo `modal_dialog {open, title}`.
 
-Toolsets bật mặc định: `meta`, `query`, `document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `assembly_query`, `toolbaker`, `toolbaker_write`, `drawing`, `drawing_query`.
-Tắt mặc định: `code` (escape hatch `send_code` — chỉ bật khi opt-in).
+Mặc định bật cả 15 toolset, gồm `code`. Dùng `--toolsets <csv>` để thu hẹp.
 
 Mọi input độ dài tính bằng **mm**, góc tính bằng **độ**; add-in tự chuyển sang centimét/radian nội bộ của Inventor.
 
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/drawing-phase3.md). These records predate v0.2.1 runtime changes; live acceptance must be renewed.
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -251,11 +250,11 @@ Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server 
 | `inventor_list_constraints` | Đọc lại mọi constraint với type, `health`, suppressed flag và hai occurrence name. |
 | `inventor_list_occurrences` | Liệt kê occurrence theo selector với cột tuỳ chọn (path, file, bbox_mm, transform, visibility, material, appearance, mass, volume); inline hoặc ra file. `check_interference` nhận `set_a` × `set_b`; `measure_min_distance` nhận `pairs[]` hoặc tập × tập + `threshold_mm`. |
 
-### code (4) — escape hatch opt-in (TẮT mặc định)
+### code (4) — C# scripts and code modules
 
 | Tool | Mô tả |
 |---|---|
-| `inventor_send_code` | **Nguy hiểm, chỉ opt-in.** Thực thi đoạn C# in-process trên `Inventor.Application`. Tắt trừ khi cả server và add-in đều opt-in (nếu không trả `SEND_CODE_DISABLED`); API bị cấm (file/process/network/environment) bị reject. |
+| `inventor_send_code` | `inventor_send_code` mặc định bật. `--disable-send-code` ẩn nhóm code; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` chặn thực thi ở host. Chế độ read-only luôn loại bỏ thực thi code. |
 | `inventor_save_code_module` | Lưu module C# helper dùng lại (chỉ khai báo); kiểm policy + dry-compile trong add-in trước khi lưu; có `requires`. |
 | `inventor_list_code_modules` | Liệt kê module đã lưu: hash, mô tả, chữ ký hàm. |
 | `inventor_delete_code_module` | Xoá module (bị từ chối nếu module khác đang require). |
@@ -298,8 +297,8 @@ Bật/tắt toast từ ribbon: **Bimwright ▸ MCP → Toasts** (Status mở dia
 
 Ngắn gọn: model của bạn ở lại trên máy bạn, và các tool write/nguy hiểm đều có gate.
 
-- **Read-only mode.** `--read-only` (hoặc `BIMWRIGHT_INVENTOR_READ_ONLY=1`) loại bỏ mọi write-capable toolset (`document`, `parameters`, `properties`, `sketch`, `feature`, `export`, `assembly`, `code`, `toolbaker_write`, `drawing`) nhưng giữ `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, và **giữ `inventor_switch_target`**. Server gửi read-only mode trong mỗi command envelope; add-in cũng tôn trọng `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`. `CommandDispatcher` của add-in là tuyến phòng thủ thứ hai: lệnh write dưới read-only trả về `READ_ONLY`.
-- **send_code opt-in hai phía.** `inventor_send_code` **mặc định tắt**. Chỉ hiện khi **cả hai** gate được bật: server với `--enable-send-code` (hoặc `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **và** tiến trình add-in với `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`. Nếu không, dispatcher trả `SEND_CODE_DISABLED`. API bị cấm (file/process/network/environment) bị reject.
+- **Read-only mode.** `--read-only` chỉ giữ tool có annotation `ReadOnly = true`, không ghi document hoặc file. Vẫn có truy vấn parameter/property, view fit và danh sách code module. Add-in cũng áp dụng `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
+- **send_code.** `inventor_send_code` mặc định bật. `--disable-send-code` ẩn nhóm code; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` chặn thực thi ở host. Chế độ read-only luôn loại bỏ thực thi code.
 - **Transport local, có xác thực.** TCP bind loopback; Named Pipe scoped local-machine. Mỗi descriptor theo session mang một auth token ngẫu nhiên.
 - **Error đã sanitize.** Error trả về model được sanitize để tránh leak absolute path/secret.
 - **Kiểm soát ToolBaker.** Mặc định ToolBaker được bật. Bạn có thể tắt hoàn toàn bằng cách truyền flag --disable-toolbaker lúc khởi động server hoặc set biến môi trường BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0.
@@ -337,3 +336,65 @@ Xem [cách đặt tên các gateway](https://github.com/bimwright/.github/blob/m
 [Apache-2.0](LICENSE). Xem [LICENSE](LICENSE).
 
 Inventor và Autodesk là thương hiệu đã đăng ký của Autodesk, Inc. bimwright là dự án open-source độc lập, không liên kết, không được tài trợ và không được bảo chứng bởi Autodesk, Inc.
+
+## Quyền & auto mode (Permissions & auto mode)
+
+Allow list dưới đây được sinh từ 28 annotation read-only và có test đối chiếu server đang chạy. Thay `ipt-mcp` bằng đúng server ID trong client. Không dùng wildcard `mcp__ipt-mcp__*` hoặc wildcard cho toàn server. `inventor_send_code` không gắn annotation hay metadata bắt buộc hỏi mỗi lần; cho phép riêng tool này là lựa chọn của người dùng. Cần kiểm tra việc lưu quyền trên client thực tế.
+
+<!-- BEGIN GENERATED READONLY -->
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__ipt-mcp__inventor_check_interference",
+      "mcp__ipt-mcp__inventor_create_bake_issue_draft",
+      "mcp__ipt-mcp__inventor_find_view_geometry",
+      "mcp__ipt-mcp__inventor_get_assembly_bom",
+      "mcp__ipt-mcp__inventor_get_current_target",
+      "mcp__ipt-mcp__inventor_get_document_info",
+      "mcp__ipt-mcp__inventor_get_drawing_info",
+      "mcp__ipt-mcp__inventor_get_iproperty",
+      "mcp__ipt-mcp__inventor_get_mass_properties",
+      "mcp__ipt-mcp__inventor_get_parameter",
+      "mcp__ipt-mcp__inventor_health",
+      "mcp__ipt-mcp__inventor_list_available_targets",
+      "mcp__ipt-mcp__inventor_list_bake_suggestions",
+      "mcp__ipt-mcp__inventor_list_baked_tools",
+      "mcp__ipt-mcp__inventor_list_bodies",
+      "mcp__ipt-mcp__inventor_list_code_modules",
+      "mcp__ipt-mcp__inventor_list_constraints",
+      "mcp__ipt-mcp__inventor_list_features",
+      "mcp__ipt-mcp__inventor_list_interfaces",
+      "mcp__ipt-mcp__inventor_list_iproperty_sets",
+      "mcp__ipt-mcp__inventor_list_occurrences",
+      "mcp__ipt-mcp__inventor_list_open_documents",
+      "mcp__ipt-mcp__inventor_list_parameters",
+      "mcp__ipt-mcp__inventor_measure_min_distance",
+      "mcp__ipt-mcp__inventor_probe_brep",
+      "mcp__ipt-mcp__inventor_report_task_result",
+      "mcp__ipt-mcp__inventor_switch_target",
+      "mcp__ipt-mcp__inventor_view_fit"
+    ]
+  }
+}
+```
+<!-- END GENERATED READONLY -->
+
+### Runtime settings (v0.2.1)
+
+| Setting | Default | CLI / JSON |
+|---|---|---|
+| send_code | on | `--enable-send-code` / `--disable-send-code`; `enableSendCode` |
+| Call-log files | off | `--enable-call-log` / `--disable-call-log`; `enableCallLog` |
+| Toolsets | all | `--toolsets all`; `toolsets` |
+| Read-only | off | `--read-only`; `readOnly` |
+| Response guard | on | `--enable-output-guard` / `--disable-output-guard`; `enableOutputGuard` |
+| Warning / strong warning / budget | 65536 / 262144 / 1048576 bytes | `--output-warning-bytes`, `--output-strong-warning-bytes`, `--output-budget-bytes`; `outputWarningBytes`, `outputStrongWarningBytes`, `outputBudgetBytes` |
+| Transport cap | 5000000 bytes | `--max-response-bytes`; `maxResponseBytes` |
+| Spill retention | 36 hours | `--spill-retention-hours`; `spillRetentionHours` (invalid values: 36) |
+
+CLI overrides environment, which overrides `--config` JSON. The server's logging switch reaches the plug-in; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG=1` can veto it. History re-runs do not persist call logs. In-memory History is independent. Body caching (`BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`) and body journaling (`BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1`, TTL default 4 hours) are separate opt-ins; journaling also requires call logging. Enabled call logs keep source length/hash, never source bodies. Saved code modules are explicit user-requested storage.
+
+`send_code` provides `app` and nullable `doc`, accepts a script body with `return` and optional helper declarations, and imports `System`, `System.Collections.Generic`, `System.Linq`, `Inventor`. Writes to the active document share one undo transaction; errors abort it and warnings are returned. New/closed documents, other documents and external files are outside that rollback scope. Oversized script output includes a file, preview, schema and `mutation_applied: null`; read the file and do not re-run the script. Spill files live under `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill` and fresh files are never evicted by a count cap.
+
+[Bản ghi benchmark và phạm vi kiểm chứng](docs/benchmarks/README.md).

@@ -66,7 +66,7 @@ public sealed class ListOccurrencesHandler : HandlerBase, IInventorCommand
             data["preview"] = new JArray(rows.Take(10));
             return Ok(ctx, data);
         }
-        ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriter.ForContext(ctx));
+        ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriterFactory.ForContext(ctx));
         if (data["results"] is JArray inline)
         {
             data.Remove("results");

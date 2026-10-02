@@ -12,13 +12,10 @@ using Bimwright.Ipt.Shared.Security;
 namespace Bimwright.Ipt.Server;
 
 /// <summary>
-/// Append-only JSONL of every add-in round-trip (and server-side meta tools).
-/// Path: %LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl, overridable via the
-/// BIMWRIGHT_INVENTOR_CALL_LOG environment variable (env-only: this class is static and
-/// initializes before config is loaded). Params are masked before storing — keys named like
+/// Opt-in JSONL of add-in round-trips and server-only tools. The runtime layout chooses
+/// the path; BIMWRIGHT_INVENTOR_CALL_LOG can override it. Params are masked before storing — keys named like
 /// tokens/passwords/secrets are replaced with "***" and every string value passes through
-/// <see cref="Bimwright.Ipt.Shared.Security.SecretMasker"/> (so send_code bodies keep their
-/// shape for replay but embedded credentials do not persist to disk, per SECURITY.md). The
+/// <see cref="Bimwright.Ipt.Shared.Security.SecretMasker"/>. Code bodies become length/hash metadata. The
 /// finish line keeps <c>success</c> at envelope level and adds the script-level outcome
 /// (<c>data_ok</c>/<c>data_error</c>/<c>stdout_bytes</c>), response size, add-in duration and
 /// target, and the returned data as <c>result</c> (masked, capped at 64 KiB); those keys are always present (null when n/a),
@@ -31,7 +28,13 @@ internal static class ServerLogger
 
     internal static readonly string SessionId = BuildSessionId(DateTime.UtcNow, Environment.ProcessId);
 
-    private static readonly string LogPath;
+    private static string LogPath;
+    internal static bool Enabled { get; private set; }
+    internal static void Configure(bool enabled, string? path = null)
+    {
+        Enabled = enabled;
+        if (path != null) LogPath = path;
+    }
     private static readonly object Gate = new object();
 
     // Journal v3: the MCP client that drives this server (from `initialize.clientInfo`), so journal
@@ -52,14 +55,7 @@ internal static class ServerLogger
     static ServerLogger()
     {
         LogPath = ResolveLogPath(Environment.GetEnvironmentVariable(LogPathEnvVar));
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-        }
-        catch
-        {
-            // A bad override must not make the type unusable; writes then fail inside their own try.
-        }
+
     }
 
     public static void LogStart(string requestId, string toolName, object? parameters)
@@ -173,9 +169,14 @@ internal static class ServerLogger
         switch (token)
         {
             case JObject obj:
-                foreach (var prop in obj.Properties())
+                foreach (var prop in obj.Properties().ToArray())
                 {
-                    if (SensitiveKeys.Contains(prop.Name))
+                    if ((prop.Name == "code" || prop.Name == "source_code") && prop.Value.Type == JTokenType.String)
+                    {
+                        var body = prop.Value.Value<string>() ?? "";
+                        prop.Value = new JObject { ["length"] = body.Length, ["sha256"] = Bimwright.Ipt.Shared.Contracts.SendCodeSource.Hash(body) };
+                    }
+                    else if (SensitiveKeys.Contains(prop.Name))
                         prop.Value = new JValue("***");
                     else
                         MaskToken(prop.Value);
@@ -274,9 +275,11 @@ internal static class ServerLogger
     private static void WriteEntry(object entry)
     {
         MarkJournaled();
+        if (!Enabled) return;
         var line = JsonConvert.SerializeObject(entry, Formatting.None);
         lock (Gate)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
             File.AppendAllText(LogPath, line + "\n");
         }
     }

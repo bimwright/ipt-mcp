@@ -21,6 +21,7 @@ namespace Bimwright.Ipt.Server.Tools;
 /// with <c>modules</c>, so recurring helpers are written once instead of re-sent on every call.
 /// </summary>
 [McpServerToolType]
+[Toolset("code")]
 public sealed class CodeTools
 {
     private readonly PluginClient _client;
@@ -33,7 +34,7 @@ public sealed class CodeTools
     }
 
     [McpServerTool(Name = "inventor_send_code"),
-     Description("DANGEROUS, opt-in only. Execute a C# script in-process within the Inventor add-in against Inventor.Application (global `app`) for workflows not covered by typed tools — prefer typed tools first. Disabled unless both server and add-in opt in (else SEND_CODE_DISABLED). Banned APIs (file/process/network/environment/dynamic-invocation) are rejected; typeof/GetType and fully-qualified System.IO.Path.{GetFileName,GetFileNameWithoutExtension,GetExtension,GetDirectoryName,Combine,ChangeExtension}(…) are allowed. File writes made through the Inventor API (SaveAs, SaveCopyAs, translators) are NOT restricted by the export-root policy. " +
+     Description("Execute a C# script in-process within the Inventor add-in against Inventor.Application (global `app`) for workflows not covered by typed tools — prefer typed tools first. Enabled by default; --disable-send-code or the add-in kill switch disables it. Globals: app (Inventor.Application), doc (active Document, null when none is open). Pass a C# script body with statements and return, with optional class/helper declarations. Imports: System, System.Collections.Generic, System.Linq, Inventor. The active document is wrapped in one undoable transaction; runtime/host errors abort that transaction and host warnings are returned. Keep mutations within doc; document creation/closing, other documents and external file writes are outside that transaction and cannot be rolled back by it. Do not manage the wrapper transaction yourself.  Banned APIs (file/process/network/environment/dynamic-invocation) are rejected; typeof/GetType and fully-qualified System.IO.Path.{GetFileName,GetFileNameWithoutExtension,GetExtension,GetDirectoryName,Combine,ChangeExtension}(…) are allowed. File writes made through the Inventor API (SaveAs, SaveCopyAs, translators) are NOT restricted by the export-root policy. " +
                  "Returns result (the script's last expression / return value; >64 KiB spills to result_file) + captured stdout. modules: names of saved code modules (inventor_save_code_module) compiled in front of the script — call their functions instead of re-sending helper code; the response echoes {name, hash}. silent=true runs under Application.SilentOperation (Inventor answers prompts with defaults — use it for scripts that Save/Open/Close). timeout_ms (max 600000) overrides the per-call STA timeout. " +
                  "Errors carry diagnostics[{source: script|module:<name>, line, code, message, hint}] or, at runtime, location{source, line, text} + hint. " +
                  "COM interop tips: lengths are cm internally (mm/10); collections are 1-based and COM items come back as object — type the loop variable (foreach (Document d in app.Documents)) or cast; look up by name with the indexed property occs.ItemByName[\"Part:1\"] (brackets); indexed properties take brackets or get_X(): body.Volume[0.0001]; UnitVector↔Vector via AsVector()/AsUnitVector(); PartDocument→Document via (Document)(object)part; Matrix has no operators (PostMultiplyBy).")]
@@ -64,8 +65,8 @@ public sealed class CodeTools
         return await Call("send_code", p, ct, timeout_ms, log);
     }
 
-    [McpServerTool(Name = "inventor_save_code_module"),
-     Description("Save (or replace) a reusable C# helper module for inventor_send_code: declarations only — static methods, classes/records, constants — no top-level statements. It is policy-checked and dry-compiled in the running Inventor add-in before it is stored, so errors surface now with module:<name> line numbers. requires: other saved modules this one calls (loaded automatically, dependencies first). Returns the module hash and its function signatures. name: [a-z][a-z0-9_]*, max 64 KiB.")]
+    [McpServerTool(Name = "inventor_save_code_module", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
+     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Save (or replace) a reusable C# helper module for inventor_send_code: declarations only — static methods, classes/records, constants — no top-level statements. It is policy-checked and dry-compiled in the running Inventor add-in before it is stored, so errors surface now with module:<name> line numbers. requires: other saved modules this one calls (loaded automatically, dependencies first). Returns the module hash and its function signatures. name: [a-z][a-z0-9_]*, max 64 KiB.")]
     public async Task<string> SaveCodeModule(string name, string code, string? description = null, string[]? requires = null,
         CancellationToken ct = default)
     {
@@ -129,7 +130,7 @@ public sealed class CodeTools
         });
     }
 
-    [McpServerTool(Name = "inventor_list_code_modules"),
+    [McpServerTool(Name = "inventor_list_code_modules", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("List saved send_code helper modules: name, hash, description, requires, bytes, saved_utc and the function/type signatures they declare — enough to call them from a script without reading the code. include_code=true also returns the source.")]
     public Task<string> ListCodeModules(bool include_code = false, CancellationToken ct = default)
     {
@@ -152,8 +153,8 @@ public sealed class CodeTools
         return Task.FromResult(ToolResponse.Serialize(new JObject { ["count"] = arr.Count, ["modules"] = arr }));
     }
 
-    [McpServerTool(Name = "inventor_delete_code_module"),
-     Description("Delete a saved send_code helper module by name. Refused while another saved module lists it in requires.")]
+    [McpServerTool(Name = "inventor_delete_code_module", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
+     Description("Deletes the stored module file; this has no Inventor undo. Delete a saved send_code helper module by name. Refused while another saved module lists it in requires.")]
     public Task<string> DeleteCodeModule(string name, CancellationToken ct = default)
     {
         var nameError = CodeModuleStore.ValidateName(name);

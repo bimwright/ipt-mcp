@@ -49,15 +49,13 @@ public sealed class PropertyToolsTests
     }
 
     [Fact]
-    public void ReadOnly_drops_the_properties_toolset()
+    public void ReadOnly_keeps_queries_and_removes_writes()
     {
-        var types = Program.ResolveToolTypesForRegistration(
-            new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true }).ToArray();
-        Assert.DoesNotContain(typeof(PropertyTools), types);
-
-        var names = types.SelectMany(ToolNamesOf).ToArray();
-        Assert.DoesNotContain("inventor_get_iproperty", names);
-        Assert.DoesNotContain("inventor_get_mass_properties", names);
-        Assert.DoesNotContain("inventor_list_iproperty_sets", names);
+        var methods = typeof(PropertyTools).GetMethods().Where(m => m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true).ToArray();
+        var names = methods.Select(m => m.GetCustomAttribute<McpServerToolAttribute>()!.Name).ToArray();
+        Assert.Contains("inventor_get_iproperty", names);
+        Assert.Contains("inventor_get_mass_properties", names);
+        Assert.Contains("inventor_list_iproperty_sets", names);
+        Assert.DoesNotContain("inventor_set_iproperty", names);
     }
 }

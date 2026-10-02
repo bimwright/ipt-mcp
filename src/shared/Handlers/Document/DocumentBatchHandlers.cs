@@ -66,7 +66,7 @@ public sealed class SaveAllHandler : HandlerBase, IInventorCommand
             {
                 foreach (var (_, row) in toSave) row["status"] = "error";
                 var failed = new JObject { ["saved"] = 0, ["error"] = "save failed: " + ex.Message };
-                ResponseSpillWriter.AttachResults(Name, failed, rows, ResponseSpillWriter.ForContext(ctx));
+                ResponseSpillWriter.AttachResults(Name, failed, rows, ResponseSpillWriterFactory.ForContext(ctx));
                 return Ok(ctx, failed);
             }
             foreach (var (d, row) in toSave)
@@ -89,7 +89,7 @@ public sealed class SaveAllHandler : HandlerBase, IInventorCommand
         };
         // Clean files are the bulk on big assemblies — list only what changed or needs attention.
         var interesting = new JArray(rows.Where(r => (string?)r["status"] != "clean"));
-        ResponseSpillWriter.AttachResults(Name, data, interesting, ResponseSpillWriter.ForContext(ctx));
+        ResponseSpillWriter.AttachResults(Name, data, interesting, ResponseSpillWriterFactory.ForContext(ctx));
         return Ok(ctx, data);
     }
 
@@ -160,7 +160,7 @@ public sealed class OpenDocumentsHandler : HandlerBase, IInventorCommand
             ["errors"] = rows.Count(r => (string?)r["status"] == "error"),
             ["visible"] = visible,
         };
-        ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriter.ForContext(ctx));
+        ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriterFactory.ForContext(ctx));
         return Ok(ctx, data);
     }
 }
@@ -235,7 +235,7 @@ public sealed class CloseDocumentsHandler : HandlerBase, IInventorCommand
             ["closed"] = rows.Count(r => (string?)r["status"] != "error"),
             ["errors"] = rows.Count(r => (string?)r["status"] == "error"),
         };
-        ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriter.ForContext(ctx));
+        ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriterFactory.ForContext(ctx));
         return Ok(ctx, data);
     }
 }

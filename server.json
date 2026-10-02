@@ -1,8 +1,8 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.bimwright/ipt-mcp",
-  "description": "MCP gateway for Autodesk Inventor 2022-2027 (parts, sketches, features, parameters, iProperties, mass properties, export).",
-  "version": "0.2.0",
+  "description": "MCP gateway for Autodesk Inventor 2022-2027: parts, assemblies, drawings and automation.",
+  "version": "0.2.1",
   "repository": {
     "url": "https://github.com/bimwright/ipt-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "Bimwright.Ipt.Server",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "runtimeHint": "dnx",
       "transport": {
         "type": "stdio"
@@ -20,7 +20,7 @@
       "environmentVariables": [
         {
           "name": "BIMWRIGHT_INVENTOR_READ_ONLY",
-          "description": "Set to 1/true to run the server in strict read-only mode (write/send_code toolsets are not registered).",
+          "description": "Set to 1/true to expose only tools annotated read-only; no document/file writes or send_code.",
           "isRequired": false
         },
         {
@@ -30,15 +30,21 @@
         },
         {
           "name": "BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE",
-          "description": "Set to 1/true to expose the dangerous inventor_send_code tool (also requires BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1 on the add-in).",
+          "description": "Code tools are enabled by default. Set to 0/false to hide them. The add-in kill switch BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1 rejects execution.",
           "isRequired": false
         },
         {
           "name": "BIMWRIGHT_INVENTOR_TARGET",
           "description": "Pin the active target by 4-digit Inventor year (e.g. 2025) or descriptor id.",
           "isRequired": false
+        },
+        {
+          "name": "BIMWRIGHT_INVENTOR_CALL_LOG_ENABLED",
+          "description": "Set to 1/true to record redacted calls on the server and plug-in. Default false.",
+          "isRequired": false
         }
       ]
     }
-  ]
+  ],
+  "license": "Apache-2.0"
 }

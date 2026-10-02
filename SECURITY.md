@@ -46,18 +46,17 @@ authenticated localhost transport — **TCP on `127.0.0.1` for Inventor 2022–2
   loopback-firewall prompt.
 
 ### Dynamic code paths (`inventor_send_code`, ToolBaker)
-- `inventor_send_code` is **disabled by default**. It requires both a server-side opt-in
-  (`--enable-send-code` or `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`) **and** an add-in environment
-  variable (`BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`). Missing either returns
-  `SEND_CODE_DISABLED`.
-- Run with `--read-only` or `--disable-toolbaker` for host profiles that must not expose
-  dynamic-code execution.
+- `inventor_send_code` is enabled by default. `--disable-send-code` hides the code toolset;
+  `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` rejects execution in the host with
+  `SEND_CODE_DISABLED`. `--read-only` also removes it.
+- Run with `--read-only`, or both `--disable-send-code --disable-toolbaker`, for profiles
+  that must not expose dynamic-code execution.
 - Both `send_code` and baked-tool source pass the `BakeCompilerPolicy` banned-API gate
   (no file/process/network/environment APIs, no invoke/load-style reflection) before
   compilation. The gate is a best-effort token scan, not a sandbox: file writes performed
   *through the Inventor API itself* (`SaveAs`, `SaveCopyAs`, translator add-ins) are
   **not** constrained by `ExportPathPolicy` (which only governs the typed export tools).
-  The two-sided opt-in above is the trust boundary — treat `send_code` as full local trust.
+  The host Inventor process is the trust boundary — treat `send_code` as full local trust.
 - Baked-tool execution is restricted by `BakedToolDispatchAuthorizer` to read-only query commands
   and may never re-enter the platform layer.
 - See [`docs/toolbaker.md`](docs/toolbaker.md) for the full model.
@@ -86,3 +85,16 @@ Do not publish proof-of-concept exploits in public channels until a fix has ship
 - Acknowledgement within 72 hours of report.
 - Assessment + fix target within 14 days for high-severity issues (auth bypass, RCE).
 - Coordinated disclosure via GitHub Security Advisory with CVE assignment where applicable.
+
+### Call logging and source privacy
+
+Call-log files are off by default. `--enable-call-log` / `--disable-call-log` control
+both the server and plug-in; the host kill switch `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG=1`
+can only disable recording. Bodies are replaced with length/hash metadata, including
+nested code modules. In-memory History is separate; its re-runs do not persist logs.
+Caching and TTL body journaling remain separate opt-ins, both off by default.
+
+The active document transaction in `send_code` covers that document only. Operations
+on other documents, creation/closing, and external files cannot be rolled back by
+the wrapper. Returned `mutation_applied: null` means readback is required; do not
+retry a write merely to recover missing output.

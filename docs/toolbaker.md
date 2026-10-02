@@ -6,7 +6,7 @@ and the **ToolBaker** self-evolution engine. Neither is an Inventor domain tool 
 separately gated and documented here.
 
 Both let an AI agent run C# in-process inside the Inventor add-in against `Inventor.Application`,
-so both are governed by a multi-layered safety policy: a two-sided opt-in, a source-level
+so both are governed by a multi-layered safety policy: explicit execution switches, a source-level
 banned-API gate, a dispatch deny-list, and the read-only-mode filter.
 
 ---
@@ -19,83 +19,20 @@ It compiles and evaluates a raw C# snippet in-process using Roslyn scripting
 snippet as the global `app`, and `System`, `System.Collections.Generic`, `System.Linq`, and
 `Inventor` are imported by default. Console output is captured and returned as `stdout`.
 
-Because this is a high-privilege escape hatch, it is **disabled by default** and protected by a
-two-sided opt-in gate.
+This is a high-privilege escape hatch and is enabled by default in v0.2.1.
 
-### Two-Sided Opt-In Gating
+### Execution switches
 
-Dynamic execution is off until **both** sides opt in:
+`--enable-send-code` / `--disable-send-code` control the server's four code tools.
+The add-in requires no opt-in; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1`
+is an explicit host kill switch and returns `SEND_CODE_DISABLED`.
+`--read-only` excludes execution, while retaining read-only code-module listing.
+ToolBaker has its own default-on switch, `--disable-toolbaker`.
 
-1. **Server-side opt-in** — boot the MCP server with either:
-   - the `--enable-send-code` CLI flag, **or**
-   - the `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1` environment variable
-     (also accepts `true` / `yes` / `on`).
-
-   When server opt-in is missing, the `code` toolset is never registered, so the
-   `inventor_send_code` tool is not even visible to the MCP client.
-
-2. **Add-in-side opt-in** — the target Inventor add-in process must detect:
-   - `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`
-     (also accepts `true` / `yes` / `on`). Set this in the environment before launching Inventor.
-
-If either side lacks its opt-in, the request is blocked with a **`SEND_CODE_DISABLED`** error. The
-enforcement is defense-in-depth:
-
-- `CommandDispatcher` rejects any `send_code` envelope with `SEND_CODE_DISABLED` unless the add-in
-  context reports `EnableSendCode`.
-- `SendCodeHandler` independently re-checks the add-in flag and refuses to run if it is off.
-
-`inventor_send_code` is **never** exposed in read-only mode (`--read-only` strips the `code`
-toolset along with every other write-capable toolset).
-
-Read-only enforcement is also carried in the add-in command envelope. For a hard add-in-side
-write lock independent of the server process, launch Inventor with
-`BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` (or `BIMWRIGHT_INVENTOR_READ_ONLY=1`).
-
----
-
-## Compiler Safety Policy (banned APIs)
-
-Before any dynamic C# snippet — from `inventor_send_code` **or** a baked tool — is compiled, its
-source is validated against `BakeCompilerPolicy.ValidateSource`. The scan is token-aware: comments
-and string/char literals are stripped first (interpolation holes are still scanned as code), and
-tokens match on word boundaries, case-sensitively — so `VisibleSocket`, a lowercase `file.`
-variable, or a `GetType` inside a `catch` no longer trip the gate. Rejection is an
-`INVALID_ARGUMENT` error naming the offending token, prefixed by the calling surface
-(`send_code` or `Baked tool`).
-
-The forbidden tokens block destructive file operations, process spawning, environment mutation,
-external network access, invoke/load-style reflection, and any attempt to re-enter the ToolBaker
-layer. Type-metadata reads (`typeof`, `GetType`) are allowed:
-
-| Category | Forbidden tokens |
-|---|---|
-| File / disk | `System.IO`, `File.`, `Directory.` |
-| Network | `System.Net`, `Socket`, `HttpClient` |
-| Process / environment | `System.Diagnostics`, `Process`, `Environment.`, `Microsoft.Win32` |
-| Reflection / dynamic invoke | `System.Reflection`, `Activator.`, `Assembly.Load*`, `MethodInfo`, `PropertyInfo`, `FieldInfo`, `GetMethod(`, `GetProperty(`, `GetField(`, `GetMember(`, `GetEvent(`, `GetConstructor(`, `Invoke(`, `DynamicInvoke(`, `BeginInvoke(`, `EndInvoke(`, `CreateDelegate(` |
-| ToolBaker re-entry | `Bimwright.Ipt.Shared.ToolBaker` |
-
-> The policy is a coarse source-text gate, not a sandbox. It is one of several layers; the
-> opt-in gates and the host Inventor process trust boundary are the others. Treat `send_code`
-> as trusted-operator-only.
-
----
-
-## ToolBaker: governed reusable tools
-
-ToolBaker (toolsets `toolbaker` read-only + `toolbaker_write`) turns repeated `send_code` /
-macro workflows into governed, named, reusable tools, so agents stop re-running raw C#. It is
-enabled by default (disable with `--disable-toolbaker` or
-`BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0`).
-
-> **Current status — adaptive suggestions are not wired in ipt-mcp.** The `--enable-adaptive-bake` /
-> `BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE=1` flag is parsed but nothing reads it: the server does not
-> record usage events and does not run clustering, so `inventor_list_bake_suggestions` only returns
-> suggestions that were inserted into the bake database by other means. The registry path
-> (`inventor_accept_bake_suggestion` → `inventor_run_baked_tool`) works. For reusing helper code
-> across `send_code` calls, use **code modules** (below) — they reuse functions, which is where the
-> repetition in real sessions is, rather than whole scripts.
+The nullable global `doc` is the active document at execution start. Its changes
+share one Inventor undo transaction. Runtime/host errors abort that transaction;
+host warnings are returned. Other documents, creation/closing and file writes are
+outside its rollback scope. Do not end or abort the wrapper transaction yourself.
 
 ### The six ToolBaker tools
 
@@ -196,8 +133,8 @@ per-instance `inventor-<year>-<pid>.json` discovery files.
 
 | Mode | `inventor_send_code` | `toolbaker` (read) | `toolbaker_write` |
 |---|---|---|---|
-| Default (`code` off) | hidden | exposed | exposed |
-| `--enable-send-code` + add-in opt-in | exposed | exposed | exposed |
+| Default (all toolsets) | exposed | exposed | exposed |
+| `--disable-send-code` | hidden | exposed | exposed |
 | `--read-only` | hidden | exposed | hidden |
 | `--disable-toolbaker` | per send-code gate | hidden | hidden |
 

@@ -11,7 +11,7 @@ namespace Bimwright.Ipt.Shared.Infrastructure;
 
 /// <summary>
 /// Routes a deserialized <see cref="InventorCommandEnvelope"/> to its handler, enforcing
-/// read-only mode, the <c>send_code</c> opt-in gate, and the response-size guard, and
+/// read-only mode, the <c>send_code</c> kill-switch gate, and the response-size guard, and
 /// sanitizing any handler exception into an <c>API_ERROR</c>. Ported from nwd's CommandDispatcher.
 /// </summary>
 public sealed class CommandDispatcher
@@ -35,7 +35,7 @@ public sealed class CommandDispatcher
 
         if (env.Command == "send_code" && !ctx.EnableSendCode)
             return InventorCommandResult.Fail(env.Id, InventorErrorCodes.SEND_CODE_DISABLED,
-                "send_code is disabled. Enable it on the server (--enable-send-code) and the add-in (BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1).", meta);
+                "send_code is disabled by the add-in kill switch BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE.", meta);
 
         if (!_commands.TryGetValue(env.Command, out var cmd))
             return InventorCommandResult.Fail(env.Id, InventorErrorCodes.INVALID_ARGUMENT, $"unknown command: {env.Command}", meta);

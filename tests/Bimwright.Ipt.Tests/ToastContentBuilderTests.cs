@@ -167,7 +167,7 @@ public sealed class ToastContentBuilderTests : IDisposable
         Assert.Equal("1 item", Ok("list_bodies", new JObject { ["total"] = 1 }).Summary);
         Assert.Equal("Extrusion3", Ok("extrude", new JObject { ["feature_name"] = "Extrusion3" }, false).Summary);
         Assert.Equal("done here", Ok("close_sketch", new JObject { ["message"] = "done here" }, false).Summary);
-        Assert.Equal("Completed", Ok("view_fit", new JObject(), false).Summary);
+        Assert.Equal("View Fit", Ok("view_fit", new JObject(), false).Summary);
     }
 
     [Theory]   // Review Focus 3: data that is not an object never throws
@@ -175,16 +175,16 @@ public sealed class ToastContentBuilderTests : IDisposable
     [InlineData("\"plain string\"")]
     [InlineData("[1,2,3]")]
     [InlineData("42")]
-    public void Non_object_data_gives_completed(string json)
+    public void Non_object_data_uses_readable_tool_name(string json)
     {
         var m = Ok("get_document_info", JToken.Parse(json));
         Assert.True(m.Success);
-        Assert.Equal("Completed", m.Summary);
+        Assert.Equal("Get Document Info", m.Summary);
     }
 
     [Fact]
-    public void Null_data_gives_completed()
-        => Assert.Equal("Completed", Ok("new_part", null, false).Summary);
+    public void Null_data_uses_readable_tool_name()
+        => Assert.Equal("New Part", Ok("new_part", null, false).Summary);
 
     [Fact]
     public void Timeout_failure()

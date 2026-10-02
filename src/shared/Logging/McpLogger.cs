@@ -126,8 +126,10 @@ namespace Bimwright.Ipt.Shared.Logging
 
         public static void Log(string toolName, string? paramsJson, bool success,
                                 long durationMs, string? errorMsg = null,
-                                string? code = null, string? resultJson = null)
+                                string? code = null, string? resultJson = null, bool? enabled = null)
         {
+            if (enabled == false) return;
+            if (enabled == true && _logPath == null) Initialize();
             if (_logPath == null) return;
             try
             {
@@ -155,10 +157,23 @@ namespace Bimwright.Ipt.Shared.Logging
         {
             if (!string.Equals(toolName, "send_code", StringComparison.OrdinalIgnoreCase))
             {
+                object? safeParams = null;
+                try
+                {
+                    if (paramsJson != null)
+                    {
+                        var redacted = CallLogPrivacy.Redact(JToken.Parse(paramsJson));
+                        var text = redacted.ToString(Formatting.None);
+                        safeParams = text.Length <= MaxLoggedParamsLength ? redacted : new JObject {
+                            ["truncated"] = true, ["preview"] = text.Substring(0, MaxLoggedParamsLength)
+                        };
+                    }
+                }
+                catch (JsonReaderException) { safeParams = RedactAndTruncate(paramsJson, MaxLoggedParamsLength); }
                 return new McpLogSafePayload
                 {
                     Code = null,
-                    Params = ParseParams(RedactAndTruncate(paramsJson, MaxLoggedParamsLength))
+                    Params = safeParams
                 };
             }
 

@@ -6,7 +6,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#サポート対象-inventor-バージョン"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-107%20or%20111%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#ツール一覧"><img src="https://img.shields.io/badge/MCP-111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -60,7 +60,7 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 
 [GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest) から `IptMcp.Setup-*-win-x64.zip` を入手。v0.1.0 は Inventor **2025** と **2027**。展開して `install.ps1`。MCP は `ipt-mcp.exe`。`dotnet tool install -g Bimwright.Ipt.Server` は使わないでください。
 
-発見: `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。`inventor_send_code` は双方のオプトイン — [安全性](#安全性) を参照。
+`inventor_send_code` はデフォルトで有効です。`--disable-send-code` は code ツールを非表示にし、`BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` はホストで実行を停止します。read-only モードでは実行できません。
 
 ---
 
@@ -92,17 +92,16 @@ dotnet build src/plugin-inv27 -c Debug   # 実際の 2027 相互運用コンパ�
 
 ## ツール一覧
 
-すべてのプラットフォームツールセットが有効な場合の全面はデフォルトで **107 ツール**です（send_code ツールセットが有効な場合は **111 ツール**：`inventor_send_code` と 3 つのコードモジュールツール）。すべての MCP 公開名は `inventor_` プレフィックスが付きます。ツールはツールセットクラスにグループ化されており、`--toolsets sketch,feature` および `--read-only` によって登録を制御できるため、性能の低いモデルでも無効なツールが表示されることはありません。
+全機能モードはデフォルトで **111 ツール**（`--toolsets all`）。`--disable-send-code` では **107 ツール**、`--read-only` では **28 ツール**です。MCP 名はすべて `inventor_` で始まり、toolset フィルターで絞り込めます。
 
-デフォルトで有効なツールセット: `meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`、`drawing`、`drawing_query`。
-デフォルトで無効: `code`（`send_code` 脱出ハッチ — オプトインのみ）。
+`code` を含む全 15 toolset がデフォルトで有効です。`--toolsets <csv>` で絞り込めます。
 
 すべての長さ入力は **mm**、角度は **度** 単位です。アドインが Inventor 内部のセンチメートル/ラジアンに変換します。
 
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
 
-Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server tests and 165 toast tests passing. Built runtime catalogs confirm 111 all-enabled / 107 code-off / 21 read-only tools. See [Phase 3 tool behavior](docs/testing/drawing-phase3.md).
+Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/drawing-phase3.md). These records predate v0.2.1 runtime changes; live acceptance must be renewed.
 
 `inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
 `inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
@@ -249,11 +248,11 @@ Phase 3 validation passed on Inventor 2027 disposable fixtures, with 792 server 
 | `inventor_list_constraints` | すべての拘束をタイプ、`health`、抑制フラグ、2 つのオカレンス名とともに読み取り。 |
 | `inventor_list_occurrences` | セレクタで絞ったオカレンス一覧（path、file、bbox_mm、transform、表示、材料、外観、質量、体積）。`check_interference` は `set_a` × `set_b`、`measure_min_distance` は `pairs[]` や集合×集合 + `threshold_mm` に対応。 |
 
-### code (4) — オプトイン脱出ハッチ（デフォルトで OFF）
+### code (4) — C# scripts and code modules
 
 | ツール | 説明 |
 |---|---|
-| `inventor_send_code` | **危険、オプトインのみ。** C# スニペットをインプロセスで `Inventor.Application` に対して実行。サーバーとアドインの両方がオプトインしない限り無効（それ以外の場合は `SEND_CODE_DISABLED`）。禁止 API（ファイル/プロセス/ネットワーク/環境）は拒否。 |
+| `inventor_send_code` | `inventor_send_code` はデフォルトで有効です。`--disable-send-code` は code ツールを非表示にし、`BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` はホストで実行を停止します。read-only モードでは実行できません。 |
 | `inventor_save_code_module` | 再利用可能な C# ヘルパーモジュールを保存（宣言のみ、保存前にポリシー検査とドライコンパイル）。 |
 | `inventor_list_code_modules` | 保存済みモジュールとシグネチャを一覧。 |
 | `inventor_delete_code_module` | モジュールを削除。 |
@@ -296,8 +295,8 @@ Toast は **専用 STA UI スレッド上のコードのみで構築した WPF**
 
 簡潔に言えば、モデルはユーザーのマシン上に留まり、書き込み/危険なツールは制限されます。
 
-- **読み取り専用モード。** `--read-only`（または `BIMWRIGHT_INVENTOR_READ_ONLY=1`）は、すべての書き込み可能ツールセット（`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`code`、`toolbaker_write`、`drawing`）を削除しますが、`meta` + `query` + `assembly_query` + `drawing_query` + 読み取り専用 `toolbaker` は維持し、**`inventor_switch_target` は公開したままにします**。サーバーは各コマンドエンベロープに読み取り専用モードを送信します。アドインも `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1` を尊重します。強制された読み取り専用下での書き込みコマンドは `READ_ONLY` を返します。
-- **send_code の二方向オプトイン。** `inventor_send_code` は**デフォルトで無効**です。サーバー側で `--enable-send-code`（または `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`）**かつ**アドインプロセス側で `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` の**両方**が設定された場合のみ公開されます。それ以外の場合、ディスパッチャーは `SEND_CODE_DISABLED` を返します。禁止 API（ファイル/プロセス/ネットワーク/環境）は拒否されます。
+- **読み取り専用モード。** `--read-only` は `ReadOnly = true` のツールだけを登録し、ドキュメントやファイルへの書き込みを除外します。parameter/property の参照、view fit、code module 一覧は利用可能です。add-in 側も `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1` を適用します。
+- **send_code.** `inventor_send_code` はデフォルトで有効です。`--disable-send-code` は code ツールを非表示にし、`BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` はホストで実行を停止します。read-only モードでは実行できません。
 - **ローカルで認証付きのトランスポート。** TCP はループバックにバインドされ、Named Pipe はローカルマシンスコープです。各セッションごとのディスクリプタにはランダムな認証トークンが含まれますが、MCP メタツールがそれを返すことはありません。
 - **サニタイズされたエラー。** モデルに返されるエラーメッセージは、絶対パスやシークレットの漏洩を防ぐためにサニタイズされています。
 - **ToolBaker の制御。** デフォルトで ToolBaker は有効化されています。サーバーの起動時に --disable-toolbaker コマンドラインフラグを渡すか、環境変数 BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0 を設定することで、完全に無効化できます。
@@ -333,3 +332,65 @@ AI アシスタントと BIM・CAD アプリケーションをつなぐオープ
 [Apache-2.0](LICENSE)。[LICENSE](LICENSE) を参照してください。
 
 Inventor および Autodesk は Autodesk, Inc. の登録商標です。bimwright は独立したオープンソースプロジェクトであり、Autodesk, Inc. とは提携、スポンサー、または推奨関係にありません。
+
+## 権限と auto mode (Permissions & auto mode)
+
+次の allow list は 28 個の read-only annotation から生成され、実際のサーバーとの一致をテストします。`ipt-mcp` はクライアントの正確な server ID に置き換えてください。`mcp__ipt-mcp__*` などサーバー全体のワイルドカードは使わないでください。`inventor_send_code` には annotation や毎回の確認を強制する metadata はなく、個別許可はユーザーの選択です。許可の保存は実際のクライアントで確認が必要です。
+
+<!-- BEGIN GENERATED READONLY -->
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__ipt-mcp__inventor_check_interference",
+      "mcp__ipt-mcp__inventor_create_bake_issue_draft",
+      "mcp__ipt-mcp__inventor_find_view_geometry",
+      "mcp__ipt-mcp__inventor_get_assembly_bom",
+      "mcp__ipt-mcp__inventor_get_current_target",
+      "mcp__ipt-mcp__inventor_get_document_info",
+      "mcp__ipt-mcp__inventor_get_drawing_info",
+      "mcp__ipt-mcp__inventor_get_iproperty",
+      "mcp__ipt-mcp__inventor_get_mass_properties",
+      "mcp__ipt-mcp__inventor_get_parameter",
+      "mcp__ipt-mcp__inventor_health",
+      "mcp__ipt-mcp__inventor_list_available_targets",
+      "mcp__ipt-mcp__inventor_list_bake_suggestions",
+      "mcp__ipt-mcp__inventor_list_baked_tools",
+      "mcp__ipt-mcp__inventor_list_bodies",
+      "mcp__ipt-mcp__inventor_list_code_modules",
+      "mcp__ipt-mcp__inventor_list_constraints",
+      "mcp__ipt-mcp__inventor_list_features",
+      "mcp__ipt-mcp__inventor_list_interfaces",
+      "mcp__ipt-mcp__inventor_list_iproperty_sets",
+      "mcp__ipt-mcp__inventor_list_occurrences",
+      "mcp__ipt-mcp__inventor_list_open_documents",
+      "mcp__ipt-mcp__inventor_list_parameters",
+      "mcp__ipt-mcp__inventor_measure_min_distance",
+      "mcp__ipt-mcp__inventor_probe_brep",
+      "mcp__ipt-mcp__inventor_report_task_result",
+      "mcp__ipt-mcp__inventor_switch_target",
+      "mcp__ipt-mcp__inventor_view_fit"
+    ]
+  }
+}
+```
+<!-- END GENERATED READONLY -->
+
+### Runtime settings (v0.2.1)
+
+| Setting | Default | CLI / JSON |
+|---|---|---|
+| send_code | on | `--enable-send-code` / `--disable-send-code`; `enableSendCode` |
+| Call-log files | off | `--enable-call-log` / `--disable-call-log`; `enableCallLog` |
+| Toolsets | all | `--toolsets all`; `toolsets` |
+| Read-only | off | `--read-only`; `readOnly` |
+| Response guard | on | `--enable-output-guard` / `--disable-output-guard`; `enableOutputGuard` |
+| Warning / strong warning / budget | 65536 / 262144 / 1048576 bytes | `--output-warning-bytes`, `--output-strong-warning-bytes`, `--output-budget-bytes`; `outputWarningBytes`, `outputStrongWarningBytes`, `outputBudgetBytes` |
+| Transport cap | 5000000 bytes | `--max-response-bytes`; `maxResponseBytes` |
+| Spill retention | 36 hours | `--spill-retention-hours`; `spillRetentionHours` (invalid values: 36) |
+
+CLI overrides environment, which overrides `--config` JSON. The server's logging switch reaches the plug-in; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG=1` can veto it. History re-runs do not persist call logs. In-memory History is independent. Body caching (`BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`) and body journaling (`BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1`, TTL default 4 hours) are separate opt-ins; journaling also requires call logging. Enabled call logs keep source length/hash, never source bodies. Saved code modules are explicit user-requested storage.
+
+`send_code` provides `app` and nullable `doc`, accepts a script body with `return` and optional helper declarations, and imports `System`, `System.Collections.Generic`, `System.Linq`, `Inventor`. Writes to the active document share one undo transaction; errors abort it and warnings are returned. New/closed documents, other documents and external files are outside that rollback scope. Oversized script output includes a file, preview, schema and `mutation_applied: null`; read the file and do not re-run the script. Spill files live under `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill` and fresh files are never evicted by a count cap.
+
+[ベンチマーク記録と検証範囲](docs/benchmarks/README.md)。

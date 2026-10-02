@@ -17,6 +17,12 @@ internal static class AgentOutputGuard
     {
         var command = toolName.StartsWith("inventor_", StringComparison.Ordinal) ? toolName.Substring(9) : toolName;
         var originalBytes = Measure(result);
+        var payloadText = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text;
+        try
+        {
+            if (payloadText != null && JObject.Parse(payloadText).Value<bool?>("ok") == false) result.IsError = true;
+        }
+        catch (JsonReaderException) { }
         var limit = config.EnableOutputGuard ? Math.Min(config.OutputBudgetBytes, config.MaxResponseBytes) : config.MaxResponseBytes;
         if (originalBytes <= limit && config.EnableOutputGuard && originalBytes >= config.OutputWarningBytes)
         {
@@ -29,6 +35,30 @@ internal static class AgentOutputGuard
         JObject? data = null;
         var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text;
         try { if (text != null) data = JObject.Parse(text); } catch (JsonReaderException) { }
+        if (command == "send_code" || command == "run_baked_tool")
+        {
+            try
+            {
+                var writer = new Bimwright.Ipt.Shared.Infrastructure.ResponseSpillWriter(
+                    System.IO.Path.Combine(config.DataDirectory, "spill"), config.SpillRetentionHours);
+                // Decode the outer MCP JSON before masking: escaped quote sequences in
+                // content.text must not conceal credentials from the string masker.
+                var structured = JToken.Parse(System.Text.Json.JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions));
+                var serialized = ((JToken)ServerLogger.MaskParams(structured)!).ToString(Formatting.None);
+                var path = writer.Write(command + "-response", ".json", serialized);
+                return Payload(new JObject {
+                    ["ok"] = result.IsError != true,
+                    ["mutation_applied"] = JValue.CreateNull(),
+                    ["response_file"] = path,
+                    ["response_preview"] = Bimwright.Ipt.Shared.Infrastructure.ResponseSpillWriter.Utf8Prefix(serialized, 512),
+                    ["spill_schema"] = new JObject { ["version"] = 1, ["format"] = "application/json", ["type"] = "CallToolResult" },
+                    ["readback_required"] = true,
+                    ["size_warning"] = "Read response_file for details. Do not re-run this operation to recover output."
+                }, result.IsError == true);
+            }
+            catch (System.IO.IOException) { }
+            catch (System.UnauthorizedAccessException) { }
+        }
         if (readOnly)
             return Payload(new JObject { ["ok"] = false, ["error"] = new JObject {
                 ["code"] = "RESPONSE_TOO_LARGE",
@@ -37,6 +67,7 @@ internal static class AgentOutputGuard
 
         // A completed write must never be presented as a rejected, replayable operation.
         var compact = Bimwright.Ipt.Shared.Contracts.ResponseEffectSummary.Compact(data, originalBytes);
+        if (command == "send_code" || command == "run_baked_tool") compact["mutation_applied"] = JValue.CreateNull();
         var summary = Payload(compact, result.IsError == true || data?.Value<bool?>("ok") == false);
         if (Measure(summary) <= limit) return summary;
         compact.Remove("items"); compact.Remove("files"); compact["locators_omitted"] = true;

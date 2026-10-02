@@ -1,6 +1,6 @@
 {
   "profile": "read-only",
-  "source": "built server tools/list",
+  "source": "built server tools/list; verified by tests/stdio/release-contract.py",
   "tools": [
     "inventor_check_interference",
     "inventor_create_bake_issue_draft",
@@ -9,19 +9,26 @@
     "inventor_get_current_target",
     "inventor_get_document_info",
     "inventor_get_drawing_info",
+    "inventor_get_iproperty",
+    "inventor_get_mass_properties",
+    "inventor_get_parameter",
     "inventor_health",
     "inventor_list_available_targets",
     "inventor_list_bake_suggestions",
     "inventor_list_baked_tools",
     "inventor_list_bodies",
+    "inventor_list_code_modules",
     "inventor_list_constraints",
     "inventor_list_features",
     "inventor_list_interfaces",
+    "inventor_list_iproperty_sets",
     "inventor_list_occurrences",
     "inventor_list_open_documents",
+    "inventor_list_parameters",
     "inventor_measure_min_distance",
     "inventor_probe_brep",
     "inventor_report_task_result",
-    "inventor_switch_target"
+    "inventor_switch_target",
+    "inventor_view_fit"
   ]
 }

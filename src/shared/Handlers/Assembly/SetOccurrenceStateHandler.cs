@@ -111,7 +111,7 @@ public sealed class SetOccurrenceStateHandler : HandlerBase, IInventorCommand
             tx = null;
             try { asm.Update2(false); } catch { }
             var data = new JObject { ["changed"] = results.Count };
-            ResponseSpillWriter.AttachResults(Name, data, results, ResponseSpillWriter.ForContext(ctx));
+            ResponseSpillWriter.AttachResults(Name, data, results, ResponseSpillWriterFactory.ForContext(ctx));
             return Ok(ctx, data);
         }
         catch (Exception ex)

@@ -15,18 +15,19 @@ namespace Bimwright.Ipt.Server.Tools;
 /// pin a target.
 /// </summary>
 [McpServerToolType]
+[Toolset("meta")]
 public sealed class MetaTools
 {
     private readonly PluginClient _client;
     public MetaTools(PluginClient client) => _client = client;
 
-    [McpServerTool(Name = "inventor_list_available_targets"),
+    [McpServerTool(Name = "inventor_list_available_targets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("List detected live Inventor add-in targets (year, pid, transport, active document). Use 4-digit calendar years (2022..2027), never legacy version codes.")]
     public string ListAvailableTargets() =>
         LoggedMeta("inventor_list_available_targets", null,
             () => ToolResponse.Serialize(_client.ListTargets().Select(PublicTarget)));
 
-    [McpServerTool(Name = "inventor_get_current_target"),
+    [McpServerTool(Name = "inventor_get_current_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Report the server's currently selected Inventor target, or NO_TARGET if none is live.")]
     public string GetCurrentTarget()
     {
@@ -39,7 +40,7 @@ public sealed class MetaTools
         });
     }
 
-    [McpServerTool(Name = "inventor_switch_target"),
+    [McpServerTool(Name = "inventor_switch_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Select the active target by descriptor id, year, or session. Server-side only; does not change the Inventor document. Use 4-digit years (2022..2027).")]
     public string SwitchTarget(string target) =>
         LoggedMeta("inventor_switch_target", new { target },

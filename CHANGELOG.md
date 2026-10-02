@@ -6,10 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-02
+
+### Changed
+
+- Full mode now exposes all 111 tools by default, including code tools. `--disable-send-code` leaves 107 tools; the add-in kill switch is `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1`.
+- Read-only registration follows explicit per-tool annotations: 28 tools remain, including parameter/property queries, view fit and code-module listing. Inspecting ToolBaker no longer creates or migrates a database.
+- Tool-call files are off by default on both sides. `--enable-call-log` / `--disable-call-log` control recording; code and nested module bodies become length/hash metadata. In-memory History remains available.
+- `send_code` exposes nullable `doc` and wraps the active document in one Inventor transaction. Runtime/host errors abort that transaction; warnings are returned. Other documents, lifecycle operations and file writes remain outside its rollback scope.
+- Every tool carries activity metadata and explicit permission hints, except unannotated `send_code`. Server-only calls also report to the selected host's toast/History when available.
+- Oversized script responses carry a spill schema, preview, unknown mutation state and a no-replay warning. Invalid spill retention falls back to 36 hours. The final response guard recognizes every read tool.
+
+### Fixed
+
+- Added setup ZIP SHA-256 sidecars, NuGet README metadata, synchronized permission lists and a public host-free per-tool MCP contract test.
+- Toast regression positioning respects the monitor work area; fallback summaries show a readable operation name.
+
+
 ### Added
 
 - **RVT toast parity.** Deliberate hover opens a virtualized three-row activity timeline with sanitized outcome/time/duration tooltips, live-tail and animated arrivals. Status adds four owner-relative corners, opt-in title-row drag, saved offsets and Reset position. Expansion keeps the anchored edge and respects reduced motion; Inventor retains its dedicated toast thread and unowned window.
-- **Drawing Phase 1 (Inventor 2027, supported scope accepted).** Eleven typed tools cover drawing inspection, unsaved template creation, sheets/title blocks, base/projected/arbitrary/detail/section views, edits, attached dimensions and supplied symbol balloons, PDF/DWG/IDW exports and PNG capture. The surface is 95 default / 99 with code enabled. Drawing writes are excluded from read-only and `batch_execute`; matching managed creates reuse persistent names/signatures. Atomic batches preflight inputs and report rollback outcomes. Cold inactive sheets report unavailable annotation data, and annotation writes/shaded rebuilds reject that state before mutation. See [coverage and release dependencies](docs/testing/drawing-phase1.md); crop, native BOM balloons, hidden-loaded capture and dependency-preserving shaded rebuild remain explicitly deferred.
+- **Drawing Phase 1 (Inventor 2027, supported scope accepted).** Eleven typed tools cover drawing inspection, unsaved template creation, sheets/title blocks, base/projected/arbitrary/detail/section views, edits, attached dimensions and supplied symbol balloons, PDF/DWG/IDW exports and PNG capture. Drawing writes are excluded from read-only and `batch_execute`; matching managed creates reuse persistent names/signatures. Atomic batches preflight inputs and report rollback outcomes. Cold inactive sheets report unavailable annotation data, and annotation writes/shaded rebuilds reject that state before mutation. See [coverage and release dependencies](docs/testing/drawing-phase1.md); crop, native BOM balloons, hidden-loaded capture and dependency-preserving shaded rebuild remain explicitly deferred.
 - Drawing metadata carries tool names, toolset, short descriptions and actual timeouts into toast/history summaries. Large completed drawing writes retain compact effect summaries. Spill retention defaults to 36 hours, is configurable, and never removes younger files to meet a count cap.
 - The response policy now runs once at the final MCP result, including server-only validation/results. UTF-8 warnings default to 64/256 KiB with a 1 MiB budget. CLI/JSON/environment settings support custom thresholds and guard-off; independent transport limits remain active. Oversized reads request narrowing; completed writes preserve bounded effects and require readback instead of replay.
 

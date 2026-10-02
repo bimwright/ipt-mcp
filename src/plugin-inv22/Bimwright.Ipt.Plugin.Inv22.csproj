@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>Bimwright.Ipt.Plugin</RootNamespace>
     <AssemblyName>Bimwright.Ipt.Plugin.Inv22</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <InventorYear>2022</InventorYear>

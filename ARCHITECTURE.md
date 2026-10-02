@@ -102,7 +102,7 @@ Canonical error codes (`InventorErrorCodes`) returned in `error.code`:
 
 `NO_TARGET`, `TARGET_UNAVAILABLE`, `NO_DOCUMENT`, `WRONG_DOCUMENT_TYPE`, `INVALID_ARGUMENT`, `UNSUPPORTED_HOST`, `API_ERROR`, `TIMEOUT`, `RESPONSE_TOO_LARGE`, `READ_ONLY`, `SEND_CODE_DISABLED`, `UNAUTHORIZED`.
 
-The `CommandDispatcher` is the add-in-side line of defense: a write command under `--read-only` → `READ_ONLY`; `send_code` without both opt-in gates → `SEND_CODE_DISABLED`; an unknown command → `INVALID_ARGUMENT`; an oversized response → `RESPONSE_TOO_LARGE`; any handler throw → a sanitized `API_ERROR`.
+The `CommandDispatcher` is the add-in-side line of defense: a write command under `--read-only` → `READ_ONLY`; `send_code` with the host kill switch enabled → `SEND_CODE_DISABLED`; an unknown command → `INVALID_ARGUMENT`; an oversized response → `RESPONSE_TOO_LARGE`; any handler throw → a sanitized `API_ERROR`.
 
 ## Handler contract and units
 

@@ -57,7 +57,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         try { ModalDialogProbe.MainWindow = new IntPtr(_app.MainFrameHWND); } catch { }   // S1.1: STA-free dialog probe
 
         _year = InventorVersion.Year;
-        var enableSendCode = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE");
+        var enableSendCode = !EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE");
         var readOnly = EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY") || EnvFlag("BIMWRIGHT_INVENTOR_READ_ONLY");
         _descriptorDir = runtimeLayout.RuntimeRoot;
 
@@ -69,7 +69,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
         // Command history (rvt-mcp parity): journal file + in-memory session log on a
         // dedicated UI thread. Everything is best-effort — history must never stop the MCP path.
-        try { McpLogger.Initialize(); } catch { }
+        // Call journals are initialized lazily only for requests with record_calls=true.
         try { SendCodeJournal.RunMaintenance(IptPrivacyConfig.Load()); } catch { }
         try { _historyHost = new HistoryHost(); } catch { _historyHost = null; }
         _sessionLog = new McpSessionLog(_historyHost is { } hh ? hh.Post : (Action<Action>?)null);
@@ -233,6 +233,19 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             }
             authorized = env;
 
+            // Server-only tools report their outcome through the authenticated transport.
+            // This is activity metadata, not an Inventor command or a second tool execution.
+            if (env.Command == "report_tool_activity" && env.Tool != null)
+            {
+                var p = env.Params;
+                env.Command = p.Value<string>("command") ?? "";
+                env.Params = p["arguments"] as JObject ?? new JObject();
+                RecordOutcome(env, dispatcher, p.Value<bool?>("ok") == true, p["result"], null,
+                    p.Value<string>("error"), p.Value<long?>("duration_ms") ?? 0);
+                tcs.TrySetResult(JsonConvert.SerializeObject(InventorCommandResult.Success(env.Id, new JObject { ["recorded"] = true }, meta)));
+                return;
+            }
+
             var ctx = new InventorCommandContext
             {
                 ReadOnly = o.ReadOnly || env.ReadOnly,
@@ -324,6 +337,11 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private bool RecordOutcome(
         InventorCommandEnvelope env, CommandDispatcher dispatcher, bool ok, JToken? data, string? code, string? message, long ms)
     {
+        if (data is JObject payload && payload.Value<bool?>("ok") == false)
+        {
+            ok = false;
+            message ??= payload["error"]?.ToString();
+        }
         LogCall(env, dispatcher, ok, data, code, message, ms);
         return NotifyToast(env, dispatcher, ok, data, code, message, ms);
     }
@@ -348,8 +366,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             var sessionResult = resultJson != null && resultJson.Length > 10240
                 ? resultJson.Substring(0, 10240) : resultJson;
 
-            McpLogger.Log(tool, paramsJson, ok, ms, error, codeSnippet, resultJson);
-            SendCodeJournalGate.OnSendCodeLogged(tool, paramsJson, codeSnippet, ok, ms, error, resultJson);
+            var recordCalls = env.RecordCalls && !EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG");
+            McpLogger.Log(tool, paramsJson, ok, ms, error, codeSnippet, resultJson, enabled: recordCalls);
+            if (recordCalls) SendCodeJournalGate.OnSendCodeLogged(tool, paramsJson, codeSnippet, ok, ms, error, resultJson);
             _sessionLog?.Add(new McpCallEntry
             {
                 ToolName = tool,
@@ -359,7 +378,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 ErrorMessage = error,
                 CodeSnippet = codeSnippet,
                 ResultJson = sessionResult,
-                IsReadOnly = handler?.IsReadOnly,
+                IsReadOnly = env.Tool?.ReadOnly ?? handler?.IsReadOnly,
                 Summary = SummaryGenerator.Generate(tool, paramsJson, sessionResult, ok, error),
             });
         }
@@ -372,8 +391,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     /// <summary>
     /// Re-run executor for the History window (rvt-mcp parity: their window re-enqueues through
     /// the event handler + ExternalEvent; Inventor marshals through <see cref="InventorStaDispatcher"/>).
-    /// The file journal covers the re-run so the audit trail stays complete; the window adds the
-    /// single session-log entry itself (marked re-run of #N).
+    /// Re-runs have no server call-log authorization. The window adds the in-memory
+    /// session entry itself (marked re-run of #N), without persisting call or body logs.
     /// </summary>
     private async Task<InventorCommandResult> ReRunCommandAsync(string toolName, string? paramsJson)
     {
@@ -396,18 +415,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             Commands = _dispatcher?.Commands,
             StaQueue = _sta?.Stats,
         };
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _sta!.InvokeAsync(() => _dispatcher!.Dispatch(ctx, env));
-        var resultJson = result.Data?.ToString(Formatting.None);
-        var errMsg = result.Error?.Message;
-        string? codeSnippet = null;
-        if (toolName == "send_code")
-        {
-            try { codeSnippet = p.Value<string>("code"); } catch { }
-        }
-        McpLogger.Log(toolName, paramsJson, result.Ok, clock.ElapsedMilliseconds, errMsg, codeSnippet, resultJson);
-        SendCodeJournalGate.OnSendCodeLogged(toolName, paramsJson, codeSnippet, result.Ok, clock.ElapsedMilliseconds, errMsg, resultJson);
-        return result;
+        return await _sta!.InvokeAsync(() => _dispatcher!.Dispatch(ctx, env));
     }
 
     /// <summary>Ribbon or toast callback (any thread): show-or-focus on the history dispatcher; no COM access.</summary>
@@ -460,7 +468,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         if (toasts is null || env.Command == "health") return false;
         try
         {
-            bool? isReadOnly = dispatcher.Commands.TryGetValue(env.Command ?? "", out var handler) ? handler.IsReadOnly : null;
+            bool? isReadOnly = env.Tool?.ReadOnly ?? (dispatcher.Commands.TryGetValue(env.Command ?? "", out var handler) ? handler.IsReadOnly : null);
             return toasts.Notify(new ToastEvent(env.Command ?? "", ok, data, code, message, ms, isReadOnly,
                 env.Tool?.Name, env.Tool?.Toolset, env.Tool?.Description, env.Tool?.TimeoutMs));
         }
@@ -580,7 +588,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     public void ExecuteCommand(int commandID) { }   // legacy no-op
 
     private static string Err(Guid id, string code, string message, InventorResponseMeta meta)
-        => JsonConvert.SerializeObject(InventorCommandResult.Fail(id, code, message, meta));
+        => JsonConvert.SerializeObject(InventorCommandResult.Fail(id, code, Bimwright.Ipt.Shared.Security.ErrorSanitizer.Sanitize(message), meta));
 
     private static bool EnvFlag(string name)
     {

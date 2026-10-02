@@ -33,7 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\shared\Infrastructure\*.cs" LinkBase="Shared\Infrastructure" />
+    <Compile Include="..\..\src\shared\Infrastructure\*.cs" Exclude="..\..\src\shared\Infrastructure\ResponseSpillWriter.cs" LinkBase="Shared\Infrastructure" />
     <Compile Include="..\..\src\shared\Transport\*.cs" LinkBase="Shared\Transport" />
     <Compile Include="..\..\src\shared\Handlers\Export\CaptureImagePolicy.cs" LinkBase="Shared\Handlers\Export" />
     <Compile Include="..\..\src\shared\Handlers\Export\CameraParams.cs" LinkBase="Shared\Handlers\Export" />

@@ -9,7 +9,7 @@ using Bimwright.Ipt.Shared.Handlers.Code;
 
 /// <summary>
 /// Phase-3 WS3-C Platform registrar: the framework escape hatch + ToolBaker runtime. <c>send_code</c> is
-/// registered only when the add-in opted in (<c>o.EnableSendCode</c>); without it the command is simply
+/// registered unless the add-in kill switch disabled it (<c>o.EnableSendCode</c>); without it the command is simply
 /// absent and the dispatcher returns <c>SEND_CODE_DISABLED</c>. <c>run_baked_tool</c> and <c>apply_bake</c>
 /// are always registered (they re-check the dispatch authorizer at run time). Implemented only under an
 /// Inventor compile symbol (the handlers touch the API); without a symbol the <c>partial void

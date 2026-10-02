@@ -145,8 +145,8 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - Progressive disclosure: `--toolsets sketch,feature` and `--read-only` gate which tools register, so weak models never see disabled tools.
 - `ServerInstructions.Text` is keyword-dense (part/sketch/extrude/parameter/iproperty/export) so MCP Tool Search can discover the surface.
 
-### Read-only & opt-in gates
-- `code` (send_code) is OFF by default — requires `--enable-send-code` (server) AND `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` (add-in). Its banned-API source scan is best-effort and file writes made through the Inventor API (`SaveAs`/`SaveCopyAs`/translators) bypass `ExportPathPolicy` by design — the two-sided opt-in is the trust boundary.
+### Read-only and execution switches
+- `code` is on by default. `--disable-send-code` hides all four code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` is the host kill switch. `--read-only` keeps only annotated read tools (28), with no script execution. Treat send_code as full local host trust.
 - `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write, drawing`) but keeps `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, and KEEPS `inventor_switch_target` exposed. The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 

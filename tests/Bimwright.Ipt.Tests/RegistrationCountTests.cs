@@ -21,6 +21,7 @@ public sealed class RegistrationCountTests
     private static string[] ToolNames(InventorMcpConfig cfg)
         => Types(cfg)
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            .Where(m => !cfg.ReadOnly || m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true)
             .Select(m => m.GetCustomAttributes(typeof(McpServerToolAttribute), false)
                           .Cast<McpServerToolAttribute>().FirstOrDefault()?.Name)
             .Where(n => n is not null)
@@ -132,18 +133,18 @@ public sealed class RegistrationCountTests
         Assert.Contains(typeof(ToolBakerTools), types);
         Assert.Contains(typeof(DrawingQueryTools), types);
         Assert.DoesNotContain(typeof(DrawingTools), types);
-        Assert.Equal(5, types.Length);
-        Assert.Equal(21, names.Length);
+        Assert.Equal(9, types.Length);
+        Assert.Equal(28, names.Length);
         Assert.Contains("inventor_find_view_geometry", names);
 
         // Dropped: every write/export/code/toolbaker_write owner.
         Assert.DoesNotContain(typeof(DocumentTools), types);
-        Assert.DoesNotContain(typeof(ParameterTools), types);
-        Assert.DoesNotContain(typeof(PropertyTools), types);
+        Assert.Contains(typeof(ParameterTools), types);
+        Assert.Contains(typeof(PropertyTools), types);
         Assert.DoesNotContain(typeof(SketchTools), types);
         Assert.DoesNotContain(typeof(FeatureTools), types);
-        Assert.DoesNotContain(typeof(ExportTools), types);
-        Assert.DoesNotContain(typeof(CodeTools), types);
+        Assert.Contains(typeof(ExportTools), types);
+        Assert.Contains(typeof(CodeTools), types);
         Assert.DoesNotContain(typeof(ToolBakerWriteTools), types);
         Assert.DoesNotContain(typeof(AssemblyTools), types);
 
@@ -158,11 +159,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_107_tools_without_send_code()
+    public void Default_config_registers_111_tools_with_send_code()
     {
         // Default drops the 4 code tools (send_code + modules), leaving 107.
         var names = ToolNames(new InventorMcpConfig());
-        Assert.False(names.Contains("inventor_send_code"), "send_code must be off by default");
-        Assert.Equal(107, names.Length);
+        Assert.Contains("inventor_send_code", names);
+        Assert.Equal(111, names.Length);
     }
 }

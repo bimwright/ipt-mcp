@@ -8,7 +8,7 @@ namespace Bimwright.Ipt.Shared.Plugin;
 /// A value of <c>0</c> means "use the dispatcher default".
 /// </summary>
 /// <param name="Year">Inventor calendar year (2022-2027), resolved from the compile symbol.</param>
-/// <param name="EnableSendCode">Add-in-side <c>send_code</c> opt-in (env <c>BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE</c>).</param>
+/// <param name="EnableSendCode">Add-in-side execution switch (default on; env <c>BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE</c> disables it).</param>
 /// <param name="ReadOnly">Add-in-side write lock (env <c>BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY</c> or <c>BIMWRIGHT_INVENTOR_READ_ONLY</c>).</param>
 /// <param name="MaxResponseBytes">Response-size guard cap in bytes; <c>0</c> = dispatcher default.</param>
 public sealed record PluginOptions(int Year, bool EnableSendCode, bool ReadOnly, int MaxResponseBytes);

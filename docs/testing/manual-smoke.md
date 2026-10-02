@@ -90,17 +90,15 @@ integration end to end.
     - `inventor_export_stl` to a temp path, e.g. `%TEMP%\smoke.stl`.
     **Expected:** `ok: true` for each, and both files exist on disk afterward.
 
-13. **send_code absent by default**
-    With the server started normally (no `--enable-send-code`), confirm `inventor_send_code` is
-    **not** offered by the client. If the client forces the call, the dispatcher returns
-    `SEND_CODE_DISABLED`.
-    **Expected:** the tool is not listed / is rejected with `SEND_CODE_DISABLED`.
+13. **send_code can be disabled**
+    Start the server with `--disable-send-code` and confirm `inventor_send_code` is not
+    offered by the client. Separately enable the server but set the host kill switch
+    `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` before starting Inventor.
+    **Expected:** the first profile hides the tool; the second rejects execution.
 
-14. **Enable the two-sided opt-in and run a harmless snippet**
-    Set `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1` in the environment **before** launching
-    Inventor, and restart the server with `--enable-send-code` (or
-    `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`). On the throwaway model, call `inventor_send_code`
-    with a harmless read-only snippet:
+14. **Run a harmless snippet with the default settings**
+    Leave the host kill switch unset and start the server with default settings.
+    On the throwaway model, call `inventor_send_code` with a harmless read-only snippet:
     ```csharp
     System.Console.WriteLine("Active doc: " + app.ActiveDocument.DisplayName);
     ```
@@ -147,7 +145,7 @@ integration end to end.
 18. **Call journal**
     `scripts\mcp-smoke.ps1` starts its own server with the journal redirected to
     `%TEMP%\ipt-mcp-smoke-calls.jsonl`, so MCP servers already running for other clients (which lock
-    `src\server\bin\`) can stay up. Start Inventor with `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`,
+    `src\server\bin\`) can stay up. Start Inventor with the send_code kill switch unset,
     then in a pwsh 7 session (not `pwsh -File`, which cannot bind `-ToolCalls`):
     ```powershell
     dotnet build src/server -c Debug --artifacts-path bin\smoke-artifacts

@@ -44,6 +44,7 @@ public sealed class SendCodeHandler : IInventorCommand
     public class Globals
     {
         public InvApi.Application app = null!;
+        public InvApi.Document? doc;
     }
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
@@ -53,7 +54,7 @@ public sealed class SendCodeHandler : IInventorCommand
         // Defense-in-depth: even though the dispatcher gates send_code, refuse to run if not enabled.
         if (!ctx.EnableSendCode)
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.SEND_CODE_DISABLED,
-                "send_code is disabled; set BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1 on the add-in and pass --enable-send-code to the server", meta);
+                "send_code is disabled by the add-in kill switch BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE", meta);
 
         var app = ctx.Application as InvApi.Application;
         if (app is null)
@@ -88,6 +89,11 @@ public sealed class SendCodeHandler : IInventorCommand
         Console.SetOut(captured);
         var previousSilent = false;
         var silentApplied = false;
+        InvApi.Transaction? transaction = null;
+        InvApi.MessageSection? messages = null;
+        var rolledBack = false;
+        string? hostMessages = null;
+        var hostWarnings = false;
 
         try
         {
@@ -145,21 +151,39 @@ public sealed class SendCodeHandler : IInventorCommand
             // No handler-side CTS: a CancellationToken cannot interrupt a synchronous script
             // running on the STA thread anyway. The add-in's task.Wait(env.TimeoutMs) is the
             // single owner of the timeout (spec F2-b).
-            var state = script.RunAsync(globals: new Globals { app = app }).GetAwaiter().GetResult();
+            // Compile before opening a transaction; a compile failure cannot dirty the model.
+            var compileDiagnostics = script.Compile();
+            if (compileDiagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
+                throw new CompilationErrorException("Script compilation failed.", compileDiagnostics);
+            messages = app.ErrorManager.StartMessageSection();
+            var document = app.ActiveDocument;
+            if (document != null) transaction = app.TransactionManager.StartTransaction(document, "MCP: send_code");
+            var state = script.RunAsync(globals: new Globals { app = app, doc = document }).GetAwaiter().GetResult();
+            hostWarnings = messages.HasWarnings;
+            if (hostWarnings || messages.HasErrors) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages);
+            if (messages.HasErrors)
+                throw new InvalidOperationException("Inventor reported a host error: " + ErrorSanitizer.Sanitize(app.ErrorManager.LastMessage));
+            transaction?.End();
+            transaction = null;
+            messages.ClearMessages();
+            messages = null;
 
             var ok = new JObject
             {
                 ["ok"] = true,
                 ["error"] = null,
-                ["result"] = null
+                ["result"] = null,
+                ["warnings"] = hostWarnings ? new JArray(hostMessages) : new JArray(),
+                ["transaction_scope"] = "active_document",
+                ["mutation_applied"] = JValue.CreateNull()
             };
-            ResponseSpillWriter.AttachStdout("send_code", ok, captured.ToString(), ResponseSpillWriter.ForContext(ctx));
+            ResponseSpillWriter.AttachStdout("send_code", ok, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
             if (state.ReturnValue is { } returnValue)
             {
                 var token = ScriptResultToken.ToResultToken(returnValue, out var resultError);
                 if (resultError is null)
                 {
-                    ResponseSpillWriter.AttachResult("send_code", ok, token, ResponseSpillWriter.ForContext(ctx));
+                    ResponseSpillWriter.AttachResult("send_code", ok, token, ResponseSpillWriterFactory.ForContext(ctx));
                 }
                 else
                 {
@@ -179,28 +203,39 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["error"] = ErrorSanitizer.Sanitize(CompileErrorText(errors.Length > 0 ? errors : ex.Diagnostics.ToArray()))
             };
             AttachDiagnostics(data, errors);
-            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriter.ForContext(ctx));
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
             Echo(data, moduleEcho, silent);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
         catch (Exception ex)
         {
-            var inner = ex is AggregateException agg && agg.InnerException != null ? agg.InnerException : ex;
+            try { if (messages != null && (messages.HasErrors || messages.HasWarnings)) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages); } catch { }
+            if (transaction != null)
+            {
+                try { transaction.Abort(); rolledBack = true; } catch { }
+                transaction = null;
+            }
+            var inner = ex.GetBaseException();
             var text = $"{inner.GetType().Name}: {inner.Message}";
             var data = new JObject
             {
                 ["ok"] = false,
-                ["error"] = ErrorSanitizer.Sanitize(text)
+                ["error"] = ErrorSanitizer.Sanitize(text),
+                ["rolled_back"] = rolledBack,
+                ["mutation_applied"] = JValue.CreateNull(),
+                ["host_messages"] = hostMessages
             };
             AttachRuntimeLocation(data, inner, parts);
             var rule = SendCodeHints.Match("runtime", text);
             if (rule != null) data["hint"] = rule.Hint;
-            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriter.ForContext(ctx));
+            ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
             Echo(data, moduleEcho, silent);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
         finally
         {
+            try { transaction?.Abort(); } catch { }
+            try { messages?.ClearMessages(); } catch { }
             if (silentApplied)
             {
                 try { app.SilentOperation = previousSilent; } catch { /* best effort */ }

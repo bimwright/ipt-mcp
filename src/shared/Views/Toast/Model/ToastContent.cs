@@ -155,7 +155,15 @@ public static class ToastContentBuilder
         if (count != null) return ($"{count.Value} item{Plural(count.Value)}", "", null);
         var name = Str(data, "name") ?? Str(data, "feature_name");
         if (name != null) return (name, "", null);
-        return (Str(data, "message") ?? "Completed", "", null);
+        if (data != null)
+        {
+            foreach (var property in data.Properties())
+                if (property.Value is JArray items)
+                    return ($"{items.Count} {property.Name.Replace('_', ' ')}", "", null);
+            foreach (var key in new[] { "count", "total", "affected_count", "created_count", "updated_count", "deleted_count" })
+                if (Int(data, key) is { } fieldCount) return ($"{fieldCount} {key.Replace('_', ' ')}", "", null);
+        }
+        return (Str(data, "message") ?? ToolNameFormatter.Format(command), "", null);
     }
 
     /// <summary>
