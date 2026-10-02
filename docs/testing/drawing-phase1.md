@@ -15,7 +15,7 @@ for Inventor 2027; older add-ins return `UNSUPPORTED_HOST`.
 | `inventor_add_section_view` | Cut line, negative direction, finite depth, rotation; explicit position readback |
 | `inventor_edit_drawing_view` | Scale/move and attached dimensions preserved; shaded base rebuilt without dependencies and PDF render inspected |
 | `inventor_add_drawing_dimension` | Horizontal 100 mm, vertical/aligned 60 mm, diameter 20 mm, radius 10 mm, angle 90°, chain, model-point intents, repeated create, invalid batch |
-| `inventor_add_balloon` | Supplied prompted symbol with text readback, nested occurrence, target region, column/angle layout, repeated create |
+| `inventor_add_balloon` | Supplied prompted symbol with text readback, nested occurrence, target region, column/angle layout, repeated create; native leader attachment after assembly scale/move and reopen |
 | `inventor_capture_sheet` | Sheet PNG, region/inline, UI/dirty state restoration, existing-path rejection |
 | `inventor_export_drawing` | All/subset/ordered PDF, per-sheet AutoCAD DWG, native IDW copy, overwrite rejection/opt-in, fresh nonempty artifacts |
 
