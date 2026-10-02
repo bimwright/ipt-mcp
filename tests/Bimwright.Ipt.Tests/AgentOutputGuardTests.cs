@@ -11,6 +11,7 @@ public sealed class AgentOutputGuardTests
 
     [Theory]
     [InlineData("inventor_get_drawing_info", true)]
+    [InlineData("inventor_list_bodies", true)]
     [InlineData("inventor_add_drawing_dimension", false)]
     [InlineData("inventor_create_part", false)]
     public void Oversized_results_use_final_MCP_bytes_and_preserve_write_effects(string name, bool readOnly)
