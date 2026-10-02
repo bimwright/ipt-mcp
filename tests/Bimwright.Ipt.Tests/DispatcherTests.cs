@@ -133,7 +133,7 @@ public sealed class DispatcherTests
     // ---- F3-a: size_warning attach + reject ----------------------------------------------
 
     [Fact]
-    public void WarningBandResponseCarriesSizeWarning()
+    public void Dispatcher_does_not_apply_agent_budget_before_final_serialization()
     {
         var d = Make(new FakeCmd
         {
@@ -147,11 +147,11 @@ public sealed class DispatcherTests
         var r = d.Dispatch(new InventorCommandContext(), new InventorCommandEnvelope { Command = "list_parameters" });
 
         Assert.True(r.Ok);
-        Assert.NotNull(r.Data!["size_warning"]);
+        Assert.Null(r.Data!["size_warning"]);
     }
 
     [Fact]
-    public void OverBudgetResponseIsRejected()
+    public void Agent_budget_does_not_reject_inside_addin_transport_budget()
     {
         var d = Make(new FakeCmd
         {
@@ -164,9 +164,8 @@ public sealed class DispatcherTests
 
         var r = d.Dispatch(new InventorCommandContext(), new InventorCommandEnvelope { Command = "get_assembly_bom" });
 
-        Assert.False(r.Ok);
-        Assert.Equal(InventorErrorCodes.RESPONSE_TOO_LARGE, r.Error!.Code);
-        Assert.Contains("max_rows", r.Error.Message);   // catalog hint reaches the caller
+        Assert.True(r.Ok);
+        Assert.Null(r.Error);
     }
 
     [Fact]
@@ -183,6 +182,18 @@ public sealed class DispatcherTests
 
         Assert.True(r.Ok);
         Assert.Null(r.Data!["size_warning"]);
+    }
+
+    [Fact]
+    public void Independent_transport_cap_preserves_completed_write_effects()
+    {
+        var d = new CommandDispatcher(new Dictionary<string, IInventorCommand> { ["create_part"] = new FakeCmd {
+            Name = "create_part", IsReadOnly = false, Body = () => InventorCommandResult.Success(Guid.Empty,
+                new JObject { ["ok"] = true, ["created"] = true, ["name"] = "Part", ["blob"] = new string('.', 10000) }, new InventorResponseMeta())
+        } }, 4096);
+        var result = d.Dispatch(new InventorCommandContext(), new InventorCommandEnvelope { Command = "create_part" });
+        Assert.True(result.Ok); Assert.True(result.Data!.Value<bool>("created")); Assert.True(result.Data.Value<bool>("response_compacted"));
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(Newtonsoft.Json.JsonConvert.SerializeObject(result)) < 4096);
     }
 }
 #endif

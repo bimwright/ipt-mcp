@@ -56,6 +56,8 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 > **状态：Drawing Phase 1 正在实现。** 新增 11 个 Inventor 2027 drawing tools。无宿主测试与真实 fixture 的基本 handler 检查已通过；完整验收与 release gate 仍待完成。参见[验证状态](docs/testing/drawing-phase1.md)。
 
+最终 MCP 结果的 UTF-8 输出保护在 64/256 KiB 时警告，预算为 1 MiB。过大的读取要求缩小范围；已完成的写入保留摘要，请勿重复执行。`--disable-output-guard` 仍保留传输上限。CLI/JSON/环境变量阈值及默认 36 小时 spill 配置见[测试文档](docs/testing/drawing-phase1.md)。
+
 ---
 
 ## 安装 / 接入 MCP Client

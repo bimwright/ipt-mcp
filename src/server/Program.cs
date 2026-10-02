@@ -50,7 +50,8 @@ var mcp = builder.Services
         string? thrown = null;
         try
         {
-            return result = await next(ctx, ct);
+            result = await next(ctx, ct);
+            return result = AgentOutputGuard.Apply(ctx.Params?.Name ?? "?", result, cfg);
         }
         catch (Exception ex)
         {
@@ -137,16 +138,24 @@ internal static partial class Program
             "  --timeout-ms <ms>       Per-command timeout (default 30000).",
             "  --max-response-bytes <n>  Response size cap (default 5000000).",
             "  --spill-retention-hours <n>  Spill lifetime (default 36 hours).",
+            "  --disable-output-guard  Disable the agent budget; transport cap still applies.",
+            "  --output-warning-bytes <n>  Warning threshold (default 65536).",
+            "  --output-strong-warning-bytes <n>  Strong warning threshold (default 262144).",
+            "  --output-budget-bytes <n>  Final MCP result budget (default 1048576).",
             "",
             "Env vars (override JSON, overridden by CLI):",
             "  BIMWRIGHT_INVENTOR_TARGET, BIMWRIGHT_INVENTOR_TOOLSETS,",
             "  BIMWRIGHT_INVENTOR_READ_ONLY, BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE,",
             "  BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER, BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE,",
-            "  BIMWRIGHT_INVENTOR_TIMEOUT_MS, BIMWRIGHT_INVENTOR_MAX_RESPONSE_BYTES",
+            "  BIMWRIGHT_INVENTOR_TIMEOUT_MS, BIMWRIGHT_INVENTOR_MAX_RESPONSE_BYTES,",
+            "  BIMWRIGHT_INVENTOR_SPILL_RETENTION_HOURS, BIMWRIGHT_INVENTOR_OUTPUT_GUARD,",
+            "  BIMWRIGHT_INVENTOR_OUTPUT_WARNING_BYTES, BIMWRIGHT_INVENTOR_OUTPUT_STRONG_WARNING_BYTES,",
+            "  BIMWRIGHT_INVENTOR_OUTPUT_BUDGET_BYTES",
             "",
             "Config file (lowest precedence, via --config <path>): JSON with readOnly,",
             "  enableSendCode, enableToolBaker, enableAdaptiveBake, timeoutMs,",
-            "  maxResponseBytes, target, toolsets.",
+            "  maxResponseBytes, spillRetentionHours, enableOutputGuard, outputWarningBytes,",
+            "  outputStrongWarningBytes, outputBudgetBytes, target, toolsets.",
             "",
             "Other:",
             "  --config <path>         Load a JSON config file (lowest precedence).",

@@ -52,6 +52,8 @@ Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent
 
 > **Trạng thái: Drawing Phase 1 đang triển khai.** Đã thêm 11 tool drawing cho Inventor 2027; test không cần host và workflow handler trên fixture thật đã qua. Acceptance đầy đủ và release gate còn pending. Xem [kiểm thử drawing](docs/testing/drawing-phase1.md).
 
+Guard chung đo UTF-8 tại kết quả MCP cuối: cảnh báo 64/256 KiB, budget 1 MiB. Read quá lớn yêu cầu thu hẹp; write đã chạy giữ kết quả rút gọn, không chạy lại để lấy chi tiết. `--disable-output-guard` vẫn giữ giới hạn transport. Cấu hình ngưỡng CLI/JSON/env và spill mặc định 36 giờ tại [tài liệu kiểm thử](docs/testing/drawing-phase1.md).
+
 ---
 
 ## Cài đặt / Wire MCP client

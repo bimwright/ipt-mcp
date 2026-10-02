@@ -170,4 +170,18 @@ public sealed class ResponseSpillTests : IDisposable
         var w = new ResponseSpillWriter(Path.Combine(_dir, "does-not-exist"));
         Assert.Equal(0, w.Cleanup(DateTime.UtcNow));
     }
+
+    [Theory]
+    [InlineData(36, 35, false)]
+    [InlineData(36, 37, true)]
+    [InlineData(48, 47, false)]
+    [InlineData(48, 49, true)]
+    public void Cleanup_uses_configured_age_without_count_eviction(int retention, int age, bool expired)
+    {
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, "age.txt"); File.WriteAllText(path, "fixture");
+        var now = DateTime.UtcNow; File.SetLastWriteTimeUtc(path, now.AddHours(-age));
+        Assert.Equal(expired ? 1 : 0, new ResponseSpillWriter(_dir, retention).Cleanup(now));
+        Assert.Equal(!expired, File.Exists(path));
+    }
 }

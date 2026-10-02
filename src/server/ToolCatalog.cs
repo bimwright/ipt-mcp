@@ -21,6 +21,8 @@ internal static class ToolCatalog
     // The drawing surface opts into metadata while existing classes retain their current
     // display behavior. Expansion of legacy annotations is a separate release dependency.
     private static readonly IReadOnlyDictionary<string, ToolMetadata> Drawing = Build(new[] { typeof(DrawingTools), typeof(DrawingQueryTools) });
+    private static readonly IReadOnlyDictionary<string, ToolMetadata> All = Build(Program.ResolveToolTypesForRegistration(new InventorMcpConfig { Toolsets = new System.Collections.Generic.List<string> { "all" }, EnableSendCode = true }));
+    internal static bool IsReadOnly(string command) => All.TryGetValue(command, out var tool) && tool.ReadOnly;
     internal static IReadOnlyDictionary<string, ToolMetadata> Build(IEnumerable<Type> types)
     {
         var catalog = new Dictionary<string, ToolMetadata>(StringComparer.Ordinal);

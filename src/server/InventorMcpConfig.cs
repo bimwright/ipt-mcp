@@ -15,6 +15,10 @@ public sealed class InventorMcpConfig
     public int TimeoutMs { get; set; } = 30000;
     public int MaxResponseBytes { get; set; } = 5_000_000;
     public int SpillRetentionHours {get;set;}=36;
+    public bool EnableOutputGuard { get; set; } = true;
+    public int OutputWarningBytes { get; set; } = 64 * 1024;
+    public int OutputStrongWarningBytes { get; set; } = 256 * 1024;
+    public int OutputBudgetBytes { get; set; } = 1024 * 1024;
     public string? TargetId { get; set; }
     public List<string> Toolsets { get; set; } = new();
 
@@ -30,6 +34,8 @@ public sealed class InventorMcpConfig
         ApplyEnv(config);          // middle
         ApplyCli(config, args);    // highest
         if(config.SpillRetentionHours<=0)throw new ArgumentException("spillRetentionHours must be positive.");
+        if (config.OutputWarningBytes < 512 || config.OutputStrongWarningBytes < config.OutputWarningBytes || config.OutputBudgetBytes < Math.Max(4096, config.OutputStrongWarningBytes) || config.MaxResponseBytes < 4096)
+            throw new ArgumentException("Output thresholds must be ordered (warning >= 512); outputBudgetBytes and maxResponseBytes must be >= 4096.");
         return config;
     }
 
@@ -46,6 +52,10 @@ public sealed class InventorMcpConfig
         if (o["timeoutMs"] is { } tm) c.TimeoutMs = tm.Value<int>();
         if (o["maxResponseBytes"] is { } mb) c.MaxResponseBytes = mb.Value<int>();
         if (o["spillRetentionHours"] is { } sr) c.SpillRetentionHours = sr.Value<int>();
+        if (o["enableOutputGuard"] is { } og) c.EnableOutputGuard = og.Value<bool>();
+        if (o["outputWarningBytes"] is { } ow) c.OutputWarningBytes = ow.Value<int>();
+        if (o["outputStrongWarningBytes"] is { } os) c.OutputStrongWarningBytes = os.Value<int>();
+        if (o["outputBudgetBytes"] is { } ob) c.OutputBudgetBytes = ob.Value<int>();
         if (o["target"] is { } tg) c.TargetId = tg.Value<string>();
         if (o["toolsets"] is JArray arr) c.Toolsets = arr.Select(x => x.Value<string>()!).ToList();
     }
@@ -60,6 +70,10 @@ public sealed class InventorMcpConfig
         if (Int("BIMWRIGHT_INVENTOR_TIMEOUT_MS") is { } tm) c.TimeoutMs = tm;
         if (Int("BIMWRIGHT_INVENTOR_MAX_RESPONSE_BYTES") is { } mb) c.MaxResponseBytes = mb;
         if (Int("BIMWRIGHT_INVENTOR_SPILL_RETENTION_HOURS") is { } sr) c.SpillRetentionHours = sr;
+        if (Bool("BIMWRIGHT_INVENTOR_OUTPUT_GUARD") is { } og) c.EnableOutputGuard = og;
+        if (Int("BIMWRIGHT_INVENTOR_OUTPUT_WARNING_BYTES") is { } ow) c.OutputWarningBytes = ow;
+        if (Int("BIMWRIGHT_INVENTOR_OUTPUT_STRONG_WARNING_BYTES") is { } os) c.OutputStrongWarningBytes = os;
+        if (Int("BIMWRIGHT_INVENTOR_OUTPUT_BUDGET_BYTES") is { } ob) c.OutputBudgetBytes = ob;
         var tg = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_TARGET");
         if (!string.IsNullOrWhiteSpace(tg)) c.TargetId = tg;
         var ts = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_TOOLSETS");
@@ -82,6 +96,11 @@ public sealed class InventorMcpConfig
                 case "--timeout-ms":           if (int.TryParse(Next(args, ref i), out var t)) c.TimeoutMs = t; break;
                 case "--max-response-bytes":   if (int.TryParse(Next(args, ref i), out var m)) c.MaxResponseBytes = m; break;
                 case "--spill-retention-hours": if (int.TryParse(Next(args, ref i),out var hours)) c.SpillRetentionHours=hours; break;
+                case "--disable-output-guard": c.EnableOutputGuard = false; break;
+                case "--enable-output-guard": c.EnableOutputGuard = true; break;
+                case "--output-warning-bytes": c.OutputWarningBytes = int.Parse(Next(args, ref i)); break;
+                case "--output-strong-warning-bytes": c.OutputStrongWarningBytes = int.Parse(Next(args, ref i)); break;
+                case "--output-budget-bytes": c.OutputBudgetBytes = int.Parse(Next(args, ref i)); break;
             }
         }
     }

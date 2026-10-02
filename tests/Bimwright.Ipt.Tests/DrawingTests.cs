@@ -152,14 +152,14 @@ public sealed class DrawingTests : IDisposable
     [Fact]
     public void Oversized_completed_write_preserves_effects_and_never_becomes_retryable_query_failure()
     {
-        var data = new JObject { ["ok"] = true, ["count"] = 1, ["created_count"] = 1, ["items"] = new JArray(new JObject { ["name"] = "length", ["attached"] = true, ["created"] = true, ["value"] = 100, ["text"] = new string('x', ResponseSizeGuard.RejectBytes) }) };
-        var result = DrawingResponsePolicy.Apply("add_drawing_dimension", data);
+        var data = new JObject { ["ok"] = true, ["count"] = 1, ["created_count"] = 1, ["items"] = new JArray(new JObject { ["name"] = "length", ["attached"] = true, ["created"] = true, ["value"] = 100, ["text"] = new string('x', 1100000) }) };
+        var result = AgentOutputGuardTests.Data(AgentOutputGuard.Apply("inventor_add_drawing_dimension", AgentOutputGuardTests.Result(data), new InventorMcpConfig()));
         Assert.True(result.Value<bool>("ok")); Assert.True(result.Value<bool>("response_compacted")); Assert.Equal(1, result.Value<int>("created_count")); Assert.Equal("length", (string?)result["items"]![0]!["name"]); Assert.True(System.Text.Encoding.UTF8.GetByteCount(result.ToString(Formatting.None)) < ResponseSizeGuard.RejectBytes);
     }
     [Fact]
     public void Oversized_query_requests_a_real_narrowing_parameter()
     {
-        var result = DrawingResponsePolicy.Apply("get_drawing_info", new JObject { ["notes"] = new string('x', ResponseSizeGuard.RejectBytes) });
+        var result = AgentOutputGuardTests.Data(AgentOutputGuard.Apply("inventor_get_drawing_info", AgentOutputGuardTests.Result(new JObject { ["notes"] = new string('x', 1100000) }), new InventorMcpConfig()));
         Assert.False(result.Value<bool>("ok")); Assert.Equal("RESPONSE_TOO_LARGE", (string?)result["error"]!["code"]); Assert.Contains("max_items", (string?)result["error"]!["message"]);
     }
     [Fact]

@@ -52,6 +52,8 @@ Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能�
 
 > **ステータス: Drawing Phase 1 は実装中です。** Inventor 2027 向け drawing tools を 11 個追加しました。ホスト不要テストとライブ fixture の基本検証は成功しました。完全な受け入れ検証と release gate は保留中です。[検証状況](docs/testing/drawing-phase1.md)。
 
+最終 MCP 結果の UTF-8 出力ガードは 64/256 KiB で警告し、1 MiB を上限とします。大きな読み取りは絞り込みを要求し、完了した書き込みは結果を要約します。再実行しないでください。`--disable-output-guard` でも転送上限は有効です。CLI/JSON/環境変数と既定 36 時間の spill 設定は[テスト文書](docs/testing/drawing-phase1.md)を参照してください。
+
 ---
 
 ## インストール / MCP クライアントの設定

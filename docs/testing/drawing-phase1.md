@@ -79,6 +79,17 @@ Save2(false); native IDW exports also disable saving dependents. Live checks of 
 exports, Save-As and in-place save preserved a dirty referenced part and its disk bytes.
 Part/assembly save behavior and older-host drawing saves keep the existing contract.
 
+One server-wide output guard measures the serialized final MCP result in UTF-8, including
+content, structured content and metadata. Defaults are warning 64 KiB, strong warning 256 KiB
+and budget 1 MiB. `--disable-output-guard` preserves the independent transport fence;
+`--enable-output-guard` enables it. Configure thresholds with `--output-warning-bytes`,
+`--output-strong-warning-bytes` and `--output-budget-bytes` or JSON `enableOutputGuard`,
+`outputWarningBytes`, `outputStrongWarningBytes`, `outputBudgetBytes`. Environment equivalents
+are `BIMWRIGHT_INVENTOR_OUTPUT_GUARD`, `BIMWRIGHT_INVENTOR_OUTPUT_WARNING_BYTES`,
+`BIMWRIGHT_INVENTOR_OUTPUT_STRONG_WARNING_BYTES`, `BIMWRIGHT_INVENTOR_OUTPUT_BUDGET_BYTES`.
+Thresholds must be ordered; budgets and the transport cap must be at least 4096 bytes.
+CLI overrides environment, which overrides JSON. This replaces the drawing-only size policy.
+
 Spill retention defaults to 36 hours and is configurable through `spillRetentionHours`,
 `BIMWRIGHT_INVENTOR_SPILL_RETENTION_HOURS` or `--spill-retention-hours`. The server carries
 the setting to the add-in; cleanup never removes younger files to satisfy a count cap.

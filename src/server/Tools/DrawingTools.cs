@@ -48,10 +48,7 @@ internal static class DrawingWire
             if (timeout.HasValue) p["timeout_ms"] = timeout.Value;
             DrawingInput.Validate(command, p);
             var data = await client.SendAsync(command, p, ct, timeoutMs: timeout);
-            if (data is JObject obj) data = DrawingResponsePolicy.Apply(command, obj);
-            var output = ToolResponse.Serialize(data);
-            if (System.Text.Encoding.UTF8.GetByteCount(output) > ResponseSizeGuard.RejectBytes && data is JObject final) output = DrawingResponsePolicy.Apply(command, final, ResponseSizeGuard.RejectBytes - 4096).ToString(Newtonsoft.Json.Formatting.None);
-            return output;
+            return ToolResponse.Serialize(data);
         }
         catch (ArgumentException ex) { return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
         catch (InventorGatewayException ex) { return ToolResponse.Error(ex.Code, ex.Message); }

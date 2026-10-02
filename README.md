@@ -52,6 +52,8 @@ Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshal
 
 > **Status: drawing implementation in progress.** The existing core surface now includes 11 Inventor 2027 drawing tools. Generic live handler checks and host-free tests pass; full drawing acceptance and release gates remain pending. See [drawing checks](docs/testing/drawing-phase1.md).
 
+The final MCP output guard warns at 64/256 KiB and uses a 1 MiB UTF-8 budget. Oversized reads request narrowing; completed writes retain compact effects and must not be replayed. `--disable-output-guard` keeps the transport fence active. CLI/JSON/environment thresholds and the configurable 36-hour spill policy are documented in [drawing testing](docs/testing/drawing-phase1.md).
+
 ---
 
 ## Install / Wire an MCP Client
