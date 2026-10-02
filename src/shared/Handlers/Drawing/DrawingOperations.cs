@@ -35,6 +35,8 @@ internal static partial class DrawingOperations
                 "add_balloon" => AddBalloons(ctx, d, s, p),
                 "export_drawing" => Export(ctx, d, p),
                 "capture_sheet" => Capture(ctx, d, s, p),
+                "add_drawing_note" => AddNote(ctx, d, s, p),
+                "add_drawing_table" => AddTable(ctx, d, s, p),
                 _ => throw new ArgumentException("Unknown drawing command.")
             };
         }
@@ -62,18 +64,21 @@ internal static partial class DrawingOperations
             row["annotation_data_available"] = annotationsAvailable;
             if (!annotationsAvailable)
             {
-                foreach (var key in new[] { "dimension_count", "symbol_count", "balloon_count" }) row[key] = JValue.CreateNull();
+                foreach (var key in new[] { "dimension_count", "symbol_count", "balloon_count", "note_count", "table_count" }) row[key] = JValue.CreateNull();
                 row["readback_hint"] = "Activate the sheet in Inventor, then query again. Do not recreate annotations from unavailable data.";
             }
             row["views"] = Page(s.DrawingViews.Cast<DrawingView>().Select(v => (JToken)DrawingSupport.ViewInfo(v)), max, offset);
             if ((string?)p["include"] == "items" && !annotationsAvailable)
             {
                 row["dimensions"] = JValue.CreateNull(); row["symbols"] = JValue.CreateNull();
+                row["notes"] = JValue.CreateNull(); row["tables"] = JValue.CreateNull();
             }
             else if ((string?)p["include"] == "items")
             {
                 row["dimensions"] = Page(s.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name"), ["kind"] = v.Type.ToString(), ["value"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? v.ModelValue * 180 / Math.PI : v.ModelValue * 10, ["unit"] = v.Type == ObjectTypeEnum.kAngularGeneralDimensionObject ? "deg" : "mm", ["attached"] = v.Attached }), max, offset);
                 row["symbols"] = Page(s.SketchedSymbols.Cast<SketchedSymbol>().Select(v => (JToken)new JObject { ["name"] = DrawingSupport.Read(v.AttributeSets, "name") ?? v.Name, ["definition"] = v.Definition.Name, ["position_mm"] = new JArray(v.Position.X * 10, v.Position.Y * 10) }), max, offset);
+                row["notes"] = Page(s.DrawingNotes.GeneralNotes.Cast<GeneralNote>().Select(x => (JToken)NoteInfo(x)).Concat(s.DrawingNotes.LeaderNotes.Cast<LeaderNote>().Select(x => (JToken)NoteInfo(x))), max, offset);
+                row["tables"] = Page(s.CustomTables.Cast<CustomTable>().Select(x => (JToken)TableQueryInfo(x, max, offset)), max, offset);
             }
             sheetInfo.Add(row);
         }

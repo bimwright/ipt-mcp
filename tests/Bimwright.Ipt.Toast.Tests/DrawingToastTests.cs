@@ -5,6 +5,16 @@ namespace Bimwright.Ipt.Toast.Tests;
 
 public sealed class DrawingToastTests
 {
+    [Theory]
+    [InlineData("add_drawing_note", true, "Added note Fixture")]
+    [InlineData("add_drawing_note", false, "Reused note Fixture")]
+    [InlineData("add_drawing_table", true, "Added table Fixture")]
+    [InlineData("add_drawing_table", false, "Reused table Fixture")]
+    public void Note_table_toast_identifies_created_or_reused_item(string command, bool created, string expected)
+    {
+        var model = ToastContentBuilder.Build(new ToastEvent(command, true, new JObject { ["created"] = created, ["name"] = "Fixture" }, null, null, 5, false));
+        Assert.True(model.Success); Assert.Equal(ToolActivityKind.Write, model.Kind); Assert.Equal(expected, model.Summary);
+    }
     [Fact]
     public void Sheet_capture_is_a_write_and_counts_as_a_capture_without_a_thumbnail()
     {

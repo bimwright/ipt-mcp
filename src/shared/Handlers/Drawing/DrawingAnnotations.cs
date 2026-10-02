@@ -22,7 +22,7 @@ internal static partial class DrawingOperations
         }
     }
     private static GeneralDimension? DimensionByName(Sheet sheet, string name) => sheet.DrawingDimensions.GeneralDimensions.Cast<GeneralDimension>().SingleOrDefault(x => DrawingSupport.Read(x.AttributeSets, "name") == name);
-    private static void AnnotationConflict(Sheet s, string name) { if (s.SketchedSymbols.Cast<SketchedSymbol>().Any(x => DrawingSupport.Read(x.AttributeSets, "name") == name) || s.Balloons.Cast<Balloon>().Any(x => DrawingSupport.Read(x.AttributeSets, "name") == name)) throw new ArgumentException("Annotation name conflicts: " + name); }
+    private static void AnnotationConflict(Sheet s, string name) { if (NamedNoteOrTable(s, name) || s.SketchedSymbols.Cast<SketchedSymbol>().Any(x => DrawingSupport.Read(x.AttributeSets, "name") == name) || s.Balloons.Cast<Balloon>().Any(x => DrawingSupport.Read(x.AttributeSets, "name") == name)) throw new ArgumentException("Annotation name conflicts: " + name); }
     private sealed class DimensionPlan
     {
         internal JObject Input { get; init; } = null!; internal DrawingIntent[] Intents { get; init; } = null!; internal GeneralDimension? Existing { get; init; }
@@ -95,7 +95,7 @@ internal static partial class DrawingOperations
         var plans = new List<BalloonPlan>(); var index = 0;
         foreach (JObject item in (JArray)p["items"]!)
         {
-            var name = (string)item["name"]!; if (DimensionByName(s, name) != null) throw new ArgumentException("Annotation name conflicts: " + name);
+            var name = (string)item["name"]!; if (NamedNoteOrTable(s, name) || DimensionByName(s, name) != null) throw new ArgumentException("Annotation name conflicts: " + name);
             var signature = new JObject { ["item"] = item.DeepClone(), ["mode"] = mode, ["symbol"] = definition.Name, ["prompts"] = p["prompts"]?.DeepClone(), ["layout"] = layout?.DeepClone() };
             var existing = s.SketchedSymbols.Cast<SketchedSymbol>().SingleOrDefault(x => DrawingSupport.Read(x.AttributeSets, "name") == name);
             if (existing != null) { DrawingSupport.Existing(existing.AttributeSets, signature); plans.Add(new BalloonPlan { Input = item, Signature = signature, Existing = existing }); index++; continue; }

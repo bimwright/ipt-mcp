@@ -1,7 +1,7 @@
 # Drawing Phase 1 checks
 
-The branch adds 11 tools: one `drawing_query` tool and ten `drawing` write tools.
-The built surface is 99 with all toolsets/send-code enabled, 95 with code off,
+Phase 1 added 11 tools: one `drawing_query` tool and ten `drawing` write tools.
+At the Phase 1 exit, the surface was 99 with all toolsets/send-code enabled, 95 with code off,
 and 20 in the current read-only registration. Drawing handlers are implemented
 for Inventor 2027; older add-ins return `UNSUPPORTED_HOST`.
 

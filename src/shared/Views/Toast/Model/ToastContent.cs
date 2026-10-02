@@ -144,6 +144,8 @@ public static class ToastContentBuilder
                 return ((Int(data,"created_count") ?? 0) + " created · " + (Int(data,"count") ?? 0) + (command == "add_balloon" ? " balloons" : " dimensions"), "", null);
             case "export_drawing":
                 return ((Int(data,"completed_count") ?? 0) + " files exported", Str(data,"format") ?? "", null);
+            case "add_drawing_note": case "add_drawing_table":
+                return ((data?.Value<bool?>("created") == false ? "Reused " : "Added ") + (command == "add_drawing_note" ? "note " : "table ") + (Str(data,"name") ?? ""), command == "add_drawing_note" ? Str(data,"kind") ?? "" : Str(data,"title") ?? "", null);
             case "send_code":
                 return (Preview(data?["result"]) ?? Preview(data?["stdout"]) ?? "Script finished", "C# script ran in Inventor", null);
             case "run_baked_tool":

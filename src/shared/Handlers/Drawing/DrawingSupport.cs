@@ -73,7 +73,7 @@ internal static class DrawingSupport
         try { result["design_view"] = v.ActiveDesignViewRepresentation; } catch { }
         return result;
     }
-    internal static JObject SheetInfo(Sheet s) => new JObject { ["name"] = s.Name, ["code"] = Read(s.AttributeSets, "code"), ["width_mm"] = s.Width * 10, ["height_mm"] = s.Height * 10, ["border"] = s.Border?.Definition.Name, ["title_block"] = s.TitleBlock?.Definition.Name, ["view_count"] = s.DrawingViews.Count, ["dimension_count"] = s.DrawingDimensions.GeneralDimensions.Count, ["symbol_count"] = s.SketchedSymbols.Count, ["balloon_count"] = s.Balloons.Count };
+    internal static JObject SheetInfo(Sheet s) => new JObject { ["name"] = s.Name, ["code"] = Read(s.AttributeSets, "code"), ["width_mm"] = s.Width * 10, ["height_mm"] = s.Height * 10, ["border"] = s.Border?.Definition.Name, ["title_block"] = s.TitleBlock?.Definition.Name, ["view_count"] = s.DrawingViews.Count, ["dimension_count"] = s.DrawingDimensions.GeneralDimensions.Count, ["symbol_count"] = s.SketchedSymbols.Count, ["balloon_count"] = s.Balloons.Count, ["note_count"] = s.DrawingNotes.GeneralNotes.Count + s.DrawingNotes.LeaderNotes.Count, ["table_count"] = s.CustomTables.Count };
     internal static InventorCommandResult Success(InventorCommandContext ctx, JToken data) => InventorCommandResult.Success(Guid.Empty, data, new InventorResponseMeta { TargetId = ctx.TargetId, InventorYear = ctx.InventorYear });
     internal static InventorCommandResult Atomic(InventorCommandContext ctx, DrawingDocument doc, string title, Func<JToken> action)
     {

@@ -38,6 +38,12 @@ public sealed class DrawingBalloonItem
     [JsonPropertyName("tolerance_mm")] public double Tolerance { get; set; } = 0.5;
 }
 
+public sealed class DrawingTableColumn
+{
+    [JsonPropertyName("heading")] public required string Heading { get; set; }
+    [JsonPropertyName("width_mm")] public required double WidthMm { get; set; }
+}
+
 internal static class DrawingWire
 {
     internal static async Task<string> Call(PluginClient client, string command, object args, int? timeout, CancellationToken ct)
@@ -122,4 +128,14 @@ public sealed class DrawingTools
      Description("Write a PNG capture of one explicitly scoped drawing sheet or region_mm={min:[x,y],max:[x,y]}. Defaults 1600x1100. Restores active document/sheet/camera. Path omitted uses capture root; explicit paths never overwrite. inline=true adds base64 only within 256 KiB; returned file remains available. Writes files, so read-only mode rejects this tool.")]
     public Task<string> CaptureSheet(string document, string sheet, JsonElement? region_mm = null, int width = 1600, int height = 1100, bool inline = false, string? output_path = null, int? timeout_ms = null, CancellationToken ct = default)
         => DrawingWire.Call(_client, "capture_sheet", new { document, sheet, region_mm, width, height, inline, output_path }, timeout_ms, ct);
+
+    [McpServerTool(Name = "inventor_add_drawing_note", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Create a named note at position_mm (sheet mm). kind=general|sheet_title creates fitted text; kind=leader requires view and intent={model_edge or model_point_mm:[x,y,z],point_intent:start|end|mid|center,occurrence_path?}, resolved uniquely. Text is literal. style is an exact existing text style for fitted notes or dimension style for leader notes; layer is an exact existing layer. Optional box_mm={width,height} fixes a fitted note box in mm. Repeats reuse identical managed notes; changed content/placement conflicts. Returns actual text/style/layer/attachment; no save.")]
+    public Task<string> AddDrawingNote(string name, string text, double[] position_mm, string? document = null, string? sheet = null, string kind = "general", string? style = null, string? layer = null, string? view = null, JsonElement? intent = null, JsonElement? box_mm = null, int? timeout_ms = null, CancellationToken ct = default)
+        => DrawingWire.Call(_client, "add_drawing_note", new { name, text, position_mm, document, sheet, kind, style, layer, view, intent, box_mm }, timeout_ms, ct);
+
+    [McpServerTool(Name = "inventor_add_drawing_table", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Create a named custom table. columns=1..50 {heading,width_mm}; rows=0..500 arrays of literal strings matching column count. position_mm is the top-left insertion point; anchor=top_left only. Optional row_heights_mm has one positive height per data row. Data row/column indices are 1-based, excluding title/header. style is an exact existing table style; returns actual title/cells/dimensions/box. BOM parts lists are unavailable. Identical managed creates are reused; conflicting names/content fail. No save.")]
+    public Task<string> AddDrawingTable(string name, DrawingTableColumn[] columns, string[][] rows, double[] position_mm, string? document = null, string? sheet = null, string? title = null, string? style = null, string anchor = "top_left", double[]? row_heights_mm = null, int? timeout_ms = null, CancellationToken ct = default)
+        => DrawingWire.Call(_client, "add_drawing_table", new { name, columns, rows, position_mm, document, sheet, title, style, anchor, row_heights_mm }, timeout_ms, ct);
 }

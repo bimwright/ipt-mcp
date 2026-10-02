@@ -12,7 +12,7 @@ public static class DrawingInput
     public static readonly string[] Commands = {
         "get_drawing_info", "new_drawing", "add_sheet", "set_title_block", "add_drawing_view",
         "add_section_view", "edit_drawing_view", "add_drawing_dimension", "add_balloon",
-        "export_drawing", "capture_sheet"
+        "export_drawing", "capture_sheet", "add_drawing_note", "add_drawing_table"
     };
 
     public static JObject Normalize(string command, JObject input)
@@ -30,8 +30,10 @@ public static class DrawingInput
             case "add_balloon": Default("mode", "symbol"); Default("allow_model_bom_change", false); break;
             case "export_drawing": Default("all_sheets", false); Default("dpi", 300); Default("overwrite_existing", false); Default("silent", true); break;
             case "capture_sheet": Default("width", 1600); Default("height", 1100); Default("inline", false); break;
+            case "add_drawing_note": Default("kind", "general"); break;
+            case "add_drawing_table": Default("anchor", "top_left"); break;
         }
-        if (p["items"] is JArray items) foreach (var item in items.OfType<JObject>()) if (!Present(item, "tolerance_mm")) item["tolerance_mm"] = 0.5;
+        if ((command == "add_drawing_dimension" || command == "add_balloon") && p["items"] is JArray items) foreach (var item in items.OfType<JObject>()) if (!Present(item, "tolerance_mm")) item["tolerance_mm"] = 0.5;
         return p;
     }
 
@@ -50,6 +52,8 @@ public static class DrawingInput
             "add_drawing_dimension" => "document sheet timeout_ms items",
             "add_balloon" => "document sheet timeout_ms items mode symbol prompts layout allow_model_bom_change",
             "export_drawing" => "document timeout_ms format output_path sheets all_sheets dpi overwrite_existing silent",
+            "add_drawing_note" => "document sheet timeout_ms name text position_mm kind style layer view intent box_mm",
+            "add_drawing_table" => "document sheet timeout_ms name columns rows position_mm title style anchor row_heights_mm",
             _ => "document sheet timeout_ms region_mm width height inline output_path"
         };
         var allowed = fields.Split(' ');
@@ -129,8 +133,46 @@ public static class DrawingInput
                 if ((string?)p["format"] == "native_idw" && Present(p, "sheets")) throw new ArgumentException("native_idw copies the whole document."); break;
             case "capture_sheet":
                 Required(p, "document", "sheet"); Range(p, "width", 64, 4096); Range(p, "height", 64, 4096); break;
+            case "add_drawing_note":
+                Required(p, "name", "text", "position_mm"); Point(p["position_mm"], 2);
+                Choice(p, "kind", "general", "leader", "sheet_title");
+                if (p["text"]!.Type != JTokenType.String) throw new ArgumentException("text must be a string.");
+                if ((string?)p["kind"] == "leader")
+                {
+                    Required(p, "view", "intent");
+                    if (p["intent"] is not JObject intent || intent.Properties().Any(x => !new[] { "model_point_mm", "model_edge", "occurrence_path", "point_intent" }.Contains(x.Name))) throw new ArgumentException("intent accepts model_point_mm, model_edge, occurrence_path and point_intent only.");
+                    Any(intent, "model_point_mm", "model_edge");
+                    if (Present(intent, "model_point_mm")) Point(intent["model_point_mm"], 3);
+                    foreach (var key in new[] { "model_edge", "occurrence_path", "point_intent" }) if (Present(intent, key) && intent[key]!.Type != JTokenType.String) throw new ArgumentException(key + " must be a string.");
+                    Choice(intent, "point_intent", "start", "end", "mid", "center");
+                }
+                else if (Present(p, "view") || Present(p, "intent")) throw new ArgumentException("view/intent require kind=leader.");
+                if (Present(p, "box_mm"))
+                {
+                    if ((string?)p["kind"] == "leader") throw new ArgumentException("box_mm requires a fitted note.");
+                    if (p["box_mm"] is not JObject box || box.Properties().Any(x => x.Name != "width" && x.Name != "height")) throw new ArgumentException("box_mm accepts width and height only.");
+                    Required(box, "width", "height"); Positive(box, "width", "height");
+                }
+                break;
+            case "add_drawing_table":
+                Required(p, "name", "columns", "rows", "position_mm"); Point(p["position_mm"], 2); Choice(p, "anchor", "top_left");
+                if (p["columns"] is not JArray columns || columns.Count < 1 || columns.Count > 50) throw new ArgumentException("columns must contain 1..50 columns.");
+                foreach (var column in columns)
+                {
+                    if (column is not JObject c || c.Properties().Any(x => x.Name != "heading" && x.Name != "width_mm")) throw new ArgumentException("Each column accepts heading and width_mm only.");
+                    Required(c, "heading", "width_mm"); if (c["heading"]!.Type != JTokenType.String) throw new ArgumentException("heading must be a string."); Positive(c, "width_mm");
+                }
+                if (p["rows"] is not JArray rows || rows.Count > 500) throw new ArgumentException("rows must contain 0..500 data rows.");
+                foreach (var row in rows) if (row is not JArray cells || cells.Count != columns.Count || cells.Any(x => x.Type != JTokenType.String)) throw new ArgumentException("Each data row must have one string per column.");
+                if (Present(p, "row_heights_mm"))
+                {
+                    if (p["row_heights_mm"] is not JArray heights || heights.Count != rows.Count) throw new ArgumentException("row_heights_mm must match data row count.");
+                    foreach (var height in heights) { var value = new JObject { ["height"] = height.DeepClone() }; Required(value, "height"); Positive(value, "height"); }
+                }
+                break;
         }
-        if (Present(p, "style")) Choice(p, "style", "hidden_line_removed", "hidden_line", "shaded", "shaded_hidden_line");
+        if (command == "add_drawing_view" || command == "add_section_view" || command == "edit_drawing_view") { if (Present(p, "style")) Choice(p, "style", "hidden_line_removed", "hidden_line", "shaded", "shaded_hidden_line"); }
+        else if (command == "add_drawing_note" || command == "add_drawing_table") foreach (var key in new[] { "style", "layer", "title" }) if (Present(p, key) && p[key]!.Type != JTokenType.String) throw new ArgumentException(key + " must be a string.");
     }
 
     public static bool Present(JObject p, string key) => p[key] is { Type: not JTokenType.Null };

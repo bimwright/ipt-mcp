@@ -35,6 +35,7 @@ public static class BatchExecutor
         "get_drawing_info", "new_drawing", "add_sheet", "set_title_block", "add_drawing_view",
         "add_section_view", "edit_drawing_view", "add_drawing_dimension", "add_balloon",
         "export_drawing", "capture_sheet",
+        "add_drawing_note", "add_drawing_table",
     };
 
     public sealed class Outcome

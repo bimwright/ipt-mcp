@@ -39,6 +39,8 @@ namespace Bimwright.Ipt.Shared.Logging
                         return Truncate(result?.Value<string>("name") ?? toolName, MaxLength);
                     case "set_title_block":
                         return Truncate("title block " + result?.Value<string>("title_block"), MaxLength);
+                    case "add_drawing_note": case "add_drawing_table":
+                        return Truncate((result?.Value<bool>("created") == true ? "created " : "existing ") + result?.Value<string>("name"), MaxLength);
                     case "add_drawing_dimension": case "add_balloon":
                         return (result?.Value<int>("created_count") ?? 0) + " created / " + (result?.Value<int>("count") ?? 0) + " items";
                     case "export_drawing":
