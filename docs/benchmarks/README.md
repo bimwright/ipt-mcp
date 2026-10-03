@@ -9,6 +9,7 @@ Claude Desktop acceptance.
 - [Drawing Phase 2 raw fixture record](drawing-phase2-smoke.json): earlier Inventor
   2027 handler fixtures; not an installed add-in/client lifecycle test.
 - [v0.2.1 host-free record](v0.2.1-host-free.md): all 111 MCP wrappers on the pinned build, with durations, sizes and expected failure states.
+- [v0.2.1 Inventor 2027 live record](v0.2.1-inventor-2027.md): 111 successful tool exercises, 15 toast toolsets and live rollback/output-guard checks.
 - Current runtime contracts: `tests/stdio/release-contract.py` calls every registered
   tool against a new disposable data root with no CAD target. It records duration,
   result bytes, estimated tokens (UTF-8 bytes / 4, rounded up) and MCP error state.
@@ -17,5 +18,5 @@ A live release benchmark must name the commit, server version, host year, driver
 an anonymized machine specification, and every tool's duration, result bytes,
 estimated tokens, Success/Failed and output-size policy outcome. Use generated
 fixtures only; omit project names, paths, IDs and model contents. New or changed
-tools need fresh live results. v0.2.1 still needs this live benchmark; earlier
-drawing records do not cover its changed send_code, logging or permissions.
+tools need fresh live results. Earlier drawing records do not cover v0.2.1's
+changed send_code, logging or permissions; use the versioned live record above.

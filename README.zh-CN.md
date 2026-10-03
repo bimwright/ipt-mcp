@@ -404,3 +404,5 @@ CLI overrides environment, which overrides `--config` JSON. The server's logging
 `send_code` provides `app` and nullable `doc`, accepts a script body with `return` and optional helper declarations, and imports `System`, `System.Collections.Generic`, `System.Linq`, `Inventor`. Writes to the active document share one undo transaction; errors abort it and warnings are returned. New/closed documents, other documents and external files are outside that rollback scope. Oversized script output includes a file, preview, schema and `mutation_applied: null`; read the file and do not re-run the script. Spill files live under `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill` and fresh files are never evicted by a count cap.
 
 [Benchmark 记录与验证范围](docs/benchmarks/README.md)。
+
+[v0.2.1 实机基准：Inventor 2027，111 个工具](docs/benchmarks/v0.2.1-inventor-2027.md)。

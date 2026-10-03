@@ -13,7 +13,8 @@ $publicDocs = @(
     'docs/testing/drawing-phase1.md', 'docs/testing/readonly-tools.json',
     'docs/testing/drawing-phase2.md', 'docs/testing/drawing-phase3.md',
     'docs/benchmarks/drawing-phase1-smoke.json', 'docs/benchmarks/drawing-phase2-smoke.json',
-    'docs/benchmarks/README.md', 'docs/benchmarks/v0.2.1-host-free.md'
+    'docs/benchmarks/README.md', 'docs/benchmarks/v0.2.1-host-free.md',
+    'docs/benchmarks/v0.2.1-inventor-2027.md'
 )
 $privatePath = '(^|/)(\.(artifacts[^/]*|worktrees|claude|cursor|kilo|agents|openclaude)|internal-docs|analysis|artifacts|runs|spikes)(/|$)|^docs/(superpowers|design|reviews|benchmarks|research-archive|archive)/|(^|/)codemap\.md$'
 $paths = @(& git -c core.quotepath=false -C $RepoRoot ls-files --cached --others --exclude-standard --deduplicate)
