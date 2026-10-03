@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format is based on
 - Toast regression positioning respects the monitor work area; fallback summaries show a readable operation name.
 - Top-corner toast cards now clear the title bar and ribbon tabs by the same 56 DIP gap as RVT; bottom corners keep their existing placement.
 - Toasts identify document reads without claiming a save, show document/material/unit results, and summarize multi-image captures with the latest available thumbnail. Structured drawing and ToolBaker errors retain their message and code in toast and History.
+- MCP initialization instructions now describe default-on `send_code`, its disable flag, read-only/toolset filtering and the optional host kill switch.
 
 
 ### Added

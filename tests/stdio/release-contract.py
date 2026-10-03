@@ -42,6 +42,10 @@ async def run_mode(server, flags, output, label, sweep=False):
             init = await request("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
                                                "clientInfo": {"name": "ipt-release-contract", "version": "1"}})
             assert "result" in init, init
+            instructions = init['result']['instructions']
+            assert 'inventor_send_code is enabled by default' in instructions
+            assert '--disable-send-code' in instructions and '--read-only' in instructions
+            assert 'PLUGIN_ENABLE_SEND_CODE' not in instructions, 'Obsolete add-in opt-in guidance'
             version = json.loads((Path(__file__).resolve().parents[2] / 'server.json').read_text('utf-8'))['version']
             assert init['result']['serverInfo']['version'].removesuffix('.0') == version.removesuffix('.0')
             process.stdin.write(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')

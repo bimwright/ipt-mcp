@@ -12,12 +12,11 @@ using Newtonsoft.Json.Linq;
 namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
-/// The opt-in <c>send_code</c> escape hatch (toolset <c>code</c>, off by default, never exposed in
+/// The <c>send_code</c> escape hatch (toolset <c>code</c>, on by default, never exposed in
 /// read-only mode). Runs a C# snippet in-process inside the Inventor add-in against
-/// <c>Inventor.Application</c>. Requires both server (<c>--enable-send-code</c> /
-/// <c>BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1</c>) and add-in
-/// (<c>BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1</c>) opt-in; the dispatcher returns
-/// <c>SEND_CODE_DISABLED</c> otherwise. Also owns the saved helper modules (S2) that scripts load
+/// <c>Inventor.Application</c>. <c>--disable-send-code</c> removes the code tools;
+/// <c>BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1</c> disables host execution.
+/// Also owns the saved helper modules (S2) that scripts load
 /// with <c>modules</c>, so recurring helpers are written once instead of re-sent on every call.
 /// </summary>
 [McpServerToolType]

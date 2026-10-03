@@ -27,7 +27,7 @@ public static class ServerInstructions
         "Activity toasts group tool calls; they do not indicate that a whole job is finished. " +
         "If inventor_report_task_result is available, call it once when the requested job is verified complete, failed or cancelled, " +
         "with a unique agent/job task_id and a truthful concise summary. Never infer success from idle time or a single successful tool. " +
-        "inventor_send_code is DISABLED unless the server is started with --enable-send-code " +
-        "(or BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1) AND the add-in opts in via " +
-        "BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1.";
+        "inventor_send_code is enabled by default. Use --disable-send-code to disable it; " +
+        "--read-only and toolset filters always hide code execution. The add-in requires no extra opt-in; " +
+        "BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1 is an optional host-side kill switch.";
 }
