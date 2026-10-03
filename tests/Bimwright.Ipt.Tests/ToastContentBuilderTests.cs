@@ -206,6 +206,25 @@ public sealed class ToastContentBuilderTests : IDisposable
         Assert.Equal("MCP · Failed", m.Category);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Toolbaker_root_error_keeps_message_and_code(bool envelopeOk)
+    {
+        var data = new JObject
+        {
+            ["ok"] = false, ["error_code"] = "not_found",
+            ["message"] = "Bake suggestion was not found.",
+        };
+        var m = ToastContentBuilder.Build(new ToastEvent("accept_bake_suggestion", envelopeOk,
+            data, null, null, 5, false));
+
+        Assert.False(m.Success);
+        Assert.Equal("Bake suggestion was not found.", m.Summary);
+        Assert.Equal("not_found", m.Detail);
+        Assert.Equal("MCP · Failed", m.Category);
+    }
+
     [Fact]
     public void Batch_rolled_back_is_an_error_toast()   // Review Focus 4
     {

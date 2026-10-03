@@ -341,8 +341,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         {
             ok = false;
             var error = payload["error"] as JObject;
-            code ??= error?.Value<string>("code");
-            message ??= error?.Value<string>("message") ?? payload["error"]?.ToString();
+            code ??= error?.Value<string>("code") ?? payload.Value<string>("error_code");
+            message ??= error?.Value<string>("message") ?? payload.Value<string>("message") ?? payload["error"]?.ToString();
         }
         LogCall(env, dispatcher, ok, data, code, message, ms);
         return NotifyToast(env, dispatcher, ok, data, code, message, ms);

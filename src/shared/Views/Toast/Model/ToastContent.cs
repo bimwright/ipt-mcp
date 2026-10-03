@@ -74,7 +74,7 @@ public static class ToastContentBuilder
         else
         {
             summary = FirstLine(softError ?? e.ErrorMessage) ?? "Command failed";
-            detail = Str(data?["error"] as JObject, "code") ?? e.ErrorCode ?? (softError != null ? "Script error" : "ERROR");
+            detail = Str(data?["error"] as JObject, "code") ?? Str(data, "error_code") ?? e.ErrorCode ?? (softError != null ? "Script error" : "ERROR");
         }
 
         return new ToastModel(
@@ -96,7 +96,7 @@ public static class ToastContentBuilder
     {
         if (data == null) return null;
         if (data["ok"] is JValue { Type: JTokenType.Boolean } ok && !(bool)ok)
-            return Str(data["error"] as JObject, "message") ?? Preview(data["error"]) ?? "The tool reported a failure";
+            return Str(data["error"] as JObject, "message") ?? Str(data, "message") ?? Preview(data["error"]) ?? "The tool reported a failure";
         if (command == "batch_execute" && data["rolled_back"] is JValue { Type: JTokenType.Boolean } rb && (bool)rb)
             return "Batch rolled back after a failed step";
         return null;
