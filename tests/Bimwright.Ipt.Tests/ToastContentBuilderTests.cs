@@ -79,6 +79,71 @@ public sealed class ToastContentBuilderTests : IDisposable
     }
 
     [Fact]
+    public void Multiple_captures_report_the_count_and_preview_the_latest_image()
+    {
+        var first = Path.Combine(_dir, "front.png");
+        var last = Path.Combine(_dir, "back.png");
+        File.WriteAllBytes(first, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        File.WriteAllBytes(last, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+        var m = Ok("capture_view", new JObject
+        {
+            ["count"] = 2,
+            ["captures"] = new JArray(
+                new JObject { ["path"] = first, ["width"] = 1280, ["height"] = 720 },
+                new JObject { ["path"] = last, ["width"] = 1280, ["height"] = 720 }),
+        }, false);
+
+        Assert.Equal("Captured 2 images", m.Summary);
+        Assert.Equal("Click to open History", m.Detail);
+        Assert.Equal(Path.GetFullPath(last), m.ThumbnailPath);
+        Assert.Equal("MCP · Snapshot", m.Category);
+    }
+
+    [Fact]
+    public void Multiple_captures_with_missing_files_still_report_the_count()
+    {
+        var m = Ok("capture_view", new JObject
+        {
+            ["count"] = 2,
+            ["captures"] = new JArray(
+                new JObject { ["path"] = Path.Combine(_dir, "gone-1.png") },
+                new JObject { ["path"] = Path.Combine(_dir, "gone-2.png") }),
+        }, false);
+
+        Assert.Equal("Captured 2 images", m.Summary);
+        Assert.Null(m.ThumbnailPath);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Document_query_identifies_the_document_without_claiming_a_save(bool dirty)
+    {
+        var m = Ok("get_document_info", new JObject
+        {
+            ["title"] = "Sample.ipt", ["path"] = @"C:\example\Sample.ipt", ["dirty"] = dirty,
+        });
+
+        Assert.Equal("Document Sample.ipt", m.Summary);
+        Assert.Equal(dirty ? "Unsaved changes" : "", m.Detail);
+        Assert.Equal(ToolActivityKind.Read, m.Kind);
+    }
+
+    [Theory]
+    [InlineData("new_part", "Created Part1")]
+    [InlineData("new_assembly", "Created Part1")]
+    [InlineData("open_document", "Opened Part1")]
+    public void Document_lifecycle_result_uses_the_returned_title(string command, string expected)
+        => Assert.Equal(expected, Ok(command, new JObject { ["title"] = "Part1", ["path"] = null }, false).Summary);
+
+    [Fact]
+    public void Material_and_units_results_show_the_applied_value()
+    {
+        Assert.Equal("Material Steel", Ok("set_material", new JObject { ["material_name"] = "Steel" }, false).Summary);
+        Assert.Equal("Units Millimeter", Ok("set_units", new JObject { ["length_unit"] = "kMillimeterLengthUnits" }, false).Summary);
+    }
+
+    [Fact]
     public void Send_code_shows_first_line_of_result()
     {
         var m = Ok("send_code", new JObject { ["ok"] = true, ["error"] = null, ["result"] = "made 12 holes\nsecond line" }, isReadOnly: false);
@@ -119,6 +184,26 @@ public sealed class ToastContentBuilderTests : IDisposable
         Assert.Equal("MCP · Failed", m.Category);
         Assert.Equal("compile error: CS0103 name 'x' does not exist", m.Summary);
         Assert.Equal("Script error", m.Detail);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Structured_payload_error_survives_an_already_failed_envelope(bool envelopeOk)
+    {
+        var data = new JObject
+        {
+            ["ok"] = false, ["rolled_back"] = true,
+            ["error"] = new JObject { ["code"] = "INVALID_ARGUMENT", ["message"] = "Geometry is ambiguous." },
+        };
+        // RecordOutcome can already have marked the envelope failed and serialized its error object.
+        var m = ToastContentBuilder.Build(new ToastEvent("add_drawing_dimension", envelopeOk, data,
+            null, envelopeOk ? null : data["error"]!.ToString(), 5, false));
+
+        Assert.False(m.Success);
+        Assert.Equal("Geometry is ambiguous.", m.Summary);
+        Assert.Equal("INVALID_ARGUMENT", m.Detail);
+        Assert.Equal("MCP · Failed", m.Category);
     }
 
     [Fact]

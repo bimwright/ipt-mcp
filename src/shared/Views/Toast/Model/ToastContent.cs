@@ -61,7 +61,7 @@ public static class ToastContentBuilder
                 Truncate("Agent reported · " + taskId, DetailMax), null,
                 ToolActivityKind.Read, outcome != "failed", 0) { TaskId = taskId, Outcome = outcome };
         }
-        var softError = e.Ok ? SoftError(command, data) : null;
+        var softError = SoftError(command, data);
         var success = e.Ok && softError == null;
 
         string summary, detail;
@@ -74,7 +74,7 @@ public static class ToastContentBuilder
         else
         {
             summary = FirstLine(softError ?? e.ErrorMessage) ?? "Command failed";
-            detail = softError != null ? "Script error" : (e.ErrorCode ?? "ERROR");
+            detail = Str(data?["error"] as JObject, "code") ?? e.ErrorCode ?? (softError != null ? "Script error" : "ERROR");
         }
 
         return new ToastModel(
@@ -106,6 +106,30 @@ public static class ToastContentBuilder
     {
         switch (command)
         {
+            case "get_document_info":
+            {
+                var title = Str(data, "title") ?? Str(data, "path");
+                if (title != null)
+                    return ("Document " + FileName(title),
+                        data?["dirty"] is JValue { Type: JTokenType.Boolean } dirty && (bool)dirty ? "Unsaved changes" : "", null);
+                break;
+            }
+            case "new_part": case "new_assembly": case "open_document":
+                if (Str(data, "title") is { } documentTitle)
+                    return ((command == "open_document" ? "Opened " : "Created ") + documentTitle, "", null);
+                break;
+            case "set_material":
+                if (Str(data, "material_name") is { } material)
+                    return ("Material " + material, "", null);
+                break;
+            case "set_units":
+                if (Str(data, "length_unit") is { } unit)
+                {
+                    if (unit.StartsWith("k", StringComparison.Ordinal) && unit.EndsWith("LengthUnits", StringComparison.Ordinal))
+                        unit = unit.Substring(1, unit.Length - 12);
+                    return ("Units " + unit, "", null);
+                }
+                break;
             case "capture_view":
             case "capture_sheet":
                 return Capture(data);
@@ -174,6 +198,17 @@ public static class ToastContentBuilder
 
     private static (string Summary, string Detail, string? Thumb) Capture(JObject? data)
     {
+        if (data?["captures"] is JArray captures && captures.Count > 0)
+        {
+            string? latest = null;
+            for (var i = captures.Count - 1; i >= 0 && latest == null; i--)
+            {
+                var shot = captures[i] as JObject;
+                latest = ToastThumbnail.PathIfImage(Str(shot, "path") ?? Str(shot, "output_path"));
+            }
+            return ($"Captured {captures.Count} image{Plural(captures.Count)}",
+                latest != null ? "Click to open History" : "", latest);
+        }
         var w = Int(data, "width");
         var h = Int(data, "height");
         var size = w != null && h != null ? $" · {w.Value}×{h.Value}" : "";

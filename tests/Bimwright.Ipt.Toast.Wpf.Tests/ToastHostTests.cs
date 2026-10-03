@@ -138,11 +138,12 @@ public sealed class ToastHostTests
                 var frameRect = ToastNative.Rect(main)!.Value;
                 var dpi = ToastNative.Dpi(main);
                 GetWindowRect(toast, out var rect);
-                // RVT parity: the default owner-relative top-left corner is 16 DIP from both edges.
+                // RVT parity: top corners add clearance below the title bar and ribbon tabs.
                 Assert.InRange(rect.Left, frameRect.Left + ToastLayout.Px(ToastLayout.EdgeDip, dpi) - 2,
                     frameRect.Left + ToastLayout.Px(ToastLayout.EdgeDip, dpi) + 2);
-                Assert.InRange(rect.Top, frameRect.Top + ToastLayout.Px(ToastLayout.EdgeDip, dpi) - 2,
-                    frameRect.Top + ToastLayout.Px(ToastLayout.EdgeDip, dpi) + 2);
+                var topInset = ToastPlacement.Margin + ToastPlacement.RibbonClearance;
+                Assert.InRange(rect.Top, frameRect.Top + ToastLayout.Px(topInset, dpi) - 2,
+                    frameRect.Top + ToastLayout.Px(topInset, dpi) + 2);
             }
             finally { host?.Shutdown(); frame.Close(); }
         });

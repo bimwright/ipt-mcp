@@ -24,11 +24,14 @@ namespace Bimwright.Ipt.Shared.Views.Toast
     {
         public const double Margin = 16;
 
+        /// <summary>Extra gap below the owner's title bar and ribbon tab row, matching the family card.</summary>
+        public const double RibbonClearance = 56;
+
         /// <summary>Corner anchor inside the owner window, plus the saved drag offset when drag is on.</summary>
         public static ToastBounds Anchor(ToastBounds owner, double width, double height, ToastPositionOptions options)
         {
             var left = options.Right ? owner.Right - Margin - width : owner.Left + Margin;
-            var top = options.Bottom ? owner.Bottom - Margin - height : owner.Top + Margin;
+            var top = options.Bottom ? owner.Bottom - Margin - height : owner.Top + Margin + RibbonClearance;
             if (options.DragEnabled && options.HasOffset)
             {
                 left += options.OffsetX.Value;

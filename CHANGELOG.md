@@ -23,6 +23,8 @@ All notable changes to this project are documented here. The format is based on
 
 - Added setup ZIP SHA-256 sidecars, NuGet README metadata, synchronized permission lists and a public host-free per-tool MCP contract test.
 - Toast regression positioning respects the monitor work area; fallback summaries show a readable operation name.
+- Top-corner toast cards now clear the title bar and ribbon tabs by the same 56 DIP gap as RVT; bottom corners keep their existing placement.
+- Toasts identify document reads without claiming a save, show document/material/unit results, and summarize multi-image captures with the latest available thumbnail. Structured drawing errors retain their message and code in toast and History.
 
 
 ### Added
