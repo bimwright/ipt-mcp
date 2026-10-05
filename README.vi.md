@@ -23,6 +23,23 @@ Model của bạn vẫn nằm trên máy bạn.
 
 ---
 
+## Ví dụ thực tế: bản vẽ native Inventor
+
+Sheet máng răng cưa và phân phối nước vào bể DAF (tuyển nổi áp lực hòa tan) này được dựng và hoàn thiện trong **Autodesk Inventor 2027 bằng workflow agent điều khiển qua ipt-mcp**—không phải ảnh dựng minh họa. Workflow dùng các tool drawing native và `inventor_send_code`, có người hướng dẫn, kiểm tra và chỉnh sửa.
+
+[![Bản vẽ native Inventor làm qua ipt-mcp: hình lắp, hình nổ, mặt cắt, chi tiết, kích thước, bảng kê và khung tên BIMwright](.github/assets/showcase/inventor-daf-drawing.png)](.github/assets/showcase/inventor-daf-drawing.png)
+
+*Bấm ảnh để xem sheet độ phân giải đầy đủ (4096 × 2893).*
+
+- **15 hình:** hình lắp, phối cảnh nổ, mặt cắt và chi tiết phóng to.
+- **111 kích thước native và 21 tag chi tiết**, cùng hai bảng kê.
+- **Chú thích tiếng Anh và khung tên tùy chỉnh**, logo BIMwright nhúng trong bản vẽ, thông tin dự án để trống.
+- **Hoàn thiện qua MCP:** đồng bộ style kích thước, căn chỉnh annotation và xuất sheet thành PNG.
+
+Đây là bản trình bày đã được người dùng kiểm tra, **không phải hồ sơ phát hành chế tạo hay kết quả tự động chỉ bằng một prompt**. Repo chỉ chứa ảnh trình bày, không phân phối model dự án.
+
+---
+
 ## ipt-mcp là gì
 
 Hai tiến trình, một kênh local:
