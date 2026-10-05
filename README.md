@@ -25,9 +25,9 @@ Your model stays on your machine.
 
 ## Real-world example: a native Inventor drawing
 
-This DAF (dissolved air flotation) weir and inlet-distributor sheet was created and refined in **Autodesk Inventor 2027 through an agent-driven ipt-mcp workflow**—not a rendered mockup. The workflow used native drawing tools and `inventor_send_code`, with human direction, review and edits.
+This mechanical assembly and installation sheet was created and refined in **Autodesk Inventor 2027 through an agent-driven ipt-mcp workflow**—not a rendered mockup. The workflow used native drawing tools and `inventor_send_code`, with human direction, review and edits.
 
-[![Native Inventor drawing produced with ipt-mcp: assembly and exploded views, sections, details, dimensions, parts lists and a BIMwright title block](.github/assets/showcase/inventor-daf-drawing.png)](.github/assets/showcase/inventor-daf-drawing.png)
+[![Native Inventor drawing produced with ipt-mcp: assembly and exploded views, sections, details, dimensions, parts lists and a BIMwright title block](.github/assets/showcase/inventor-assembly-drawing.png)](.github/assets/showcase/inventor-assembly-drawing.png)
 
 *Click the image to inspect the full-resolution sheet (4096 × 2893).*
 

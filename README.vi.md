@@ -25,9 +25,9 @@ Model của bạn vẫn nằm trên máy bạn.
 
 ## Ví dụ thực tế: bản vẽ native Inventor
 
-Sheet máng răng cưa và phân phối nước vào bể DAF (tuyển nổi áp lực hòa tan) này được dựng và hoàn thiện trong **Autodesk Inventor 2027 bằng workflow agent điều khiển qua ipt-mcp**—không phải ảnh dựng minh họa. Workflow dùng các tool drawing native và `inventor_send_code`, có người hướng dẫn, kiểm tra và chỉnh sửa.
+Sheet chi tiết lắp ráp và lắp đặt cơ khí này được dựng và hoàn thiện trong **Autodesk Inventor 2027 bằng workflow agent điều khiển qua ipt-mcp**—không phải ảnh dựng minh họa. Workflow dùng các tool drawing native và `inventor_send_code`, có người hướng dẫn, kiểm tra và chỉnh sửa.
 
-[![Bản vẽ native Inventor làm qua ipt-mcp: hình lắp, hình nổ, mặt cắt, chi tiết, kích thước, bảng kê và khung tên BIMwright](.github/assets/showcase/inventor-daf-drawing.png)](.github/assets/showcase/inventor-daf-drawing.png)
+[![Bản vẽ native Inventor làm qua ipt-mcp: hình lắp, hình nổ, mặt cắt, chi tiết, kích thước, bảng kê và khung tên BIMwright](.github/assets/showcase/inventor-assembly-drawing.png)](.github/assets/showcase/inventor-assembly-drawing.png)
 
 *Bấm ảnh để xem sheet độ phân giải đầy đủ (4096 × 2893).*
 

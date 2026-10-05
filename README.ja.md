@@ -25,9 +25,9 @@
 
 ## 実例：Inventor のネイティブ図面
 
-この DAF（溶解空気浮上）設備の越流堰・流入水分配装置の図面シートは、**エージェントが ipt-mcp を介して Autodesk Inventor 2027 を操作するワークフローで作成・調整したもの**です。レンダリングしたモックアップではありません。ネイティブの図面ツールと `inventor_send_code` を使用し、人が指示・確認・編集を行いました。
+この機械の組立・据付詳細図のシートは、**エージェントが ipt-mcp を介して Autodesk Inventor 2027 を操作するワークフローで作成・調整したもの**です。レンダリングしたモックアップではありません。ネイティブの図面ツールと `inventor_send_code` を使用し、人が指示・確認・編集を行いました。
 
-[![ipt-mcp で作成した Inventor のネイティブ図面：組立図、分解図、断面図、詳細図、寸法、部品表、BIMwright の表題欄](.github/assets/showcase/inventor-daf-drawing.png)](.github/assets/showcase/inventor-daf-drawing.png)
+[![ipt-mcp で作成した Inventor のネイティブ図面：組立図、分解図、断面図、詳細図、寸法、部品表、BIMwright の表題欄](.github/assets/showcase/inventor-assembly-drawing.png)](.github/assets/showcase/inventor-assembly-drawing.png)
 
 *画像をクリックすると、シートをフル解像度（4096 × 2893）で確認できます。*
 

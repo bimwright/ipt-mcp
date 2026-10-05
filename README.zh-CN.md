@@ -29,9 +29,9 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 ## 实际案例：Inventor 原生工程图
 
-这张 DAF（溶气气浮）设备的溢流堰和进水配水装置图纸，通过 **Agent 经 ipt-mcp 操作 Autodesk Inventor 2027 的工作流创建并完善**，并非渲染的概念示意图。工作流使用原生工程图工具和 `inventor_send_code`，由用户指导、审核并参与编辑。
+这张机械装配与安装详图，通过 **Agent 经 ipt-mcp 操作 Autodesk Inventor 2027 的工作流创建并完善**，并非渲染的概念示意图。工作流使用原生工程图工具和 `inventor_send_code`，由用户指导、审核并参与编辑。
 
-[![通过 ipt-mcp 制作的 Inventor 原生工程图：装配图、爆炸图、剖视图、详图、尺寸、零件表和 BIMwright 标题栏](.github/assets/showcase/inventor-daf-drawing.png)](.github/assets/showcase/inventor-daf-drawing.png)
+[![通过 ipt-mcp 制作的 Inventor 原生工程图：装配图、爆炸图、剖视图、详图、尺寸、零件表和 BIMwright 标题栏](.github/assets/showcase/inventor-assembly-drawing.png)](.github/assets/showcase/inventor-assembly-drawing.png)
 
 *点击图片可查看完整分辨率的图纸（4096 × 2893）。*
 
