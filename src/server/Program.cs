@@ -129,7 +129,7 @@ internal static partial class Program
             "",
             "Safety:",
             "  --enable-send-code      Expose code tools (default ON; read-only still excludes execution).",
-            "  --disable-send-code     Hide all four code tools.",
+            "  --disable-send-code     Hide all five code tools.",
             "  --enable-call-log       Record redacted tool calls (default OFF).",
             "  --disable-call-log      Disable server and plug-in call logging.",
             "",
@@ -188,6 +188,9 @@ internal static partial class Program
         Add("assembly_query",  typeof(AssemblyQueryTools));
         Add("drawing_query", typeof(DrawingQueryTools));
         Add("drawing", typeof(DrawingTools));
+        Add("sheetmetal_query", typeof(SheetMetalQueryTools));
+        Add("sheetmetal", typeof(SheetMetalTools));
+        Add("ilogic", typeof(ILogicTools));
         return cfg.ReadOnly ? types.Where(t => t.GetMethods().Any(m => m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true)).ToArray() : types;
     }
 }

@@ -12,6 +12,10 @@
     <InventorYear>2024</InventorYear>
     <DefineConstants>$(DefineConstants);INVENTOR2024</DefineConstants>
     <InventorInteropDir Condition="'$(InventorInteropDir)' == ''">C:\Program Files\Common Files\Autodesk Shared\Extensions 2024\Framework\Interop</InventorInteropDir>
+    <InventorBinDir Condition="'$(InventorBinDir)' == ''">C:\Program Files\Autodesk\Inventor $(InventorYear)\Bin</InventorBinDir>
+    <InventorILogicDir Condition="'$(InventorILogicDir)' == '' and Exists('$(InventorBinDir)\iLogicBin\Autodesk.iLogic.Interfaces.dll')">$(InventorBinDir)\iLogicBin</InventorILogicDir>
+    <InventorILogicDir Condition="'$(InventorILogicDir)' == ''">$(InventorBinDir)</InventorILogicDir>
+    <InventorILogicTyped Condition="'$(InventorILogicTyped)' == '' and Exists('$(InventorILogicDir)\Autodesk.iLogic.Automation.dll') and Exists('$(InventorILogicDir)\Autodesk.iLogic.Interfaces.dll') and Exists('$(InventorBinDir)\Autodesk.Inventor.Interop.dll')">true</InventorILogicTyped>
   </PropertyGroup>
 
   <Target Name="ValidateInventorReferences" BeforeTargets="ResolveReferences" Condition="'$(SkipInventorReferenceCheck)' != 'true'">
@@ -19,13 +23,42 @@
            Text="Inventor interop not found at $(InventorInteropDir). Pass /p:InventorInteropDir=... or /p:SkipInventorReferenceCheck=true for project-shape checks." />
   </Target>
 
-  <ItemGroup>
+  <!-- iLogic assemblies bind the Inventor.Interop build shipped in Inventor's Bin dir, which
+       can differ from the shared Extensions PIA (CS1705 on 2027: Bin=v31, Extensions=v29). When
+       iLogic typed interop is available, resolve ALL Autodesk references from Bin so versions
+       cannot skew; otherwise keep the Extensions PIA. -->
+  <ItemGroup Condition="'$(InventorILogicTyped)' != 'true'">
     <Reference Include="Autodesk.Inventor.Interop">
       <HintPath>$(InventorInteropDir)\Autodesk.Inventor.Interop.dll</HintPath>
       <Private>false</Private>
       <EmbedInteropTypes>false</EmbedInteropTypes>
     </Reference>
   </ItemGroup>
+  <ItemGroup Condition="'$(InventorILogicTyped)' == 'true'">
+    <Reference Include="Autodesk.Inventor.Interop">
+      <HintPath>$(InventorBinDir)\Autodesk.Inventor.Interop.dll</HintPath>
+      <Private>false</Private>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+    </Reference>
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(InventorILogicTyped)' == 'true'">
+    <DefineConstants>$(DefineConstants);INVENTOR_ILOGIC_TYPED</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(InventorILogicTyped)' == 'true'">
+    <Reference Include="Autodesk.iLogic.Automation">
+      <HintPath>$(InventorILogicDir)\Autodesk.iLogic.Automation.dll</HintPath>
+      <Private>false</Private>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="Autodesk.iLogic.Interfaces">
+      <HintPath>$(InventorILogicDir)\Autodesk.iLogic.Interfaces.dll</HintPath>
+      <Private>false</Private>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+    </Reference>
+  </ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

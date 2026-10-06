@@ -47,6 +47,28 @@ public sealed class QueryTools
     public Task<string> ListFeatures(int max_items = 200, bool include_health = true, string? document = null, CancellationToken ct = default)
         => Call("list_features", new JObject { ["max_items"] = max_items, ["include_health"] = include_health, ["document"] = document }, ct);
 
+    [McpServerTool(Name = "inventor_list_faces", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("List the target part's faces: {id:'body:B/face:F', surface_type (plane|cylinder|cone|sphere|torus|bspline|elliptical_cylinder|elliptical_cone|…), area_mm2, bbox_mm, normal (planar faces only, unit vector corrected for IsParamReversed)}. ids round-trip into face:F / body:B/face:F refs (work planes, unwrap_try). body scopes to one body ('1'/'body:N'/name); surface_type filters; max_items caps (default 200), truncated reports overflow. Read-only. Optional document: a document already open or loaded in Inventor — never opened or activated; omit for the active document.")]
+    public Task<string> ListFaces(string? body = null, string? surface_type = null, int max_items = 200, string? document = null, CancellationToken ct = default)
+    {
+        var p = new JObject { ["max_items"] = max_items };
+        if (!string.IsNullOrWhiteSpace(body)) p["body"] = body;
+        if (!string.IsNullOrWhiteSpace(surface_type)) p["surface_type"] = surface_type;
+        if (!string.IsNullOrWhiteSpace(document)) p["document"] = document;
+        return Call("list_faces", p, ct);
+    }
+
+    [McpServerTool(Name = "inventor_list_edges", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("List the target part's edges: {id:'body:B/edge:E', curve_type (line|line_segment|circle|circular_arc|ellipse_full|elliptical_arc|bspline|polyline|unknown), length_mm, radius_mm (circular edges only)}. ids round-trip into edge:E / body:B/edge:E refs (fillet, chamfer, create_work_axis, inventor_sheet_metal_flange). body scopes to one body ('1'/'body:N'/name); curve_type filters; max_items caps (default 200), truncated reports overflow. Read-only. Optional document: a document already open or loaded in Inventor — never opened or activated; omit for the active document.")]
+    public Task<string> ListEdges(string? body = null, string? curve_type = null, int max_items = 200, string? document = null, CancellationToken ct = default)
+    {
+        var p = new JObject { ["max_items"] = max_items };
+        if (!string.IsNullOrWhiteSpace(body)) p["body"] = body;
+        if (!string.IsNullOrWhiteSpace(curve_type)) p["curve_type"] = curve_type;
+        if (!string.IsNullOrWhiteSpace(document)) p["document"] = document;
+        return Call("list_edges", p, ct);
+    }
+
     [McpServerTool(Name = "inventor_probe_brep", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Survey the active part's B-rep for port mouths: planar faces carrying an inner-loop circular edge (hole/pipe openings). Reports per face: body, face_index, normal (unit vector corrected for IsParamReversed), center_mm, port_diameter_mm (2 × smallest inner-loop radius), and every full-circle edge on the face (radius_mm, center_mm, inner_loop) so concentric flange rims are visible — a face with several openings is one port; check circles[] for the rest. Full circles only (arcs/slots excluded); a cylindrical boss on a face looks identical and is also reported. body scopes to one body ('1'/'body:N'/name); min/max_diameter_mm filter; max_items caps (default 200), truncated reports overflow. Read-only.")]
     public Task<string> ProbeBrep(string? body = null, double? min_diameter_mm = null, double? max_diameter_mm = null, int max_items = 200, CancellationToken ct = default)

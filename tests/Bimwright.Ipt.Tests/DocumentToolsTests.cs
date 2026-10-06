@@ -21,6 +21,8 @@ public sealed class DocumentToolsTests
         "inventor_get_document_info",
         "inventor_list_bodies",
         "inventor_list_features",
+        "inventor_list_faces",
+        "inventor_list_edges",
         "inventor_probe_brep",
     };
 

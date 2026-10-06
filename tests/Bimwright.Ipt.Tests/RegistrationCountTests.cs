@@ -9,7 +9,7 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Declares the Phase 3 surface: 111 all-enabled, 107 code-off and 21 read-only.
+/// Declares the Phase 3 surface: 131 all-enabled, 126 code-off and 35 read-only.
 /// These expectations do not claim that the current source has been built or tested.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -36,7 +36,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_111_tools()
+    public void All_toolsets_with_send_code_register_exactly_131_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -44,11 +44,11 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(111, names.Length);
+        Assert.Equal(131, names.Length);
     }
 
     [Fact]
-    public void The_111_tools_match_the_frozen_surface()
+    public void The_131_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
@@ -61,9 +61,9 @@ public sealed class RegistrationCountTests
             "inventor_add_drawing_dimension", "inventor_add_balloon", "inventor_export_drawing", "inventor_capture_sheet", "inventor_add_drawing_note", "inventor_add_drawing_table", "inventor_add_drawing_symbol", "inventor_edit_drawing_annotation", "inventor_delete_drawing_items", "inventor_edit_drawing_table", "inventor_set_drawing_styles", "inventor_edit_sheet",
             // meta (3)
             "inventor_list_available_targets", "inventor_get_current_target", "inventor_switch_target",
-            // query (7) + document (7)
+            // query (9) + document (7)
             "inventor_report_task_result", "inventor_health", "inventor_list_open_documents", "inventor_get_document_info",
-            "inventor_list_bodies", "inventor_list_features", "inventor_probe_brep",
+            "inventor_list_bodies", "inventor_list_features", "inventor_list_faces", "inventor_list_edges", "inventor_probe_brep",
             "inventor_new_part", "inventor_new_assembly", "inventor_open_document",
             "inventor_save_document", "inventor_close_document", "inventor_set_units", "inventor_set_material",
             "inventor_save_all", "inventor_open_documents", "inventor_close_documents",
@@ -85,8 +85,9 @@ public sealed class RegistrationCountTests
             "inventor_capture_view", "inventor_export_step", "inventor_export_stl", "inventor_export_dxf",
             "inventor_view_fit", "inventor_set_view_orientation", "inventor_set_camera", "inventor_export_sat",
             "inventor_derive_envelope", "inventor_set_view_state",
-            // code (1)
+            // code (5: send_code + modules + ilogic_run_snippet riding the same gate)
             "inventor_send_code", "inventor_save_code_module", "inventor_list_code_modules", "inventor_delete_code_module",
+            "inventor_ilogic_run_snippet",
             // toolbaker (6)
             "inventor_list_baked_tools", "inventor_list_bake_suggestions", "inventor_create_bake_issue_draft",
             "inventor_run_baked_tool", "inventor_accept_bake_suggestion", "inventor_dismiss_bake_suggestion",
@@ -98,9 +99,17 @@ public sealed class RegistrationCountTests
             // assembly_query (5 read-only)
             "inventor_list_interfaces", "inventor_check_interference", "inventor_measure_min_distance",
             "inventor_get_assembly_bom", "inventor_list_constraints", "inventor_list_occurrences",
+            // sheetmetal (7 write) + sheetmetal_query (1 read-only)
+            "inventor_new_sheet_metal_part", "inventor_sheet_metal_face", "inventor_sheet_metal_flange",
+            "inventor_sheet_metal_cut", "inventor_flat_pattern", "inventor_set_sheet_metal_thickness",
+            "inventor_unwrap_try", "inventor_sheet_metal_info",
+            // ilogic (4 read-only: list_rules/get_rule/read_log/list_commands; 5 write)
+            "inventor_ilogic_list_rules", "inventor_ilogic_get_rule", "inventor_ilogic_read_log",
+            "inventor_ilogic_run_rule", "inventor_ilogic_run_external_rule", "inventor_ilogic_upsert_rule",
+            "inventor_list_commands", "inventor_run_command", "inventor_undo",
         };
 
-        Assert.Equal(111, expected.Length);
+        Assert.Equal(131, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
         // and nothing extra beyond the 111 expected
@@ -133,8 +142,11 @@ public sealed class RegistrationCountTests
         Assert.Contains(typeof(ToolBakerTools), types);
         Assert.Contains(typeof(DrawingQueryTools), types);
         Assert.DoesNotContain(typeof(DrawingTools), types);
-        Assert.Equal(9, types.Length);
-        Assert.Equal(28, names.Length);
+        Assert.Contains(typeof(SheetMetalQueryTools), types);
+        Assert.DoesNotContain(typeof(SheetMetalTools), types);
+        Assert.Contains(typeof(ILogicTools), types);
+        Assert.Equal(11, types.Length);
+        Assert.Equal(35, names.Length);
         Assert.Contains("inventor_find_view_geometry", names);
 
         // Dropped: every write/export/code/toolbaker_write owner.
@@ -159,11 +171,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_111_tools_with_send_code()
+    public void Default_config_registers_131_tools_with_send_code()
     {
-        // Default drops the 4 code tools (send_code + modules), leaving 107.
         var names = ToolNames(new InventorMcpConfig());
         Assert.Contains("inventor_send_code", names);
-        Assert.Equal(111, names.Length);
+        Assert.Contains("inventor_ilogic_run_snippet", names);
+        Assert.Equal(131, names.Length);
     }
 }

@@ -300,10 +300,10 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                     InventorCommandResult.Success(env.Id, busyData, meta)));
                 RecordOutcome(env, dispatcher, true, busyData, null, null, clock.ElapsedMilliseconds);
             }
-            else if (env.Command == "send_code")
+            else if (env.Command == "send_code" || env.Command == "ilogic_run_snippet")
             {
                 tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
-                    $"send_code exceeded {env.TimeoutMs} ms. The script MAY STILL BE RUNNING on Inventor's STA thread " +
+                    $"{env.Command} exceeded {env.TimeoutMs} ms. The script MAY STILL BE RUNNING on Inventor's STA thread " +
                     "and later commands will queue behind it. Call inventor_health to check sta_busy before retrying; " +
                     "do not resend the same script." + ModalDialogProbe.TimeoutSuffix(), meta));
                 RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
@@ -359,7 +359,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             var handler = dispatcher.Commands.TryGetValue(tool, out var h) ? h : null;
             var error = ok ? null : (message ?? code ?? "failed");
             string? codeSnippet = null;
-            if (tool == "send_code")
+            if (tool == "send_code" || tool == "ilogic_run_snippet")
             {
                 try { codeSnippet = env.Params?.Value<string>("code"); } catch { }
             }

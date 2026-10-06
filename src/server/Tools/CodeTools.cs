@@ -166,6 +166,18 @@ public sealed class CodeTools
             blockedBy != null ? $"module '{name}' is required by: {blockedBy}" : $"no saved module named '{name}'"));
     }
 
+    [McpServerTool(Name = "inventor_ilogic_run_snippet", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
+     Description("Send-code-grade escape hatch: run arbitrary iLogic VB code against the target document — rides the same gate as inventor_send_code (hidden by --disable-send-code and the add-in kill switch). The code is added as a temporary internal rule (iLogic's AddRule compiles AND runs it) and deleted in a finally block; stale TempMCPRule_* residue from interrupted runs is swept first. If the snippet writes Logger.Info(\"MCP_RESULT_BEGIN\" + json + \"MCP_RESULT_END\"), the last marker payload is scraped from the iLogic log and returned as result (secret-masked). code: VB rule source; document: name/path of a document already in memory (default: active); silent=true suppresses host prompts. UNSUPPORTED_HOST on Inventor LT (no iLogic).")]
+    public async Task<string> ILogicRunSnippet(string code, string? document = null, bool silent = false, int? timeout_ms = null,
+        CancellationToken ct = default)
+    {
+        var p = new JObject { ["code"] = code };
+        var log = new JObject { ["code"] = code };
+        if (!string.IsNullOrWhiteSpace(document)) { p["document"] = document; log["document"] = document; }
+        if (silent) { p["silent"] = true; log["silent"] = true; }
+        return await Call("ilogic_run_snippet", p, ct, timeout_ms, log);
+    }
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct, int? timeoutMs = null, JObject? logParams = null)
     {
         try

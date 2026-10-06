@@ -10,7 +10,8 @@ public static class ToolsetFilter
     {
         "meta", "query", "document", "parameters", "properties",
         "sketch", "feature", "export", "code", "toolbaker", "toolbaker_write",
-        "assembly", "assembly_query", "drawing", "drawing_query"
+        "assembly", "assembly_query", "drawing", "drawing_query",
+        "sheetmetal", "sheetmetal_query", "ilogic"
     };
 
     public static HashSet<string> Resolve(InventorMcpConfig config)

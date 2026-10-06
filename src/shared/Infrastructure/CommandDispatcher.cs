@@ -28,14 +28,18 @@ public sealed class CommandDispatcher
     /// <summary>The registered command map, so the entrypoint can pass it into the context.</summary>
     public IReadOnlyDictionary<string, IInventorCommand> Commands => _commands;
 
+    /// <summary>Commands that execute arbitrary caller source in the host; all ride the send-code gate.</summary>
+    private static readonly HashSet<string> SendCodeGradeCommands =
+        new(StringComparer.OrdinalIgnoreCase) { "send_code", "ilogic_run_snippet" };
+
     public InventorCommandResult Dispatch(InventorCommandContext ctx, InventorCommandEnvelope env)
     {
         var started = Stopwatch.StartNew();
         var meta = new InventorResponseMeta { TargetId = ctx.TargetId, InventorYear = ctx.InventorYear == 0 ? null : ctx.InventorYear };
 
-        if (env.Command == "send_code" && !ctx.EnableSendCode)
+        if (SendCodeGradeCommands.Contains(env.Command ?? "") && !ctx.EnableSendCode)
             return InventorCommandResult.Fail(env.Id, InventorErrorCodes.SEND_CODE_DISABLED,
-                "send_code is disabled by the add-in kill switch BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE.", meta);
+                $"{env.Command} is disabled by the add-in kill switch BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE.", meta);
 
         if (!_commands.TryGetValue(env.Command, out var cmd))
             return InventorCommandResult.Fail(env.Id, InventorErrorCodes.INVALID_ARGUMENT, $"unknown command: {env.Command}", meta);
