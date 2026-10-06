@@ -24,6 +24,7 @@ public sealed class PlatformToolsTests
     private static string[] ToolNames(InventorMcpConfig cfg)
         => Types(cfg)
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            .Where(m => !cfg.ReadOnly || m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true)
             .Select(m => m.GetCustomAttributes(typeof(McpServerToolAttribute), false)
                           .Cast<McpServerToolAttribute>().FirstOrDefault()?.Name)
             .Where(n => n is not null)
@@ -33,18 +34,18 @@ public sealed class PlatformToolsTests
     // ---- (1) send_code opt-in ----
 
     [Fact]
-    public void CodeToolset_off_by_default()
+    public void CodeToolset_on_by_default()
     {
         var types = Types(new InventorMcpConfig());
-        Assert.DoesNotContain(typeof(CodeTools), types);
-        Assert.DoesNotContain("inventor_send_code", ToolNames(new InventorMcpConfig()));
+        Assert.Contains(typeof(CodeTools), types);
+        Assert.Contains("inventor_send_code", ToolNames(new InventorMcpConfig()));
     }
 
     [Fact]
     public void CodeToolset_registered_when_send_code_enabled_and_selected()
     {
         // `code` requires BOTH the EnableSendCode gate AND being in the requested toolset set
-        // (DefaultOn excludes `code`, so "all" or an explicit `code` selection is needed).
+        // An explicit filter that excludes code still hides it when execution is enabled.
         var cfg = new InventorMcpConfig { Toolsets = { "all" }, EnableSendCode = true };
         Assert.Contains(typeof(CodeTools), Types(cfg));
         Assert.Contains("inventor_send_code", ToolNames(cfg));
@@ -54,7 +55,7 @@ public sealed class PlatformToolsTests
     public void CodeToolset_absent_when_selected_but_gate_off()
     {
         // Selecting `code` without the EnableSendCode gate must NOT register it.
-        var cfg = new InventorMcpConfig { Toolsets = { "code" } };
+        var cfg = new InventorMcpConfig { Toolsets = { "code" }, EnableSendCode = false };
         Assert.DoesNotContain(typeof(CodeTools), Types(cfg));
     }
 
@@ -81,9 +82,9 @@ public sealed class PlatformToolsTests
         var names = ToolNames(cfg);
 
         // Hidden in read-only.
-        Assert.DoesNotContain(typeof(CodeTools), types);
+        Assert.Contains(typeof(CodeTools), types);
         Assert.DoesNotContain(typeof(ToolBakerWriteTools), types);
-        Assert.DoesNotContain(typeof(ExportTools), types);
+        Assert.Contains(typeof(ExportTools), types);
         Assert.DoesNotContain("inventor_run_baked_tool", names);
         Assert.DoesNotContain("inventor_accept_bake_suggestion", names);
         Assert.DoesNotContain("inventor_dismiss_bake_suggestion", names);
@@ -99,7 +100,7 @@ public sealed class PlatformToolsTests
     }
 
     [Fact]
-    public void Default_surface_exposes_export_and_both_toolbaker_classes_but_not_code()
+    public void Default_surface_exposes_export_toolbaker_and_code()
     {
         var names = ToolNames(new InventorMcpConfig());
         // export + read + write toolbaker present by default
@@ -109,8 +110,8 @@ public sealed class PlatformToolsTests
         Assert.Contains("inventor_export_dxf", names);
         Assert.Contains("inventor_list_baked_tools", names);
         Assert.Contains("inventor_run_baked_tool", names);
-        // code is off by default
-        Assert.DoesNotContain("inventor_send_code", names);
+        // code is on by default
+        Assert.Contains("inventor_send_code", names);
     }
 
     // ---- (3) baked-tool dispatch authorizer ----

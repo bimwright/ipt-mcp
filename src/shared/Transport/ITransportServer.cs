@@ -20,7 +20,8 @@ public interface ITransportServer : IDisposable
     /// <summary>Human-readable description of the bound endpoint (e.g. <c>TCP:49891</c> or <c>Pipe:Bimwright-Inventor-1234</c>).</summary>
     string ConnectionInfo { get; }
 
-    /// <summary>True while a client is connected and being served.</summary>
+    /// <summary>True once the attached client has passed auth, until its connection drops.
+    /// A bare socket/pipe attach (or a failed token) never raises it — it signals a verified client.</summary>
     bool IsClientConnected { get; }
 
     /// <summary>Wall-clock time the last command line was received, or null if none yet.</summary>

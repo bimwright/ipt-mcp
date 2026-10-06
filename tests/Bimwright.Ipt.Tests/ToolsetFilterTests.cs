@@ -3,17 +3,13 @@ using Bimwright.Ipt.Server;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Behavior of <see cref="ToolsetFilter.Resolve"/> per the Frozen Integration Contracts:
-///   DefaultOn = all except `code`;
-///   WriteCapable (removed by --read-only) = document, parameters, properties, sketch,
-///     feature, export, code, toolbaker_write;
-///   `code` requires EnableSendCode; `toolbaker*` requires EnableToolBaker;
-///   "all" expands to every known toolset; unknown names are silently dropped.
+/// Every known toolset is enabled by default. Explicit execution switches and
+/// toolset selection narrow the set; per-method registration enforces read-only.
 /// </summary>
 public sealed class ToolsetFilterTests
 {
     [Fact]
-    public void DefaultSurfaceIncludesEverythingExceptCode()
+    public void DefaultSurfaceIncludesEveryToolset()
     {
         var set = ToolsetFilter.Resolve(new InventorMcpConfig());
         foreach (var t in new[]
@@ -23,7 +19,7 @@ public sealed class ToolsetFilterTests
                      "assembly", "assembly_query"
                  })
             Assert.Contains(t, set);
-        Assert.DoesNotContain("code", set);
+        Assert.Contains("code", set);
     }
 
     [Fact]
@@ -36,7 +32,7 @@ public sealed class ToolsetFilterTests
     [Fact]
     public void AllWithoutSendCodeStillExcludesCode()
     {
-        var set = ToolsetFilter.Resolve(new InventorMcpConfig { Toolsets = { "all" } });
+        var set = ToolsetFilter.Resolve(new InventorMcpConfig { Toolsets = { "all" }, EnableSendCode = false });
         Assert.DoesNotContain("code", set);
     }
 
@@ -50,7 +46,7 @@ public sealed class ToolsetFilterTests
     }
 
     [Fact]
-    public void ReadOnlyRemovesWriteCapableToolsetsButKeepsReadOnlyOnes()
+    public void ReadOnlySelectionIsAppliedPerMethodAfterToolsetFiltering()
     {
         var set = ToolsetFilter.Resolve(new InventorMcpConfig
         {
@@ -67,7 +63,7 @@ public sealed class ToolsetFilterTests
                      "document", "parameters", "properties", "sketch",
                      "feature", "export", "code", "toolbaker_write", "assembly"
                  })
-            Assert.DoesNotContain(gone, set);
+            Assert.Contains(gone, set);
     }
 
     [Fact]
@@ -92,7 +88,7 @@ public sealed class ToolsetFilterTests
     {
         var ro = new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true };
         var set = ToolsetFilter.Resolve(ro);
-        Assert.DoesNotContain("assembly", set);
+        Assert.Contains("assembly", set);
         Assert.Contains("assembly_query", set);
     }
 

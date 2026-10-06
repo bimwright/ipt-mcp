@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Text.Json;
 using Bimwright.Ipt.Server;
 using Bimwright.Ipt.Server.Tools;
 using Bimwright.Ipt.Shared.Contracts;
@@ -72,10 +73,24 @@ public sealed class AssemblyToolWireTests : IDisposable
     }
 
     [Fact]
+    public async Task Query_tools_emit_expected_wire_commands_and_keys()
+    {
+        var tools = new QueryTools(_client);
+
+        AssertEnvelope(await CaptureAsync(() => tools.ListBodies(50)), "list_bodies", "max_items");
+        AssertEnvelope(await CaptureAsync(() => tools.ListFeatures(10, include_health: false)),
+            "list_features", "max_items", "include_health");
+        AssertEnvelope(await CaptureAsync(() => tools.ProbeBrep("body:2", min_diameter_mm: 5, max_diameter_mm: 40, max_items: 50)),
+            "probe_brep", "body", "min_diameter_mm", "max_diameter_mm", "max_items");
+    }
+
+    [Fact]
     public async Task Feature_and_view_tools_emit_expected_wire_commands_and_keys()
     {
         var features = new FeatureTools(_client);
         var exports = new ExportTools(_client);
+        var props = new PropertyTools(_client);
+        var sketches = new SketchTools(_client);
 
         var hole = await CaptureAsync(() => features.Hole(
             new HoleFaceDto { Normal = "+Z", Extreme = "max" },
@@ -84,14 +99,47 @@ public sealed class AssemblyToolWireTests : IDisposable
             tapped: new HoleTappedDto { Designation = "M6x1" }));
         AssertEnvelope(hole, "hole", "face", "points_mm", "diameter_mm", "tapped_designation");
 
+        AssertEnvelope(await CaptureAsync(() => features.Combine("body:1", ["body:2"], "cut", keep_tool_bodies: true)),
+            "combine", "base_body", "tool_bodies", "operation", "keep_tool_bodies");
+        AssertEnvelope(await CaptureAsync(() => features.BatchExecute(JsonDocument.Parse("[{\"command\":\"list_bodies\"}]").RootElement)),
+            "batch_execute", "commands", "continue_on_error");
         AssertEnvelope(await CaptureAsync(() => features.CircularPattern(["Hole1"], "Z Axis", 4)),
             "circular_pattern", "feature_names", "axis", "count", "angle_deg");
         AssertEnvelope(await CaptureAsync(() => features.RectangularPattern(
             ["Hole1"], "X Axis", 3, 20, "Y Axis", 2, 10)),
             "rectangular_pattern", "feature_names", "dir1", "count1", "spacing_mm1", "dir2", "count2", "spacing_mm2");
+        AssertEnvelope(await CaptureAsync(() => features.Loft(["S1", "S2:1"], "new_body", closed: true, name: "hull")),
+            "loft", "profiles", "operation", "merge_tangent_faces", "closed", "name");
+        AssertEnvelope(await CaptureAsync(() => features.Sweep("Prof", "Path1", orientation: "parallel")),
+            "sweep", "profile", "path", "operation", "orientation");
+        AssertEnvelope(await CaptureAsync(() => features.CreateWorkPoint(
+                JsonDocument.Parse("[10,20,30]").RootElement, construction: true, name: "wp_pt", visible: false)),
+            "create_work_point", "position", "construction", "name", "visible");
+        AssertEnvelope(await CaptureAsync(() => features.CreateBimConnector(
+                "body:1/edge:3", nominal_diameter_mm: 50, system_type: "domestic_cold",
+                flow_direction: "in", connection_type: "threaded", description: "inlet")),
+            "create_bim_connector", "geometry", "kind", "nominal_diameter_mm", "system_type",
+            "flow_direction", "connection_type", "description");
+        AssertEnvelope(await CaptureAsync(() => sketches.DrawText(
+                "PORT A", [5.0, 10.0], sketch_name: "S1", font_size_mm: 3.5, rotation_deg: 90)),
+            "draw_text", "text", "position", "sketch_name", "font_size_mm", "rotation_deg");
         AssertEnvelope(await CaptureAsync(() => exports.ViewFit()), "view_fit");
         AssertEnvelope(await CaptureAsync(() => exports.SetViewOrientation("iso_top_right", false)),
             "set_view_orientation", "orientation", "fit");
+        AssertEnvelope(await CaptureAsync(() => exports.SetCamera(
+                eye: JsonDocument.Parse("[10,20,30]").RootElement,
+                perspective: true, extents_mm: [100, 80], fit: true)),
+            "set_camera", "eye", "perspective", "extents_mm", "fit");
+        // output_path is validated against ExportPathPolicy before the wire call, so use a
+        // path under %TEMP% (an allowed root) or the request never reaches the plugin.
+        AssertEnvelope(await CaptureAsync(() => exports.ExportSat(Path.Combine(Path.GetTempPath(), "out.sat"))),
+            "export_sat", "output_path", "acis_version");
+        AssertEnvelope(await CaptureAsync(() => exports.DeriveEnvelope(
+                Path.Combine(Path.GetTempPath(), "env.ipt"), deriveStyle: "single_no_seams",
+                includeBodies: ["valve_body", "body:2"], activate: false)),
+            "derive_envelope", "output_path", "derive_style", "include_bodies", "bounding_box", "activate");
+        AssertEnvelope(await CaptureAsync(() => props.ListIPropertySets(true)),
+            "list_iproperty_sets", "include_values");
     }
 
     private async Task<JObject> CaptureAsync(Func<Task<string>> invoke)

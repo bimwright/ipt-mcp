@@ -9,18 +9,34 @@ namespace Bimwright.Ipt.Server;
 public sealed class InventorMcpConfig
 {
     public bool ReadOnly { get; set; }
-    public bool EnableSendCode { get; set; }
+    public bool EnableSendCode { get; set; } = true;
+    public bool EnableCallLog { get; set; }
+    public string? LocalAppDataRoot { get; set; }
+    public string DataDirectory { get; private set; } = Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot;
     public bool EnableToolBaker { get; set; } = true;
     public bool EnableAdaptiveBake { get; set; }
     public int TimeoutMs { get; set; } = 30000;
     public int MaxResponseBytes { get; set; } = 5_000_000;
+    public int SpillRetentionHours {get;set;}=36;
+    public bool EnableOutputGuard { get; set; } = true;
+    public int OutputWarningBytes { get; set; } = 64 * 1024;
+    public int OutputStrongWarningBytes { get; set; } = 256 * 1024;
+    public int OutputBudgetBytes { get; set; } = 1024 * 1024;
     public string? TargetId { get; set; }
     public List<string> Toolsets { get; set; } = new();
 
-    public string DescriptorDirectory { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "ipt-mcp");
+    public string DescriptorDirectory { get; set; } = Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").RuntimeRoot;
     public string BakeDirectory { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bimwright", "ipt-mcp", "baked");
+        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot, "baked");
+
+    // Bind once the setup barrier is held, so an installer cutover between option
+    // parsing and startup cannot leave writers using a stale layout.
+    internal void BindRuntimeLayout(Bimwright.Setup.RuntimeLayout layout)
+    {
+        DataDirectory = layout.DataRoot;
+        DescriptorDirectory = layout.RuntimeRoot;
+        BakeDirectory = Path.Combine(layout.DataRoot, "baked");
+    }
 
     public static InventorMcpConfig Load(string[] args)
     {
@@ -28,6 +44,17 @@ public sealed class InventorMcpConfig
         ApplyJson(config, args);   // lowest precedence
         ApplyEnv(config);          // middle
         ApplyCli(config, args);    // highest
+        if (config.SpillRetentionHours <= 0) config.SpillRetentionHours = 36;
+        if (config.LocalAppDataRoot is { } root)
+        {
+            if (!Path.IsPathFullyQualified(root)) throw new ArgumentException("localAppDataRoot must be an absolute directory.");
+            config.LocalAppDataRoot = Path.GetFullPath(root);
+            config.DataDirectory = Path.Combine(config.LocalAppDataRoot, "Bimwright", "ipt-mcp");
+            config.DescriptorDirectory = config.DataDirectory;
+            config.BakeDirectory = Path.Combine(config.DataDirectory, "baked");
+        }
+        if (config.OutputWarningBytes < 512 || config.OutputStrongWarningBytes < config.OutputWarningBytes || config.OutputBudgetBytes < Math.Max(4096, config.OutputStrongWarningBytes) || config.MaxResponseBytes < 4096)
+            throw new ArgumentException("Output thresholds must be ordered (warning >= 512); outputBudgetBytes and maxResponseBytes must be >= 4096.");
         return config;
     }
 
@@ -39,10 +66,17 @@ public sealed class InventorMcpConfig
         var o = JObject.Parse(File.ReadAllText(path));
         if (o["readOnly"] is { } ro) c.ReadOnly = ro.Value<bool>();
         if (o["enableSendCode"] is { } sc) c.EnableSendCode = sc.Value<bool>();
+        if (o["enableCallLog"] is { } log) c.EnableCallLog = log.Value<bool>();
+        if (o["localAppDataRoot"] is { } root) c.LocalAppDataRoot = root.Value<string>();
         if (o["enableToolBaker"] is { } tb) c.EnableToolBaker = tb.Value<bool>();
         if (o["enableAdaptiveBake"] is { } ab) c.EnableAdaptiveBake = ab.Value<bool>();
         if (o["timeoutMs"] is { } tm) c.TimeoutMs = tm.Value<int>();
         if (o["maxResponseBytes"] is { } mb) c.MaxResponseBytes = mb.Value<int>();
+        if (o["spillRetentionHours"] is { } sr) c.SpillRetentionHours = int.TryParse(sr.ToString(), out var retention) ? retention : 36;
+        if (o["enableOutputGuard"] is { } og) c.EnableOutputGuard = og.Value<bool>();
+        if (o["outputWarningBytes"] is { } ow) c.OutputWarningBytes = ow.Value<int>();
+        if (o["outputStrongWarningBytes"] is { } os) c.OutputStrongWarningBytes = os.Value<int>();
+        if (o["outputBudgetBytes"] is { } ob) c.OutputBudgetBytes = ob.Value<int>();
         if (o["target"] is { } tg) c.TargetId = tg.Value<string>();
         if (o["toolsets"] is JArray arr) c.Toolsets = arr.Select(x => x.Value<string>()!).ToList();
     }
@@ -52,10 +86,18 @@ public sealed class InventorMcpConfig
     {
         if (Bool("BIMWRIGHT_INVENTOR_READ_ONLY") is { } ro) c.ReadOnly = ro;
         if (Bool("BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE") is { } sc) c.EnableSendCode = sc;
+        if (Bool("BIMWRIGHT_INVENTOR_CALL_LOG_ENABLED") is { } log) c.EnableCallLog = log;
+        if (Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_LOCAL_APP_DATA") is { Length: > 0 } root) c.LocalAppDataRoot = root;
         if (Bool("BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER") is { } tb) c.EnableToolBaker = tb;
         if (Bool("BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE") is { } ab) c.EnableAdaptiveBake = ab;
         if (Int("BIMWRIGHT_INVENTOR_TIMEOUT_MS") is { } tm) c.TimeoutMs = tm;
         if (Int("BIMWRIGHT_INVENTOR_MAX_RESPONSE_BYTES") is { } mb) c.MaxResponseBytes = mb;
+        if (Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_SPILL_RETENTION_HOURS") is { } sr)
+            c.SpillRetentionHours = int.TryParse(sr, out var retention) ? retention : 36;
+        if (Bool("BIMWRIGHT_INVENTOR_OUTPUT_GUARD") is { } og) c.EnableOutputGuard = og;
+        if (Int("BIMWRIGHT_INVENTOR_OUTPUT_WARNING_BYTES") is { } ow) c.OutputWarningBytes = ow;
+        if (Int("BIMWRIGHT_INVENTOR_OUTPUT_STRONG_WARNING_BYTES") is { } os) c.OutputStrongWarningBytes = os;
+        if (Int("BIMWRIGHT_INVENTOR_OUTPUT_BUDGET_BYTES") is { } ob) c.OutputBudgetBytes = ob;
         var tg = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_TARGET");
         if (!string.IsNullOrWhiteSpace(tg)) c.TargetId = tg;
         var ts = Environment.GetEnvironmentVariable("BIMWRIGHT_INVENTOR_TOOLSETS");
@@ -71,12 +113,22 @@ public sealed class InventorMcpConfig
             {
                 case "--read-only":            c.ReadOnly = NextBool(args, ref i, true); break;
                 case "--enable-send-code":     c.EnableSendCode = true; break;
+                case "--disable-send-code":    c.EnableSendCode = false; break;
+                case "--enable-call-log":      c.EnableCallLog = true; break;
+                case "--disable-call-log":     c.EnableCallLog = false; break;
+                case "--local-app-data":       c.LocalAppDataRoot = Next(args, ref i); break;
                 case "--disable-toolbaker":    c.EnableToolBaker = false; break;
                 case "--enable-adaptive-bake": c.EnableAdaptiveBake = true; break;
                 case "--toolsets":             c.Toolsets = SplitCsv(Next(args, ref i)); break;
                 case "--target":               c.TargetId = Next(args, ref i); break;
                 case "--timeout-ms":           if (int.TryParse(Next(args, ref i), out var t)) c.TimeoutMs = t; break;
                 case "--max-response-bytes":   if (int.TryParse(Next(args, ref i), out var m)) c.MaxResponseBytes = m; break;
+                case "--spill-retention-hours": c.SpillRetentionHours = int.TryParse(Next(args, ref i), out var hours) ? hours : 36; break;
+                case "--disable-output-guard": c.EnableOutputGuard = false; break;
+                case "--enable-output-guard": c.EnableOutputGuard = true; break;
+                case "--output-warning-bytes": c.OutputWarningBytes = int.Parse(Next(args, ref i)); break;
+                case "--output-strong-warning-bytes": c.OutputStrongWarningBytes = int.Parse(Next(args, ref i)); break;
+                case "--output-budget-bytes": c.OutputBudgetBytes = int.Parse(Next(args, ref i)); break;
             }
         }
     }

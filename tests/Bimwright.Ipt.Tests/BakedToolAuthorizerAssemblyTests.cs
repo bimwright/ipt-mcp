@@ -11,6 +11,9 @@ public sealed class BakedToolAuthorizerAssemblyTests
     [InlineData("measure_min_distance")]
     [InlineData("get_assembly_bom")]
     [InlineData("list_constraints")]
+    [InlineData("list_bodies")]
+    [InlineData("list_features")]
+    [InlineData("probe_brep")]
     public void New_readonly_assembly_commands_are_bakeable(string cmd)
         => Assert.True(BakedToolDispatchAuthorizer.IsAllowed(cmd));
 
@@ -21,6 +24,8 @@ public sealed class BakedToolAuthorizerAssemblyTests
     [InlineData("hole")]
     [InlineData("circular_pattern")]
     [InlineData("rectangular_pattern")]
+    [InlineData("combine")]
+    [InlineData("batch_execute")]
     public void Write_commands_stay_denied(string cmd)
         => Assert.False(BakedToolDispatchAuthorizer.IsAllowed(cmd));
 }

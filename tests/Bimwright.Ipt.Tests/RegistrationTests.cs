@@ -8,10 +8,7 @@ using ModelContextProtocol.Server;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Asserts the server's toolset→type registration map (Program.ResolveToolTypesForRegistration)
-/// behaves per the Frozen Integration Contracts: code off by default, meta + toolbaker on,
-/// read-only drops every WriteCapable toolset but keeps meta/query/toolbaker (and the
-/// switch_target meta tool), and an explicit --toolsets selection registers only that set.
+/// Verifies default and explicit toolset registration and per-method read-only filtering.
 /// </summary>
 public sealed class RegistrationTests
 {
@@ -22,6 +19,7 @@ public sealed class RegistrationTests
     private static string[] ToolNames(InventorMcpConfig cfg)
         => Types(cfg)
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            .Where(m => !cfg.ReadOnly || m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true)
             .Select(m => m.GetCustomAttributes(typeof(McpServerToolAttribute), false)
                           .Cast<McpServerToolAttribute>().FirstOrDefault()?.Name)
             .Where(n => n is not null)
@@ -29,13 +27,13 @@ public sealed class RegistrationTests
             .ToArray();
 
     [Fact]
-    public void Default_registration_excludes_code_toolset()
+    public void Default_registration_includes_code_toolset()
     {
         var cfg = new InventorMcpConfig();
         var types = Types(cfg);
 
         Assert.Contains(typeof(MetaTools), types);
-        Assert.DoesNotContain(typeof(CodeTools), types);   // code off by default
+        Assert.Contains(typeof(CodeTools), types);   // code off by default
         Assert.Contains(typeof(ToolBakerTools), types);
     }
 
@@ -46,7 +44,7 @@ public sealed class RegistrationTests
         var types = Types(InventorMcpConfig.Load(Array.Empty<string>()));
 
         Assert.Contains(typeof(MetaTools), types);
-        Assert.DoesNotContain(typeof(CodeTools), types);
+        Assert.Contains(typeof(CodeTools), types);
     }
 
     [Fact]
@@ -73,15 +71,15 @@ public sealed class RegistrationTests
         Assert.Contains(typeof(QueryTools), types);
         Assert.Contains(typeof(ToolBakerTools), types);
 
-        // Dropped: every WriteCapable toolset's owner that has no read-only toolset.
+        // Types containing no read-only method are omitted.
         Assert.DoesNotContain(typeof(DocumentTools), types);
-        Assert.DoesNotContain(typeof(CodeTools), types);
+        Assert.Contains(typeof(CodeTools), types);
         Assert.DoesNotContain(typeof(ToolBakerWriteTools), types);
-        Assert.DoesNotContain(typeof(ParameterTools), types);
-        Assert.DoesNotContain(typeof(PropertyTools), types);
+        Assert.Contains(typeof(ParameterTools), types);
+        Assert.Contains(typeof(PropertyTools), types);
         Assert.DoesNotContain(typeof(SketchTools), types);
         Assert.DoesNotContain(typeof(FeatureTools), types);
-        Assert.DoesNotContain(typeof(ExportTools), types);
+        Assert.Contains(typeof(ExportTools), types);
     }
 
     [Fact]

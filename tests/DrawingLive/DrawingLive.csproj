@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <InventorInteropDir Condition="'$(InventorInteropDir)' == ''">C:/Program Files/Common Files/Autodesk Shared/Extensions 2027/Framework/Interop</InventorInteropDir>
+    <InventorBinDir Condition="'$(InventorBinDir)' == ''">C:/Program Files/Autodesk/Inventor 2027/Bin</InventorBinDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/plugin-inv27/Bimwright.Ipt.Plugin.Inv27.csproj" />
+    <Reference Include="Autodesk.Inventor.Interop"><HintPath>$(InventorInteropDir)/Autodesk.Inventor.Interop.dll</HintPath><Private>true</Private><EmbedInteropTypes>false</EmbedInteropTypes></Reference>
+    <Reference Include="stdole"><HintPath>$(InventorBinDir)/stdole.dll</HintPath><Private>true</Private></Reference>
+  </ItemGroup>
+</Project>

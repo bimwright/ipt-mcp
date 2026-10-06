@@ -40,6 +40,21 @@ internal static class EntityResolver
         return idx;
     }
 
+    /// <summary>
+    /// True when <paramref name="id"/> is a typed entity reference — <c>prefix:N</c> or
+    /// <c>body:B/prefix:N</c> — rather than a bare index or a user-chosen name that merely
+    /// contains the prefix as a substring (e.g. a work plane named "wp_faceplate" must not
+    /// be routed to the face-reference branch).
+    /// </summary>
+    public static bool IsEntityRef(string id, string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        var s = id.Trim();
+        var slash = s.LastIndexOf('/');
+        if (slash >= 0) s = s.Substring(slash + 1);
+        return s.StartsWith(prefix + ":", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Optional leading <c>body:N/</c> segment of an edge id (defaults to body 1).</summary>
     public static int ParseBodyIndex(string id)
     {
@@ -87,6 +102,40 @@ internal static class EntityResolver
             if (string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))
                 return s;
         return null;
+    }
+
+    /// <summary>
+    /// Resolve a solid body by the same id scheme the query tools report: <c>"1"</c>/
+    /// <c>"body:1"</c> (1-based index) or the body's name. Used by <c>affected_bodies</c>
+    /// params (extrude join/cut, combine).
+    /// </summary>
+    public static SurfaceBody ResolveBody(PartComponentDefinition def, string bodyRef)
+    {
+        var bodies = def.SurfaceBodies;
+        if (bodies.Count < 1)
+            throw new ArgumentException("the part has no solid bodies");
+        var s = (bodyRef ?? "").Trim();
+        if (s.Length == 0)
+            throw new ArgumentException("empty body reference");
+
+        var head = s;
+        var colon = s.IndexOf(':');
+        if (colon >= 0)
+        {
+            if (!s.Substring(0, colon).Equals("body", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"expected 'body:' id or a body name, got '{bodyRef}'");
+            head = s.Substring(colon + 1);
+        }
+        if (int.TryParse(head, out var idx))
+        {
+            if (idx < 1 || idx > bodies.Count)
+                throw new ArgumentException($"body index {idx} out of range (1..{bodies.Count})");
+            return bodies[idx];
+        }
+        foreach (SurfaceBody b in bodies)
+            if (string.Equals(b.Name, s, StringComparison.OrdinalIgnoreCase))
+                return b;
+        throw new ArgumentException($"unknown body '{bodyRef}' (use a 1-based index, body:N, or the body name)");
     }
 }
 #endif

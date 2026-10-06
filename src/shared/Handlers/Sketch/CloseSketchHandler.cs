@@ -27,6 +27,12 @@ public sealed class CloseSketchHandler : HandlerBase, IInventorCommand
             var sketch = SketchSupport.ResolveTargetSketch(def, (string?)p["sketch_name"]);
             try { sketch.ExitEdit(); } catch { /* not in edit mode — fine */ }
             try { sketch.UpdateProfiles(); } catch { /* profiles refresh is best-effort */ }
+            // Inventor quirk: a lone closed curve (e.g. one circle) does not populate Profiles —
+            // force an explicit profile so the sketch can be consumed by extrude/revolve.
+            if (sketch.Profiles.Count == 0)
+            {
+                try { sketch.Profiles.AddForSolid(); } catch { /* no closed region — nothing to add */ }
+            }
             return Ok(ctx, new JObject
             {
                 ["sketch_name"] = sketch.Name,

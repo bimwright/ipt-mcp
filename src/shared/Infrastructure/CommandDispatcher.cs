@@ -11,7 +11,7 @@ namespace Bimwright.Ipt.Shared.Infrastructure;
 
 /// <summary>
 /// Routes a deserialized <see cref="InventorCommandEnvelope"/> to its handler, enforcing
-/// read-only mode, the <c>send_code</c> opt-in gate, and the response-size guard, and
+/// read-only mode, the <c>send_code</c> kill-switch gate, and the response-size guard, and
 /// sanitizing any handler exception into an <c>API_ERROR</c>. Ported from nwd's CommandDispatcher.
 /// </summary>
 public sealed class CommandDispatcher
@@ -35,7 +35,7 @@ public sealed class CommandDispatcher
 
         if (env.Command == "send_code" && !ctx.EnableSendCode)
             return InventorCommandResult.Fail(env.Id, InventorErrorCodes.SEND_CODE_DISABLED,
-                "send_code is disabled. Enable it on the server (--enable-send-code) and the add-in (BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1).", meta);
+                "send_code is disabled by the add-in kill switch BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE.", meta);
 
         if (!_commands.TryGetValue(env.Command, out var cmd))
             return InventorCommandResult.Fail(env.Id, InventorErrorCodes.INVALID_ARGUMENT, $"unknown command: {env.Command}", meta);
@@ -47,10 +47,21 @@ public sealed class CommandDispatcher
         {
             var result = cmd.Execute(ctx, env.Params ?? new JObject());
             Normalize(env, ctx, result, started);
+            if (DrawingInput.Commands.Contains(env.Command)) DrawingResponsePolicy.NormalizeOutcome(result);
             SanitizeResult(result);
-            var serialized = JsonConvert.SerializeObject(result.Data);
+
+            // Independent add-in transport fence. Agent policy runs once at the MCP exit.
+            var serialized = JsonConvert.SerializeObject(result);
             if (!ResponseSizeGuard.Check(serialized, _maxResponseBytes, out var sizeError))
+            {
+                if (!cmd.IsReadOnly)
+                {
+                    result.Data = ResponseEffectSummary.Compact(result.Data as JObject, System.Text.Encoding.UTF8.GetByteCount(serialized));
+                    if (result.Data is JObject compact) { compact.Remove("items"); compact.Remove("files"); compact["locators_omitted"] = true; }
+                    if (ResponseSizeGuard.Check(JsonConvert.SerializeObject(result), _maxResponseBytes, out _)) return result;
+                }
                 return InventorCommandResult.Fail(env.Id, sizeError!.Code, sizeError.Message, result.Meta);
+            }
             return result;
         }
         catch (Exception ex)
@@ -74,32 +85,6 @@ public sealed class CommandDispatcher
             result.Error.Message = ErrorSanitizer.Sanitize(result.Error.Message);
 
         if (result.Data is JObject obj)
-            SanitizeKnownErrorFields(obj);
-    }
-
-    private static void SanitizeKnownErrorFields(JObject obj)
-    {
-        foreach (var property in obj.Properties())
-        {
-            if (property.Value is JObject nested)
-            {
-                SanitizeKnownErrorFields(nested);
-                continue;
-            }
-
-            if (property.Value is JArray arr)
-            {
-                foreach (var item in arr.OfType<JObject>())
-                    SanitizeKnownErrorFields(item);
-                continue;
-            }
-
-            if (property.Value.Type == JTokenType.String &&
-                (string.Equals(property.Name, "error", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(property.Name, "message", StringComparison.OrdinalIgnoreCase)))
-            {
-                property.Value = ErrorSanitizer.Sanitize((string?)property.Value);
-            }
-        }
+            ErrorSanitizer.SanitizeErrorFields(obj);
     }
 }

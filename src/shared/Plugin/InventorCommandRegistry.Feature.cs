@@ -16,6 +16,8 @@ public static partial class InventorCommandRegistry
     static partial void AddFeature(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add)
     {
         add(new ExtrudeHandler());
+        add(new CreatePartHandler());
+        add(new CombineHandler());
         add(new RevolveHandler());
         add(new FilletHandler());
         add(new ChamferHandler());
@@ -24,6 +26,10 @@ public static partial class InventorCommandRegistry
         add(new HoleHandler());
         add(new CircularPatternHandler());
         add(new RectangularPatternHandler());
+        add(new LoftHandler());
+        add(new SweepHandler());
+        add(new CreateWorkPointHandler());
+        add(new CreateBimConnectorHandler());
     }
 }
 #endif

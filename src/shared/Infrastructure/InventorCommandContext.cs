@@ -13,6 +13,7 @@ public sealed class InventorCommandContext
 
     /// <summary>Whether the <c>send_code</c> command is enabled on this add-in.</summary>
     public bool EnableSendCode { get; init; }
+    public int SpillRetentionHours {get;init;}=36;
 
     /// <summary>Inventor calendar year (2022-2027), captured from the compile symbol.</summary>
     public int InventorYear { get; init; }
@@ -29,4 +30,10 @@ public sealed class InventorCommandContext
 
     /// <summary>The full command map, so commands like <c>run_baked_tool</c> can dispatch sub-commands.</summary>
     public IReadOnlyDictionary<string, IInventorCommand>? Commands { get; init; }
+
+    /// <summary>
+    /// Live STA-queue counters shared with the dispatcher (spec F2-b). Read-only views such as
+    /// <c>health</c> use this to report <c>sta_busy</c> / <c>pending_commands</c>; null in tests.
+    /// </summary>
+    public StaQueueStats? StaQueue { get; init; }
 }

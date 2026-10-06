@@ -46,6 +46,33 @@ public sealed class FaceSelectorSpecTests
     }
 
     [Fact]
+    public void Non_finite_numbers_fail()
+    {
+        // infinite tolerance/radius would silently disable the filter or match the wrong face
+        Assert.False(FaceSelectorSpec.TryParse(
+            new JObject { ["kind"] = "planar", ["normal"] = "+Z", ["tolerance_deg"] = double.PositiveInfinity },
+            out _, out _));
+        Assert.False(FaceSelectorSpec.TryParse(
+            new JObject { ["kind"] = "cylindrical", ["radius_mm"] = double.NaN },
+            out _, out _));
+        Assert.False(FaceSelectorSpec.TryParse(
+            new JObject { ["kind"] = "cylindrical", ["radius_mm"] = 5.0, ["radius_tol_mm"] = double.PositiveInfinity },
+            out _, out _));
+        Assert.False(FaceSelectorSpec.TryParse(
+            new JObject { ["kind"] = "planar", ["normal"] = "+Z", ["near_mm"] = new JArray(1.0, double.PositiveInfinity, 0.0) },
+            out _, out _));
+    }
+
+    [Fact]
+    public void Non_numeric_tokens_fail_cleanly()
+    {
+        Assert.False(FaceSelectorSpec.TryParse(
+            JObject.Parse("{kind:'planar',normal:'+Z',tolerance_deg:'abc'}"), out _, out _));
+        Assert.False(FaceSelectorSpec.TryParse(
+            JObject.Parse("{kind:'cylindrical',radius_mm:'abc'}"), out _, out _));
+    }
+
+    [Fact]
     public void Null_object_fails()
     {
         Assert.False(FaceSelectorSpec.TryParse(null, out _, out var err));

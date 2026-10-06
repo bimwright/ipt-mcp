@@ -107,4 +107,15 @@ public sealed class TargetRegistryTests : IDisposable
         Assert.False(File.Exists(stale));
         Assert.True(File.Exists(live));
     }
+
+    [Fact]
+    public void Toast_config_file_in_the_descriptor_dir_is_ignored_and_kept()
+    {
+        // iptmcp.config.json shares %LOCALAPPDATA%\Bimwright\ipt-mcp with the descriptors (*.json scan).
+        var cfg = Path.Combine(_dir, "iptmcp.config.json");
+        File.WriteAllText(cfg, """{ "enableToast": false, "toastTheme": "auto" }""");
+
+        Assert.Empty(new TargetRegistry(_dir).List());
+        Assert.True(File.Exists(cfg));
+    }
 }

@@ -6,13 +6,24 @@ namespace Bimwright.Ipt.Shared.Handlers.Properties;
 
 /// <summary>
 /// Helpers for locating iProperty sets and properties by name without relying on the collection
-/// indexers (which throw when the key is missing). Matching is case-insensitive and falls back to a
-/// set's <c>InternalName</c> so common identifiers like "Summary Information" and its localized
-/// display name both resolve.
+/// indexers (which throw when the key is missing). Matching is case-insensitive, falls back to a
+/// set's <c>InternalName</c>, and retries with the "Inventor " prefix so both "Summary Information"
+/// and "Inventor Summary Information" resolve.
 /// </summary>
 internal static class PropertyAccess
 {
     public static PropertySet? FindSet(global::Inventor.Document doc, string name)
+    {
+        var found = FindSetExact(doc, name);
+        // "Inventor " prefix is optional: "Summary Information" aliases
+        // "Inventor Summary Information" (found by F5 — the tool description's example
+        // used the short name and a caller following it got 'set not found').
+        if (found is null && !name.StartsWith("Inventor ", StringComparison.OrdinalIgnoreCase))
+            found = FindSetExact(doc, "Inventor " + name);
+        return found;
+    }
+
+    private static PropertySet? FindSetExact(global::Inventor.Document doc, string name)
     {
         foreach (PropertySet set in doc.PropertySets)
         {

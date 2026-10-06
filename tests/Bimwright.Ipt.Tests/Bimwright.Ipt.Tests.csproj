@@ -33,9 +33,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\shared\Infrastructure\*.cs" LinkBase="Shared\Infrastructure" />
+    <Compile Include="..\..\src\shared\Infrastructure\*.cs" Exclude="..\..\src\shared\Infrastructure\ResponseSpillWriter.cs" LinkBase="Shared\Infrastructure" />
     <Compile Include="..\..\src\shared\Transport\*.cs" LinkBase="Shared\Transport" />
     <Compile Include="..\..\src\shared\Handlers\Export\CaptureImagePolicy.cs" LinkBase="Shared\Handlers\Export" />
+    <Compile Include="..\..\src\shared\Handlers\Export\CameraParams.cs" LinkBase="Shared\Handlers\Export" />
+    <Compile Include="..\..\src\shared\Handlers\Feature\ExtrudeParams.cs" LinkBase="Shared\Handlers\Feature" />
+    <Compile Include="..\..\src\shared\Handlers\Core\ReportTaskResultHandler.cs" LinkBase="Shared\Handlers\Core" />
+    <Compile Include="..\..\src\shared\Handlers\BatchExecutor.cs" LinkBase="Shared\Handlers" />
+    <Compile Include="..\..\src\shared\Handlers\HandlerBase.cs" LinkBase="Shared\Handlers" />
+    <Compile Include="..\..\src\shared\Handlers\Drawing\DrawingCommandHandler.cs" LinkBase="Shared\Handlers\Drawing" />
+    <Compile Include="..\..\src\shared\Handlers\Assembly\CreateDesignViewHandler.cs" LinkBase="Shared\Handlers\Assembly" />
+    <Compile Include="..\..\src\shared\Handlers\Vec3Params.cs" LinkBase="Shared\Handlers" />
+    <Compile Include="..\..\src\shared\Handlers\EnumText.cs" LinkBase="Shared\Handlers" />
+    <Compile Include="..\..\src\shared\Logging\*.cs" LinkBase="Shared\Logging" />
+    <!-- Host-free toast model: the card state machine, content builder, layout, config and status text.
+         The WPF card itself is covered by tests/Bimwright.Ipt.Toast.Tests. -->
+    <Compile Include="..\..\src\shared\Views\Toast\Model\*.cs" LinkBase="Shared\Views\Toast\Model" />
+    <Compile Include="..\..\src\shared\Localization\L.cs" Link="Shared\Localization\L.cs" />
   </ItemGroup>
 
 </Project>

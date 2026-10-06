@@ -13,6 +13,12 @@ public static partial class InventorCommandRegistry
         add(new PlaceOccurrenceHandler());
         add(new AddConstraintHandler());
         add(new CreateIMateHandler());
+        add(new PlaceOccurrencesHandler());
+        add(new DeleteOccurrencesHandler());
+        add(new SetOccurrenceStateHandler());
+        add(new SetAppearanceHandler());
+        add(new ResetAppearanceHandler());
+        add(new CreateDesignViewHandler());
     }
 }
 #endif

@@ -13,9 +13,11 @@ namespace Bimwright.Ipt.Server.Bake;
 public sealed class BakeDb : IDisposable
 {
     private readonly string _dbPath;
+    private readonly bool _readOnly;
 
-    public BakeDb(string dbPath)
+    public BakeDb(string dbPath, bool readOnly = false)
     {
+        _readOnly = readOnly;
         _dbPath = string.IsNullOrWhiteSpace(dbPath)
             ? throw new ArgumentException("Bake database path is required.", nameof(dbPath))
             : dbPath;
@@ -203,7 +205,7 @@ VALUES($timestamp, $session_id, $tool, $params_hash, $ok, $duration_ms)";
 
     private SqliteConnection OpenConnection()
     {
-        var connection = new SqliteConnection("Data Source=" + _dbPath);
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _dbPath, Mode = _readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate }.ToString());
         connection.Open();
         return connection;
     }

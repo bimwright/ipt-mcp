@@ -8,8 +8,8 @@ using ModelContextProtocol.Server;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 9 sketch
-/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 6 feature tools, that every one
+/// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 10 sketch
+/// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 16 feature tools, that every one
 /// is a write tool (so all are dropped under <c>--read-only</c>), and that they register under the
 /// <c>sketch</c>/<c>feature</c> toolsets. Handler bodies are type-checked by the inv25 build, not here.
 /// </summary>
@@ -25,20 +25,28 @@ public sealed class SketchFeatureToolsTests
         "inventor_draw_arc",
         "inventor_add_sketch_dimension",
         "inventor_add_sketch_constraint",
+        "inventor_draw_text",
         "inventor_close_sketch",
     };
 
     private static readonly string[] ExpectedFeatureTools =
     {
         "inventor_extrude",
+        "inventor_combine",
+        "inventor_batch_execute",
+        "inventor_loft",
+        "inventor_sweep",
         "inventor_revolve",
         "inventor_fillet",
         "inventor_chamfer",
         "inventor_create_work_plane",
+        "inventor_create_work_point",
+        "inventor_create_bim_connector",
         "inventor_create_work_axis",
         "inventor_hole",
         "inventor_circular_pattern",
         "inventor_rectangular_pattern",
+        "inventor_create_part",
     };
 
     private static string[] ToolNamesOf(Type toolType)
@@ -55,18 +63,18 @@ public sealed class SketchFeatureToolsTests
             .ToArray();
 
     [Fact]
-    public void SketchTools_exposes_exactly_the_nine_expected_tools()
+    public void SketchTools_exposes_exactly_the_ten_expected_tools()
     {
         var names = ToolNamesOf(typeof(SketchTools));
-        Assert.Equal(9, names.Length);
+        Assert.Equal(10, names.Length);
         Assert.Equal(ExpectedSketchTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 
     [Fact]
-    public void FeatureTools_exposes_exactly_the_nine_expected_tools()
+    public void FeatureTools_exposes_exactly_the_fifteen_expected_tools()
     {
         var names = ToolNamesOf(typeof(FeatureTools));
-        Assert.Equal(9, names.Length);
+        Assert.Equal(16, names.Length);
         Assert.Equal(ExpectedFeatureTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 
@@ -83,7 +91,7 @@ public sealed class SketchFeatureToolsTests
     [Fact]
     public void All_sketch_and_feature_tools_are_write_and_dropped_under_read_only()
     {
-        // With everything enabled but read-only on, none of the 15 write tools should be exposed.
+        // With everything enabled but read-only on, none of the 20 write tools should be exposed.
         var cfg = new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true };
         var names = ToolNames(cfg);
 
@@ -92,7 +100,7 @@ public sealed class SketchFeatureToolsTests
     }
 
     [Fact]
-    public void Default_registration_includes_all_fifteen_write_tools()
+    public void Default_registration_includes_all_twenty_write_tools()
     {
         var names = ToolNames(new InventorMcpConfig());
         foreach (var t in ExpectedSketchTools.Concat(ExpectedFeatureTools))

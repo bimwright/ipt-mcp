@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
-using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Server.Tools;
 
@@ -15,18 +15,19 @@ namespace Bimwright.Ipt.Server.Tools;
 /// pin a target.
 /// </summary>
 [McpServerToolType]
+[Toolset("meta")]
 public sealed class MetaTools
 {
     private readonly PluginClient _client;
     public MetaTools(PluginClient client) => _client = client;
 
-    [McpServerTool(Name = "inventor_list_available_targets"),
+    [McpServerTool(Name = "inventor_list_available_targets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("List detected live Inventor add-in targets (year, pid, transport, active document). Use 4-digit calendar years (2022..2027), never legacy version codes.")]
     public string ListAvailableTargets() =>
         LoggedMeta("inventor_list_available_targets", null,
-            () => JsonConvert.SerializeObject(_client.ListTargets().Select(PublicTarget), Formatting.Indented));
+            () => ToolResponse.Serialize(_client.ListTargets().Select(PublicTarget)));
 
-    [McpServerTool(Name = "inventor_get_current_target"),
+    [McpServerTool(Name = "inventor_get_current_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Report the server's currently selected Inventor target, or NO_TARGET if none is live.")]
     public string GetCurrentTarget()
     {
@@ -34,16 +35,16 @@ public sealed class MetaTools
         {
             var t = _client.CurrentTarget;
             return t is null
-                ? JsonConvert.SerializeObject(new { ok = false, error = new { code = "NO_TARGET", message = "no live target" } }, Formatting.Indented)
-                : JsonConvert.SerializeObject(PublicTarget(t), Formatting.Indented);
+                ? ToolResponse.Error("NO_TARGET", "no live target")
+                : ToolResponse.Serialize(PublicTarget(t));
         });
     }
 
-    [McpServerTool(Name = "inventor_switch_target"),
+    [McpServerTool(Name = "inventor_switch_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Select the active target by descriptor id, year, or session. Server-side only; does not change the Inventor document. Use 4-digit years (2022..2027).")]
     public string SwitchTarget(string target) =>
         LoggedMeta("inventor_switch_target", new { target },
-            () => JsonConvert.SerializeObject(new { ok = _client.SwitchTarget(target), target }, Formatting.Indented));
+            () => ToolResponse.Serialize(new { ok = _client.SwitchTarget(target), target }));
 
     private static string LoggedMeta(string tool, object? parameters, Func<string> run)
     {
@@ -54,7 +55,10 @@ public sealed class MetaTools
         {
             var result = run();
             sw.Stop();
-            ServerLogger.LogFinish(requestId, tool, true, sw.ElapsedMilliseconds);
+            // Feed the JSON payload as `data` so payload-level ok:false (e.g. NO_TARGET) lands in data_ok (spec F1-R3).
+            JToken? payload = null;
+            try { payload = JToken.Parse(result); } catch { /* non-JSON payload */ }
+            ServerLogger.LogFinish(requestId, tool, true, sw.ElapsedMilliseconds, data: payload);
             return result;
         }
         catch (Exception ex)

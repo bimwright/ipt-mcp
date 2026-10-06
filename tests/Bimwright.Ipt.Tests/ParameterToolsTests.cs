@@ -49,16 +49,13 @@ public sealed class ParameterToolsTests
     }
 
     [Fact]
-    public void ReadOnly_drops_the_parameters_toolset_including_read_only_param_tools()
+    public void ReadOnly_keeps_queries_and_removes_writes()
     {
-        // `parameters` is a WriteCapable toolset, so the entire class (incl. the read-only
-        // list/get tools) is hidden under --read-only — by design.
-        var types = Program.ResolveToolTypesForRegistration(
-            new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true }).ToArray();
-        Assert.DoesNotContain(typeof(ParameterTools), types);
-
-        var names = types.SelectMany(ToolNamesOf).ToArray();
-        Assert.DoesNotContain("inventor_list_parameters", names);
+        var methods = typeof(ParameterTools).GetMethods().Where(m => m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true).ToArray();
+        var names = methods.Select(m => m.GetCustomAttribute<McpServerToolAttribute>()!.Name).ToArray();
+        Assert.Contains("inventor_list_parameters", names);
+        Assert.Contains("inventor_get_parameter", names);
         Assert.DoesNotContain("inventor_set_parameter", names);
+        Assert.DoesNotContain("inventor_create_parameter", names);
     }
 }

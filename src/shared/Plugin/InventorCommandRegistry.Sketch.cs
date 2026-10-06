@@ -23,6 +23,7 @@ public static partial class InventorCommandRegistry
         add(new DrawArcHandler());
         add(new AddSketchDimensionHandler());
         add(new AddSketchConstraintHandler());
+        add(new DrawTextHandler());
         add(new CloseSketchHandler());
     }
 }

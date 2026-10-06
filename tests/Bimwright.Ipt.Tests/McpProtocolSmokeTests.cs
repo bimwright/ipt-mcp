@@ -17,6 +17,9 @@ public sealed class McpProtocolSmokeTests
         var tools = Assert.IsAssignableFrom<JArray>(toolsList["result"]?["tools"]);
         Assert.NotEmpty(tools);
         Assert.Contains(tools, t => (string?)t["name"] == "inventor_list_available_targets");
+        var report = Assert.Single(tools, t => (string?)t["name"] == "inventor_report_task_result");
+        Assert.Equal(new[] { "outcome", "summary", "task_id" },
+            report["inputSchema"]!["required"]!.Values<string>().OrderBy(x => x).ToArray());
     }
 
     private static async Task<JObject[]> RunProtocolHandshake()

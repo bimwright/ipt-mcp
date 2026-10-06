@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Allows the "?" annotations the shared model files use; the shared WPF files opt out with #nullable disable. -->
+    <Nullable>annotations</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <!-- The toast window and BrandAssets are guarded by the per-year plugin symbols. They never touch
+         the Inventor API, so any year compiles them. -->
+    <DefineConstants>$(DefineConstants);INVENTOR2027</DefineConstants>
+  </PropertyGroup>
+  <!-- Real WPF windows on an STA dispatcher, independent of Inventor. -->
+  <ItemGroup>
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastActivityEntry.cs" Link="ToastActivityEntry.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastActivityLog.cs" Link="ToastActivityLog.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastPositionOptions.cs" Link="ToastPositionOptions.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastPlacement.cs" Link="ToastPlacement.cs" />
+    <Compile Include="../../src/shared/Views/Toast/ToastActivityPanel.cs" Link="ToastActivityPanel.cs" />
+    <Compile Include="../../src/shared/Views/Toast/ToastScrollBarStyles.cs" Link="ToastScrollBarStyles.cs" />
+    <Compile Include="../../src/shared/Security/SecretMasker.cs" Link="SecretMasker.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.cs" Link="ActivityAggregator.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.Ipt.cs" Link="ActivityAggregator.Ipt.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/McpToastViewModel.cs" Link="McpToastViewModel.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastContent.cs" Link="ToastContent.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastThumbnail.cs" Link="ToastThumbnail.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToolActivity.cs" Link="ToolActivity.cs" />
+    <Compile Include="../../src/shared/Views/Toast/McpToastWindow.cs" Link="McpToastWindow.cs" />
+    <Compile Include="../../src/shared/Views/Toast/RollingToastNumber.cs" Link="RollingToastNumber.cs" />
+    <Compile Include="../../src/shared/Views/Toast/McpToastManager.cs" Link="McpToastManager.cs" />
+    <Compile Include="../../src/shared/Views/Toast/McpToastTheme.cs" Link="McpToastTheme.cs" />
+    <Compile Include="../../src/shared/Views/Toast/ToastThumbnailLoader.cs" Link="ToastThumbnailLoader.cs" />
+    <Compile Include="../../src/shared/Views/BrandAssets.cs" Link="BrandAssets.cs" />
+    <Compile Include="../../src/shared/Localization/L.cs" Link="Localization\L.cs" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>

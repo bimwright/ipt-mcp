@@ -1,26 +1,61 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Bimwright.Ipt.Shared.Security;
 
 namespace Bimwright.Ipt.Server;
 
 /// <summary>
-/// Append-only JSONL of every add-in round-trip (and server-side meta tools).
-/// Path: %LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl. Params are stored as-is
-/// (including send_code bodies) so MCP development can replay real calls.
+/// Opt-in JSONL of add-in round-trips and server-only tools. The runtime layout chooses
+/// the path; BIMWRIGHT_INVENTOR_CALL_LOG can override it. Params are masked before storing — keys named like
+/// tokens/passwords/secrets are replaced with "***" and every string value passes through
+/// <see cref="Bimwright.Ipt.Shared.Security.SecretMasker"/>. Code bodies become length/hash metadata. The
+/// finish line keeps <c>success</c> at envelope level and adds the script-level outcome
+/// (<c>data_ok</c>/<c>data_error</c>/<c>stdout_bytes</c>), response size, add-in duration and
+/// target, and the returned data as <c>result</c> (masked, capped at 64 KiB); those keys are always present (null when n/a),
+/// with error strings masked too. Server-only tools are journaled by the call-tool filter via <see cref="LogServerOnlyCall"/>.
 /// </summary>
 internal static class ServerLogger
 {
-    private static readonly string LogPath;
+    internal const string LogPathEnvVar = "BIMWRIGHT_INVENTOR_CALL_LOG";
+    internal const int MaxDataErrorChars = 300;
+
+    internal static readonly string SessionId = BuildSessionId(DateTime.UtcNow, Environment.ProcessId);
+
+    private static string LogPath;
+    internal static bool Enabled { get; private set; }
+    internal static void Configure(bool enabled, string? path = null)
+    {
+        Enabled = enabled;
+        if (path != null) LogPath = path;
+    }
     private static readonly object Gate = new object();
+
+    // Journal v3: the MCP client that drives this server (from `initialize.clientInfo`), so journal
+    // analysis can tell channels apart without the "<=2 calls per session" heuristic. Set once by
+    // the call-tool filter in Program; null until the first tool call.
+    private static string? _clientName;
+    private static string? _clientVersion;
+
+    internal static string? ClientName => _clientName;
+    internal static string? ClientVersion => _clientVersion;
+
+    internal static void SetClient(string? name, string? version)
+    {
+        _clientName = string.IsNullOrWhiteSpace(name) ? null : name;
+        _clientVersion = string.IsNullOrWhiteSpace(version) ? null : version;
+    }
 
     static ServerLogger()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Bimwright");
-        Directory.CreateDirectory(dir);
-        LogPath = Path.Combine(dir, "ipt-mcp-calls.jsonl");
+        LogPath = ResolveLogPath(Environment.GetEnvironmentVariable(LogPathEnvVar));
+
     }
 
     public static void LogStart(string requestId, string toolName, object? parameters)
@@ -30,11 +65,13 @@ internal static class ServerLogger
             WriteEntry(new
             {
                 timestamp = DateTime.UtcNow.ToString("o"),
-                session_id = "server",
+                session_id = SessionId,
                 request_id = requestId,
                 tool = toolName,
                 phase = "start",
-                @params = parameters
+                client_name = _clientName,
+                client_version = _clientVersion,
+                @params = MaskParams(parameters)
             });
         }
         catch
@@ -43,32 +80,206 @@ internal static class ServerLogger
         }
     }
 
-    public static void LogFinish(string requestId, string toolName, bool success, long durationMs, string? errorMsg = null)
+    public static void LogFinish(string requestId, string toolName, bool success, long durationMs, string? errorMsg = null,
+        string? errorCode = null, string? targetId = null, long? responseBytes = null, long? pluginDurationMs = null,
+        JToken? data = null)
     {
         try
         {
-            WriteEntry(new
-            {
-                timestamp = DateTime.UtcNow.ToString("o"),
-                session_id = "server",
-                request_id = requestId,
-                tool = toolName,
-                phase = "finish",
-                success,
-                duration_ms = durationMs,
-                error = errorMsg
-            });
+            WriteEntry(BuildFinishEntry(SessionId, requestId, toolName, success, durationMs, errorMsg, errorCode,
+                targetId, responseBytes, pluginDurationMs, data));
         }
         catch
         {
         }
     }
 
+    /// <summary>
+    /// Start + finish lines for a tool answered by the server alone. The result is the tool's text
+    /// content (parsed as JSON when it is JSON); success is false when the tool reported an error.
+    /// </summary>
+    public static void LogServerOnlyCall(string toolName, IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        ModelContextProtocol.Protocol.CallToolResult? result, string? thrown, long durationMs)
+    {
+        try
+        {
+            var requestId = Guid.NewGuid().ToString("N");
+            JObject? args = arguments is null ? null : JObject.Parse(System.Text.Json.JsonSerializer.Serialize(arguments));
+            LogStart(requestId, toolName, args);
+
+            JToken? data = null;
+            var text = result?.Content?.OfType<ModelContextProtocol.Protocol.TextContentBlock>().FirstOrDefault()?.Text;
+            if (text != null)
+            {
+                try { data = JToken.Parse(text); }
+                catch (JsonException) { data = new JValue(text); }
+            }
+            var obj = data as JObject;
+            var error = thrown ?? obj?["error"]?.ToString(Formatting.None);
+            var reportedFailure = obj != null
+                && ((obj["ok"] is { Type: JTokenType.Boolean } okToken && !okToken.Value<bool>())
+                    || obj["error"] is { Type: not JTokenType.Null });
+            var ok = thrown is null && result?.IsError != true && !reportedFailure;
+            WriteEntry(BuildFinishEntry(SessionId, requestId, toolName, ok, durationMs, ok ? null : error, null, null,
+                text is null ? null : Encoding.UTF8.GetByteCount(text), null, data));
+        }
+        catch
+        {
+            // Logging must never break a call.
+        }
+    }
+
+    internal static string BuildSessionId(DateTime startUtc, int processId) =>
+        "server-" + startUtc.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
+                  + "-" + processId.ToString(CultureInfo.InvariantCulture);
+
+    internal static string ResolveLogPath(string? envOverride) =>
+        string.IsNullOrWhiteSpace(envOverride)
+            ? Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").GatewayLogPath
+            : envOverride;
+
+    internal static string? TruncateError(string? s, int max = MaxDataErrorChars) =>
+        s is null || s.Length <= max ? s : s.Substring(0, max);
+
+    /// <summary>
+    /// Deep-masks a params payload for journaling: the structure is preserved (replay/debugging
+    /// still sees the real keys) but secret material never reaches disk. Keys whose name looks
+    /// like a credential get their whole value replaced; every other string value goes through
+    /// <see cref="SecretMasker.Mask"/> so code bodies and ad-hoc fields are still swept.
+    /// </summary>
+    internal static object? MaskParams(object? parameters)
+    {
+        if (parameters is null) return null;
+        var token = parameters as JToken ?? JToken.FromObject(parameters);
+        var masked = token.DeepClone();
+        MaskToken(masked);
+        return masked;
+    }
+
+    // Key names that always carry credentials — matched case-insensitively, value replaced wholesale.
+    private static readonly IReadOnlySet<string> SensitiveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "auth_token", "access_token", "refresh_token", "id_token",
+        "api_key", "apikey", "client_secret",
+        "password", "passwd", "pwd", "secret", "token", "authorization",
+    };
+
+    private static void MaskToken(JToken token)
+    {
+        switch (token)
+        {
+            case JObject obj:
+                foreach (var prop in obj.Properties().ToArray())
+                {
+                    if ((prop.Name == "code" || prop.Name == "source_code") && prop.Value.Type == JTokenType.String)
+                    {
+                        var body = prop.Value.Value<string>() ?? "";
+                        prop.Value = new JObject { ["length"] = body.Length, ["sha256"] = Bimwright.Ipt.Shared.Contracts.SendCodeSource.Hash(body) };
+                    }
+                    else if (SensitiveKeys.Contains(prop.Name))
+                        prop.Value = new JValue("***");
+                    else
+                        MaskToken(prop.Value);
+                }
+                break;
+            case JArray arr:
+                foreach (var item in arr)
+                    MaskToken(item);
+                break;
+            case JValue { Type: JTokenType.String } jv:
+                jv.Value = SecretMasker.Mask((string?)jv.Value);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Script-level outcome of send_code / run_baked_tool payloads: <c>ok</c> only when it is a JSON
+    /// boolean, <c>error</c> (truncated) and <c>stdout</c> byte count only when they are strings.
+    /// </summary>
+    internal static (bool? ok, string? error, int? stdoutBytes) ExtractDataOutcome(JToken? data)
+    {
+        if (data is not JObject obj) return (null, null, null);
+
+        bool? ok = obj["ok"] is { Type: JTokenType.Boolean } okToken ? okToken.Value<bool>() : null;
+        string? error = obj["error"] is { Type: JTokenType.String } errorToken
+            ? TruncateError(errorToken.Value<string>())
+            : null;
+        int? stdoutBytes = obj["stdout"] is { Type: JTokenType.String } stdoutToken
+            ? Encoding.UTF8.GetByteCount(stdoutToken.Value<string>()!)
+            : null;
+        return (ok, error, stdoutBytes);
+    }
+
+    internal static JObject BuildFinishEntry(string sessionId, string requestId, string tool, bool success,
+        long durationMs, string? error, string? errorCode, string? targetId, long? responseBytes,
+        long? pluginDurationMs, JToken? data)
+    {
+        var (dataOk, dataError, stdoutBytes) = ExtractDataOutcome(data);
+        return new JObject
+        {
+            ["timestamp"] = DateTime.UtcNow.ToString("o"),
+            ["session_id"] = sessionId,
+            ["request_id"] = requestId,
+            ["tool"] = tool,
+            ["phase"] = "finish",
+            ["success"] = success,
+            ["duration_ms"] = durationMs,
+            ["error"] = NullableString(SanitizeOrNull(error)),
+            ["error_code"] = NullableString(errorCode),
+            ["target_id"] = NullableString(targetId),
+            ["response_bytes"] = responseBytes,
+            ["plugin_duration_ms"] = pluginDurationMs,
+            ["data_ok"] = dataOk,
+            ["data_error"] = NullableString(SanitizeOrNull(dataError)),
+            ["stdout_bytes"] = stdoutBytes,
+            ["client_name"] = NullableString(_clientName),
+            ["client_version"] = NullableString(_clientVersion),
+            ["result"] = CapResult(data),
+        };
+    }
+
+    internal const int MaxResultChars = 64 * 1024;
+
+    /// <summary>
+    /// The tool's returned data for the journal: masked like params; above <see cref="MaxResultChars"/>
+    /// serialized characters it is kept as a truncated string prefix (spilled payloads already carry
+    /// their file path inline). Null when there is no data.
+    /// </summary>
+    internal static JToken CapResult(JToken? data)
+    {
+        if (data is null || data.Type == JTokenType.Null) return JValue.CreateNull();
+        var masked = data.DeepClone();
+        MaskToken(masked);
+        var text = masked.ToString(Formatting.None);
+        if (text.Length <= MaxResultChars) return masked;
+        return new JObject { ["truncated"] = true, ["chars"] = text.Length, ["head"] = text.Substring(0, MaxResultChars) };
+    }
+
+    // Set by the call-tool filter for each MCP call; journaling code marks it so the filter can
+    // journal the server-only tools (code modules, ToolBaker DB) that never reach the add-in.
+    private static readonly System.Threading.AsyncLocal<StrongBox<bool>?> CallJournaled = new();
+
+    internal static StrongBox<bool> BeginCall() => CallJournaled.Value = new StrongBox<bool>(false);
+
+    private static void MarkJournaled()
+    {
+        if (CallJournaled.Value is { } box) box.Value = true;
+    }
+
+    // ErrorSanitizer turns null into "" — keep null as null so the stable-key contract holds.
+    private static string? SanitizeOrNull(string? value) => value is null ? null : ErrorSanitizer.Sanitize(value);
+
+    // A null string converts to a JValue typed String; emit a real JSON null token instead.
+    private static JToken NullableString(string? value) => value is null ? JValue.CreateNull() : new JValue(value);
+
     private static void WriteEntry(object entry)
     {
+        MarkJournaled();
+        if (!Enabled) return;
         var line = JsonConvert.SerializeObject(entry, Formatting.None);
         lock (Gate)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
             File.AppendAllText(LogPath, line + "\n");
         }
     }

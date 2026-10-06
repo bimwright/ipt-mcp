@@ -21,15 +21,33 @@ local.settings.json
 *.idw
 *.dwg
 
-# Claude Code local state
+# Local agent state (never product documentation)
 .claude/
+.cursor/
+.kilo/
+.agents/
+.openclaude/
+.worktrees/
 
 # Internal process docs — plans, brainstorms, reviews, dev-roadmaps. NOT for public release.
 docs/superpowers/
 docs/design/brainstorm/
 docs/reviews/
 docs/benchmarks/
+!docs/benchmarks/
+docs/benchmarks/*
+!docs/benchmarks/*.md
+!docs/benchmarks/drawing-phase1-smoke.json
+!docs/benchmarks/drawing-phase2-smoke.json
 docs/research-archive/
+docs/design/
+docs/archive/
+docs/*roadmap*.md
+docs/gap-analysis-*.md
+docs/improvement-spec-*.md
+docs/handoff-*.md
+docs/*field-notes*.md
+spikes/
 
 # Internal per-directory codemap design notes
 codemap.md
@@ -39,3 +57,10 @@ runs/
 
 # MCP Registry publisher CLI (downloaded on demand)
 .mcp-publisher/
+
+# Local smoke/diagnostics artifacts and analysis scratch — never product source
+.artifacts/
+.artifacts-smoke/
+.artifacts-test/
+artifacts/
+analysis/

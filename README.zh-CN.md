@@ -10,7 +10,7 @@
   <a href="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml"><img src="https://github.com/bimwright/ipt-mcp/actions/workflows/build.yml/badge.svg" alt="build" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="license" /></a>
   <a href="#支持的-inventor-版本"><img src="https://img.shields.io/badge/Inventor-2022--2027-F5A300" alt="Inventor 2022-2027" /></a>
-  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-58%20or%2059%20tools-6C47FF" alt="MCP tools" /></a>
+  <a href="#工具面"><img src="https://img.shields.io/badge/MCP-111%20tools-6C47FF" alt="MCP tools" /></a>
 </p>
 
 <p align="center">
@@ -71,7 +71,9 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 - Inventor 从 2025 起把桌面 add-in 开发从 .NET Framework 上移开：**2025/2026 用 .NET 8，2027 用 .NET 10**。 （.NET 8 add-in 在 2027 上仍二进制兼容，但 net10 是原生目标。）
 - 全程使用**4-digit calendar years**（2022..2027）—— 永远不要使用 legacy 版本号。
 
-> **状态：已验证。** Phase 1-3 已完成且全绿（默认 58 个 MCP tools，启用 send_code 时为 59 个；server + tests 在没有 Inventor 时也能 build），Inventor-API handlers 已在真实 Inventor session 中验证。和往常一样，在你的 production models 上信任它之前，请先用你自己的 templates 测试。
+> **状态：Drawing Phase 1 正在实现。** 新增 11 个 Inventor 2027 drawing tools。无宿主测试与真实 fixture 的基本 handler 检查已通过；完整验收与 release gate 仍待完成。参见[验证状态](docs/testing/drawing-phase1.md)。
+
+最终 MCP 结果的 UTF-8 输出保护在 64/256 KiB 时警告，预算为 1 MiB。过大的读取要求缩小范围；已完成的写入保留摘要，请勿重复执行。`--disable-output-guard` 仍保留传输上限。CLI/JSON/环境变量阈值及默认 36 小时 spill 配置见[测试文档](docs/testing/drawing-phase1.md)。
 
 ---
 
@@ -79,7 +81,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 从 [GitHub Releases](https://github.com/bimwright/ipt-mcp/releases/latest) 下载 `IptMcp.Setup-*-win-x64.zip`。v0.1.0 含 Inventor **2025** 与 **2027**。解压后 `install.ps1`，MCP 指向 `ipt-mcp.exe`。不要 `dotnet tool install -g Bimwright.Ipt.Server`。
 
-发现文件：`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。`inventor_send_code` 需双侧 opt-in——见 [安全](#安全)。
+发现文件：`%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`。`inventor_send_code` 默认启用，可通过服务器开关或宿主 kill switch 禁用——见 [安全](#安全)。
 
 ---
 
@@ -111,12 +113,28 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## 工具面
 
-当所有平台 toolsets 都启用时，完整 surface 默认是 **58 个 tools**（12 个 default-on toolsets；`code` 关闭），启用 inventor_send_code 时为 **59 个**。每个面向 MCP 的名字都带有前缀 `inventor_`。Tools 按 toolset class 分组；`--toolsets sketch,feature` 和 `--read-only` 控制哪些被注册，这样弱模型就不会看到被禁用的 tools。
+完整模式默认有 **111 个工具**（`--toolsets all`）；`--disable-send-code` 后为 **107 个工具**，`--read-only` 下为 **28 个工具**。所有 MCP 名称以 `inventor_` 开头，可用 toolset 过滤器缩小范围。
 
-默认启用的 toolsets：`meta`、`query`、`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`assembly_query`、`toolbaker`、`toolbaker_write`。
-默认关闭：`code`（即 `send_code` escape hatch —— 仅 opt-in）。
+默认启用包括 `code` 在内的全部 15 个 toolset。用 `--toolsets <csv>` 缩小范围。
 
 所有长度输入单位为 **mm**，角度单位为 **degrees**；add-in 会转换成 Inventor 内部的 centimetres/radians。
+
+
+### drawing_query (2) / drawing (20) — Inventor 2027
+
+Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/drawing-phase3.md). These records predate v0.2.1 runtime changes; live acceptance must be renewed.
+
+`inventor_get_drawing_info` and `inventor_find_view_geometry` are read-only. Drawing writes:
+`inventor_new_drawing`, `inventor_add_sheet`, `inventor_set_title_block`,
+`inventor_add_drawing_view`, `inventor_add_section_view`, `inventor_edit_drawing_view`,
+`inventor_add_drawing_dimension`, `inventor_add_balloon`, `inventor_export_drawing`,
+`inventor_capture_sheet`, `inventor_add_drawing_note`, `inventor_add_drawing_table`,
+`inventor_add_drawing_symbol`, `inventor_edit_drawing_annotation`, `inventor_delete_drawing_items`,
+`inventor_edit_drawing_table`, `inventor_set_drawing_styles`, `inventor_edit_sheet`, `inventor_sketch_on_view`, `inventor_hide_view_edges`. Captures write PNG files and are excluded from read-only.
+
+[Drawing checks and current limitations](docs/testing/drawing-phase1.md) ·
+[Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
+[Declared read-only inventory](docs/testing/readonly-tools.json).
 
 ### meta (3) —— server-side 的 target tools，不 round-trip 到 add-in；在 `--read-only` 下仍然暴露
 
@@ -126,15 +144,19 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_get_current_target` | 报告 server 当前选中的 target，若没有 live 的则返回 `NO_TARGET`。 |
 | `inventor_switch_target` | 按 descriptor id、Inventor year、process id 或 pipe/session 名选择 active target。仅 server-side。 |
 
-### query (3) —— 只读的 document/health 探测
+### query (7) —— 只读的 document/health/model 探测及任务结果报告
 
 | Tool | 描述 |
 |---|---|
 | `inventor_health` | 探测 active add-in：inventor_year、process_id、是否有 document 打开、active document type。 |
+| `inventor_report_task_result` | agent 用 `task_id`、`outcome`（`completed`/`failed`/`cancelled`）及单行 `summary` 显式报告任务结果；不修改模型。 |
 | `inventor_list_open_documents` | 列出所有打开的 documents：标题、路径、类型，以及哪个是 active。 |
 | `inventor_get_document_info` | 获取 active document 的标题、完整路径和 document type。 |
+| `inventor_list_bodies` | 列出 part 的 solid bodies：id（`body:N`）、name、volume_mm3、bbox_mm、face_count、生成 feature（created_by）、visible。 |
+| `inventor_list_features` | 按 tree 顺序列出 part 的 features：name、type、health、suppressed、body_names。 |
+| `inventor_probe_brep` | 调查 part 的 B-rep 端口：带 inner-loop 圆形边的平面 — normal（已按 IsParamReversed 校正）、center_mm、port_diameter_mm、面上所有圆。 |
 
-### document (7) —— document 生命周期（write）
+### document (10) —— document 生命周期（write）
 
 | Tool | 描述 |
 |---|---|
@@ -145,6 +167,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_close_document` | 关闭 active document；`save=true` 会先保存。 |
 | `inventor_set_units` | 设置 active document 的长度单位（mm、cm、m、in、ft）。 |
 | `inventor_set_material` | 按名称给 active part 分配一个 material。 |
+| `inventor_save_all` | 更新根文档并静默保存它及所有有改动的被引用文档；逐文件报告 saved / read_only / error；支持 `dry_run`。 |
+| `inventor_open_documents` | 一次打开多个文档（默认不开窗口）。 |
+| `inventor_close_documents` | 按路径/名称关闭文档，或关闭所有可见文档（`keep_active`）；可先保存。 |
 
 ### parameters (4) —— model 与 user parameters（write）
 
@@ -155,15 +180,16 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_set_parameter` | 设置一个已有 parameter 的表达式/值，然后更新 document。 |
 | `inventor_create_parameter` | 新建一个 user parameter（名称、表达式、单位）。 |
 
-### properties (3) —— iProperties 与 mass properties（write）
+### properties (4) —— iProperties 与 mass properties（write）
 
 | Tool | 描述 |
 |---|---|
 | `inventor_get_iproperty` | 按 property-set 和 property 名称获取一个 iProperty 值。 |
 | `inventor_set_iproperty` | 设置一个 iProperty 值。 |
 | `inventor_get_mass_properties` | 质量（g）、体积（mm³）、表面积（mm²）、质心、包围盒。 |
+| `inventor_list_iproperty_sets` | 列出 iProperty 集合（name、internal_name、属性名；可选值）—— get/set_iproperty 的 discovery。 |
 
-### sketch (9) —— 2D 草图几何与约束（write）
+### sketch (10) —— 2D 草图几何与约束（write）
 
 | Tool | 描述 |
 |---|---|
@@ -175,44 +201,64 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_draw_arc` | 画一个草图圆弧（圆心、半径、起始/结束角度）。 |
 | `inventor_add_sketch_dimension` | 给草图图元添加一个驱动尺寸约束。 |
 | `inventor_add_sketch_constraint` | 添加一个几何约束（coincident、parallel、tangent 等）。 |
+| `inventor_draw_text` | 添加一个 fitted 文本框（position mm，可选 font_size_mm；rotation_deg 仅支持 90 的倍数）。 |
 | `inventor_close_sketch` | 结束草图编辑（退出 sketch edit 模式）。 |
 
-### feature (9) —— 实体与工作特征（write）
+### feature (16) —— 实体与工作特征（write）
 
 | Tool | 描述 |
 |---|---|
 | `inventor_extrude` | 拉伸一个命名草图（距离、join/cut/intersect、方向）。 |
 | `inventor_revolve` | 把一个命名草图绕一个轴旋转（角度、operation）。 |
-| `inventor_fillet` | 给 model edges 添加等半径倒圆。 |
+| `inventor_combine` | 对实体做布尔运算（base + tool bodies，join/cut/intersect，keep_tool_bodies）。 |
+| `inventor_batch_execute` | 在一个事务中运行最多 20 条 wire commands（单次 undo，出错回滚）。 |
+| `inventor_fillet` | 添加等半径边倒圆 — `edgeIds` 或 `edges` 选择器 `{kind:circular, radius_mm?, center_mm?, on_body?, adjacent_surface_types?}`；返回 `matched_edges`。 |
 | `inventor_chamfer` | 给 model edges 添加等距倒角。 |
-| `inventor_create_work_plane` | 创建一个工作平面（offset、three_points 或 tangent）。 |
+| `inventor_create_work_plane` | 创建一个工作平面（offset、three_points、tangent 或 fixed 原点+轴）。 |
 | `inventor_create_work_axis` | 创建一个工作轴（two_points、edge、plane_intersection、normal_to_face_through_point）。 |
+| `inventor_create_work_point` | 在 {x,y,z}/[x,y,z] mm 处创建固定工作点；construction point 无法命名（name_applied 会报告）。 |
 | `inventor_hole` | 在确定性选择的平面面上钻通孔/沉孔/埋头孔；可选 tapped-thread 元数据。 |
 | `inventor_circular_pattern` | 绕一个命名轴圆形阵列 part features（在某一角度上 count）。 |
 | `inventor_rectangular_pattern` | 沿一个或两个命名轴矩形阵列 part features。 |
+| `inventor_loft` | 按有序 sketch profiles（'SketchName' 或 'SketchName:N'）做 loft；可选 centerline sketch、closed/merge-tangent-faces。 |
+| `inventor_sweep` | 把 sketch profile 沿 sketch path 扫掠（相连段自动串链）；orientation normal_to_path\|parallel。 |
+| `inventor_create_bim_connector` | 在圆形 port edge 上创建 BIM pipe connector（ref 来自 inventor_probe_brep 的 `circles[].edge`）；kind=pipe，可选 system/flow/connection 元数据。 |
+| `inventor_create_part` | 用 JSON recipe 一次调用建完整零件：草图（矩形 / 圆 / 带 bulge 圆弧的多段线、内部孔洞）→ 拉伸 / 孔 / 圆角 / 倒角 → 材料 + iProperties → 静默另存为。错误指出 recipe 路径，失败时零件不保存直接关闭；支持 `dry_run`。 |
 
-### export (6) —— 视图捕获与几何导出（write）
+### export (10) —— 视图捕获与几何导出（write）
+
+> `output_path` 必须位于允许的根目录下：user profile、`%TEMP%`，或自行添加的根目录 —— 例如在运行 Inventor 的机器上设置 `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports`（设置后需重启 Inventor 和 MCP 客户端/服务器会话）。
 
 | Tool | 描述 |
 |---|---|
-| `inventor_capture_view` | 把 active view 捕获为受限的 base64 PNG，或写入输出路径。 |
+| `inventor_capture_view` | 把 active view 捕获为 PNG 文件（写入 `<export-root>\captures\` 或输出路径）；`inline=true` 返回受限 base64 PNG。 |
 | `inventor_export_step` | 把 active part/assembly 导出为 STEP（.stp/.step）。 |
 | `inventor_export_stl` | 把 active part/assembly 导出为 STL（.stl）。 |
+| `inventor_export_sat` | 把 active part/assembly 导出为 ACIS SAT（.sat）—— 用于 Revit interop 的格式；acis_version 默认 7（唯一支持的值）。 |
 | `inventor_export_dxf` | 导出 2D DXF；必须声明 source（`sketch` 或 `flat_pattern`）。 |
+| `inventor_derive_envelope` | 从源 part/assembly 创建 derived part —— envelope/interop 路径：`derive_style`、`include_bodies` 选择 solid、轻量 `bounding_box` 模式；.ipt 保存到允许的 root 下。 |
 | `inventor_view_fit` | 把 active view 缩放适配到 model extents（捕获前运行）。 |
 | `inventor_set_view_orientation` | 设置一个标准相机方向（iso/front/top 等），用于多角度捕获。 |
+| `inventor_set_camera` | 显式设置相机（eye/target mm、up、perspective、extents_mm、fit）—— 标准方向不合适时在 capture_view 前使用。 |
+| `inventor_set_view_state` | 激活/创建设计视图、切换对象可见性（工作特征、草图等）、按 selector 显示/隐藏 occurrence。`inventor_capture_view` 也接受这些键以及 orientation/camera/fit 和多个 `shots`。 |
 
 > 导出路径必须是绝对路径，且位于允许的 output root 之下（用户 profile 或 temp）。
 
-### assembly (3, write) —— 通过关系（而非坐标）组合装配体
+### assembly (9, write) —— 组合与编辑装配体
 
 | Tool | 描述 |
 |---|---|
+| `inventor_create_design_view` | Copy an assembly design view; exact occurrence visibility/appearance settings, optional activation. Validated on an Inventor 2027 disposable fixture. |
 | `inventor_place_occurrence` | 把一个 component（.ipt/.iam）放入 active assembly；可选初始 pose + grounded。 |
 | `inventor_add_constraint` | 约束两个命名引用（mate/flush/insert/angle）；response 携带 `health` —— 务必检查它。 |
 | `inventor_create_imate` | 使用确定性面选择器在 active part 上编写一个命名 iMate。 |
+| `inventor_place_occurrences` | 在一个撤销步骤中放置多个组件；姿态为原点+旋转、坐标轴或 4×4 矩阵；`lock` = none / grounded / workplanes。 |
+| `inventor_delete_occurrences` | 删除 selector 匹配的顶层 occurrence（`dry_run`）。 |
+| `inventor_set_occurrence_state` | 批量设置可见 / 抑制 / 固定 / 姿态 / 锁定。 |
+| `inventor_set_appearance` | 为 occurrence 或零件实体设置 RGB 颜色或库外观。 |
+| `inventor_reset_appearance` | 移除外观覆盖。 |
 
-### assembly_query (5, read-only) —— 数值自检一组；在 `--read-only` 下存活
+### assembly_query (6, read-only) —— 数值自检一组；在 `--read-only` 下存活
 
 | Tool | 描述 |
 |---|---|
@@ -221,12 +267,16 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 | `inventor_measure_min_distance` | 两个 occurrences 或命名引用之间的最小 3D 距离（mm）。 |
 | `inventor_get_assembly_bom` | BOM + occurrence 树，带 grounded 标志以及 translation/rotation 自由度。 |
 | `inventor_list_constraints` | 读回每个约束的 type、`health`、suppressed 标志以及两个 occurrence 名称。 |
+| `inventor_list_occurrences` | 按 selector 列出 occurrence 及所选字段（path、file、bbox_mm、transform、可见性、材料、外观、质量、体积）。`check_interference` 支持 `set_a` × `set_b`，`measure_min_distance` 支持 `pairs[]` 或集合×集合 + `threshold_mm`。 |
 
-### code (1) —— opt-in 的 escape hatch（默认关闭）
+### code (4) — C# scripts and code modules
 
 | Tool | 描述 |
 |---|---|
-| `inventor_send_code` | **危险，仅 opt-in。** 在进程内针对 `Inventor.Application` 执行一段 C# 代码片段。除非 server 和 add-in 都 opt-in，否则禁用（否则返回 `SEND_CODE_DISABLED`）；被禁的 API（file/process/network/environment）会被拒绝。 |
+| `inventor_send_code` | `inventor_send_code` 默认启用。`--disable-send-code` 隐藏 code 工具；`BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` 在宿主中禁止执行。read-only 模式始终排除代码执行。 |
+| `inventor_save_code_module` | 保存可复用的 C# helper module（仅声明；保存前做策略检查和 dry-compile）。 |
+| `inventor_list_code_modules` | 列出已保存的 module 及其签名。 |
+| `inventor_delete_code_module` | 删除 module。 |
 
 ### toolbaker (3, read-only) —— 纯粹操作 server-side 的 bake 数据库
 
@@ -246,16 +296,33 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ---
 
+## Toast 通知
+
+当 Inventor 可见时，命令结果更新到 **一张紧凑的活动卡片**，显示最新 tool 和带数字滚动效果的 **Success / Failed / Capture** 计数器。Capture 是 Success 的子集，包含 `inventor_capture_view` 的 `inline=true` 调用，不应再加到操作总数中。Failed 包含软失败和 batch rollback。读写操作都使用蓝色强调色；记录过失败的卡片保持红色强调色。该卡片与 rvt-mcp、dwg-mcp 的卡片相同，数值变化时布局保持稳定，没有优先级堆叠或逐 tool 的 toast 队列。成功且保存了图像的 capture 还会显示该图像的**缩略图**，居中放在固定大小的框内；点击缩略图会打开文件。计数仅覆盖当前 target 上该卡片的生命周期，不代表整个任务或特定 MCP client。`inventor_health` 不产生 toast。**Agent connected** 只是状态通知，不增加计数，也不替换保留中的活动卡片或任务报告。
+
+活动卡片默认在 **最后一个结果之后 20 秒**消失。可在 **Status → Toast duration → Apply** 中选择 10、20、30 或 60 秒，选择保存为 `toastIdleSeconds`。保存失败时会显示错误，并继续使用原来的时长。由指针移动确认的真实悬停暂停计时，离开后重新开始完整的所选时长。新时长从下一个结果或指针离开时开始生效。卡片出现在静止光标下不算悬停。点击卡片打开 **History** 并关闭卡片；**×** 只关闭卡片。卡片标题始终显示网关名称和 **Inventor 年份**（`ipt-mcp 2027`），不受 branding 开关影响。
+
+agent 必须显式调用 `inventor_report_task_result` 报告工作结果：每项 agent/job 使用唯一 `task_id`（1–80 字符），`outcome` 为 `completed`/`failed`/`cancelled`，`summary` 为真实的单行总结（1–120 字符）。报告 **替换同一个共享卡位**，标注 **Agent reported**，显示时限为 **8 秒**；真实悬停暂停，离开后重新计时。报告不增加活动计数，下一个 tool 结果开始新的活动卡片。不会从空闲时间或单个 tool 成功推断任务完成。报告绕过 Inventor 命令队列，不调用 Inventor API，因此长时间 `send_code` 占用主线程时仍可接收。`toast_shown` 表示是否已保留卡片供显示，也包括等待 Inventor 取消最小化或关闭模态对话框的情况。报告遵守 Toasts 开关，需同时更新 server 和 add-in。
+
+Toast 使用 **专用 STA UI 线程上的纯代码 WPF**，窗口 **无 owner 且不激活（unowned / no-activate）**，独立于 Inventor 主 STA，toast 线程不调用 Inventor COM。命令结果通知在响应返回后投递。Toast 不抢焦点，Inventor 最小化或打开模态对话框时隐藏，**即使其他应用位于前台也保持置顶**。卡片使用与 rvt-mcp、dwg-mcp 相同的固定浅色样式；没有主题设置，也不会读取卡片后面的屏幕内容。
+
+通过功能区开关 toast：**Bimwright ▸ MCP → Toasts**（Status 打开诊断对话框）。该选择持久化到 `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` 的 `enableToast`。环境变量 `BIMWRIGHT_INVENTOR_ENABLE_TOAST` 会覆盖 JSON 值。已移除的 `toastTheme` 键和 `BIMWRIGHT_INVENTOR_TOAST_THEME` 会被忽略。格式错误的配置文件不会被改动——开关拒绝覆盖它。
+
+同一功能区的 **Toast Brand** **默认关闭**；选择保存在同一文件的 `showBranding` 键中，并在下次启动 Inventor 时恢复。启用后卡片底部预留一行字标，并在真实悬停时以擦拭动画在该行显示 BIMwright 字标，离开时淡出。**卡片出现时不会自动播放字标擦拭动画**。动效遵守 Windows 动画设置。Toast UI 标签仍为英文；README 翻译不代表已实现 UI 本地化。
+
+---
+
 ## 安全
 
 简短版：你的模型留在你的机器上，write/dangerous tools 都被 gate 住。
 
-- **只读模式。** `--read-only`（或 `BIMWRIGHT_INVENTOR_READ_ONLY=1`）移除每一个 write-capable toolset（`document`、`parameters`、`properties`、`sketch`、`feature`、`export`、`assembly`、`code`、`toolbaker_write`），但保留 `meta` + `query` + `assembly_query` + 只读的 `toolbaker`，并**保留 `inventor_switch_target` 暴露**。Server 在每个 command envelope 中发送只读模式；add-in 也支持 `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`。在强制只读下执行 write 命令会返回 `READ_ONLY`。
-- **send_code 双面 opt-in。** `inventor_send_code` **默认禁用**。只有当**两个** gate 都设置时才会暴露：server 端 `--enable-send-code`（或 `BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1`）**且** add-in 进程 `BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1`。否则 dispatcher 返回 `SEND_CODE_DISABLED`。被禁的 API（file/process/network/environment）会被拒绝。
+- **只读模式。** `--read-only` 仅注册 annotation 为 `ReadOnly = true` 的工具，不写入文档或文件。仍保留 parameter/property 查询、view fit 和 code module 列表。add-in 同时遵守 `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`。
+- **send_code.** `inventor_send_code` 默认启用。`--disable-send-code` 隐藏 code 工具；`BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` 在宿主中禁止执行。read-only 模式始终排除代码执行。
 - **本地、经过认证的 transport。** TCP 绑定 loopback；Named Pipe 的作用域是 local-machine。每个 per-session descriptor 都带一个随机 auth token，但 MCP meta tools 永远不会返回它。
 - **Sanitized errors。** 返回给 model 的错误信息会被 sanitize，避免泄露绝对路径/密钥。
 - **ToolBaker 控制。** 默认启用 ToolBaker。你可以通过在启动 server 时传入 --disable-toolbaker 命令行标志，或者设置环境变量 BIMWRIGHT_INVENTOR_ENABLE_TOOLBAKER=0 来完全禁用它。
 - **允许的导出路径。** 文件导出工具会验证 output_path 是否指向安全文件夹（位于 User Profile 或 Temp 目录下）。你可以通过设置环境变量 BIMWRIGHT_INVENTOR_EXPORT_ROOT 来定义额外允许的根文件夹。
+- **错误与日志中的机密遮蔽。** 带引号的键值凭据和 `Bearer` 令牌始终会被遮蔽。另有一个启发式规则会把任何 24 个字符以上的字母数字串视为可能的机密并遮蔽，**默认开启**。在需要看清长标识符（COM 类型名、零件名）的可信机器上，可在用户环境变量中设置 `BIMWRIGHT_INVENTOR_MASK_LONG_TOKENS=0`（服务器和插件都会读取；需重启 Inventor 和 MCP 客户端）。
 
 **ToolBaker** 把重复的本地 workflow 变成个人、已验证的工具：建议通过 `inventor_list_bake_suggestions` 浮现，你用 `inventor_accept_bake_suggestion` 显式接受一个（validate → compile → apply → persist），accept 后的工具就可以通过 `inventor_list_baked_tools` / `inventor_run_baked_tool` 调用。Bake 数据库和 audit log 都位于本地 `%LOCALAPPDATA%\Bimwright\ipt-mcp\baked\`。见 [docs/toolbaker.md](docs/toolbaker.md) 和 [SECURITY.md](SECURITY.md)。
 
@@ -269,7 +336,9 @@ dotnet build src/plugin-inv27 -c Debug   # 真实 2027 interop compile；需要 
 
 ## bimwright 家族
 
-为 AEC 工具链亲手打造的 MCP gateway —— 同一套架构，predictable / auditable / reversible：
+连接 AI 助手与 BIM、CAD 应用的开源工具。
+
+**bimwright** 这个名字由 **BIM** 和 **wright** 组成。wright 是英语中表示制作者或建造者的旧词，如 *shipwright*（造船工）。
 
 - [**rvt-mcp**](https://github.com/bimwright/rvt-mcp) —— Autodesk® Revit®
 - [**dwg-mcp**](https://github.com/bimwright/dwg-mcp) —— Autodesk® AutoCAD®
@@ -288,5 +357,69 @@ Inventor 和 Autodesk 是 Autodesk, Inc. 的注册商标。bimwright 是一个�
 ---
 
 <p align="center">
-  一个 <a href="https://github.com/bimwright">bimwright</a> 项目 - 给那些想把工作自动化，而不是贩卖神秘感的人。
+  一个 <a href="https://github.com/bimwright">bimwright</a> 项目。
 </p>
+
+## 权限与 auto mode (Permissions & auto mode)
+
+以下 allow list 从 28 个 read-only annotation 生成，并通过测试对照运行中的服务器。请把 `ipt-mcp` 替换成客户端中准确的 server ID。不要使用 `mcp__ipt-mcp__*` 等整个服务器的通配符。`inventor_send_code` 不带 annotation 或强制每次确认的 metadata；单独允许它是用户的选择。权限是否持久保存仍需在实际客户端中验证。
+
+<!-- BEGIN GENERATED READONLY -->
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__ipt-mcp__inventor_check_interference",
+      "mcp__ipt-mcp__inventor_create_bake_issue_draft",
+      "mcp__ipt-mcp__inventor_find_view_geometry",
+      "mcp__ipt-mcp__inventor_get_assembly_bom",
+      "mcp__ipt-mcp__inventor_get_current_target",
+      "mcp__ipt-mcp__inventor_get_document_info",
+      "mcp__ipt-mcp__inventor_get_drawing_info",
+      "mcp__ipt-mcp__inventor_get_iproperty",
+      "mcp__ipt-mcp__inventor_get_mass_properties",
+      "mcp__ipt-mcp__inventor_get_parameter",
+      "mcp__ipt-mcp__inventor_health",
+      "mcp__ipt-mcp__inventor_list_available_targets",
+      "mcp__ipt-mcp__inventor_list_bake_suggestions",
+      "mcp__ipt-mcp__inventor_list_baked_tools",
+      "mcp__ipt-mcp__inventor_list_bodies",
+      "mcp__ipt-mcp__inventor_list_code_modules",
+      "mcp__ipt-mcp__inventor_list_constraints",
+      "mcp__ipt-mcp__inventor_list_features",
+      "mcp__ipt-mcp__inventor_list_interfaces",
+      "mcp__ipt-mcp__inventor_list_iproperty_sets",
+      "mcp__ipt-mcp__inventor_list_occurrences",
+      "mcp__ipt-mcp__inventor_list_open_documents",
+      "mcp__ipt-mcp__inventor_list_parameters",
+      "mcp__ipt-mcp__inventor_measure_min_distance",
+      "mcp__ipt-mcp__inventor_probe_brep",
+      "mcp__ipt-mcp__inventor_report_task_result",
+      "mcp__ipt-mcp__inventor_switch_target",
+      "mcp__ipt-mcp__inventor_view_fit"
+    ]
+  }
+}
+```
+<!-- END GENERATED READONLY -->
+
+### Runtime settings (v0.2.1)
+
+| Setting | Default | CLI / JSON |
+|---|---|---|
+| send_code | on | `--enable-send-code` / `--disable-send-code`; `enableSendCode` |
+| Call-log files | off | `--enable-call-log` / `--disable-call-log`; `enableCallLog` |
+| Toolsets | all | `--toolsets all`; `toolsets` |
+| Read-only | off | `--read-only`; `readOnly` |
+| Response guard | on | `--enable-output-guard` / `--disable-output-guard`; `enableOutputGuard` |
+| Warning / strong warning / budget | 65536 / 262144 / 1048576 bytes | `--output-warning-bytes`, `--output-strong-warning-bytes`, `--output-budget-bytes`; `outputWarningBytes`, `outputStrongWarningBytes`, `outputBudgetBytes` |
+| Transport cap | 5000000 bytes | `--max-response-bytes`; `maxResponseBytes` |
+| Spill retention | 36 hours | `--spill-retention-hours`; `spillRetentionHours` (invalid values: 36) |
+
+CLI overrides environment, which overrides `--config` JSON. The server's logging switch reaches the plug-in; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG=1` can veto it. History re-runs do not persist call logs. In-memory History is independent. Body caching (`BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`) and body journaling (`BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1`, TTL default 4 hours) are separate opt-ins; journaling also requires call logging. Enabled call logs keep source length/hash, never source bodies. Saved code modules are explicit user-requested storage; credential-like source values are rejected before compilation/storage, without rewriting the code.
+
+`send_code` provides `app` and nullable `doc`, accepts a script body with `return` and optional helper declarations, and imports `System`, `System.Collections.Generic`, `System.Linq`, `Inventor`. Writes to the active document share one undo transaction; errors abort it and warnings are returned. New/closed documents, other documents and external files are outside that rollback scope. Oversized script output includes a file, preview, schema and `mutation_applied: null`; read the file and do not re-run the script. Spill files live under `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill` and fresh files are never evicted by a count cap.
+
+[Benchmark 记录与验证范围](docs/benchmarks/README.md)。
+
+[v0.2.1 实机基准：Inventor 2027，111 个工具](docs/benchmarks/v0.2.1-inventor-2027.md)。

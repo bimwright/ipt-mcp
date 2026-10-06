@@ -22,7 +22,8 @@ public sealed class GetParameterHandler : HandlerBase, IInventorCommand
         var app = (Application)ctx.Application!;
 
         global::Inventor.Document? activeDoc;
-        try { activeDoc = app.ActiveDocument; } catch { activeDoc = null; }
+        activeDoc = ActiveDocumentSupport.ResolveTarget(ctx, p, out var targetFailure);
+        if (targetFailure != null) return targetFailure;
         if (activeDoc is null)
             return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
         if (activeDoc is not PartDocument doc)

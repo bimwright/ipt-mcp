@@ -1,6 +1,7 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
 using Inventor;
+using Bimwright.Ipt.Shared.Handlers;
 
 namespace Bimwright.Ipt.Shared.Handlers.Export;
 
@@ -17,6 +18,7 @@ internal static class ExportSupport
     // Stable Inventor translator ClassId GUIDs (consistent across 2022-2027).
     public const string StepTranslatorId = "{90AF7F40-0C01-11D5-8E83-0010B541CD80}";
     public const string StlTranslatorId  = "{533E9A98-FC3B-11D4-8E7E-0010B541CD80}";
+    public const string SatTranslatorId  = "{89162634-02B6-11D5-8E80-0010B541CD80}";
 
     /// <summary>Look up a built-in translator add-in by ClassId GUID, or throw a friendly error.</summary>
     public static TranslatorAddIn GetTranslator(Application app, string classId, string label)
@@ -39,14 +41,35 @@ internal static class ExportSupport
 
     /// <summary>Run a translator export of <paramref name="source"/> (a document) to <paramref name="outputPath"/>.</summary>
     public static void SaveCopyAs(Application app, TranslatorAddIn translator, object source, string outputPath)
+        => SaveCopyAs(app, translator, source, outputPath, null);
+
+    /// <summary>
+    /// Run a translator export, first populating the options map via
+    /// <see cref="TranslatorAddIn.HasSaveCopyAsOptions"/> so translator-defined keys exist, then
+    /// applying <paramref name="configure"/> overrides (e.g. SAT <c>Version</c>).
+    /// </summary>
+    public static void SaveCopyAs(Application app, TranslatorAddIn translator, object source, string outputPath,
+        Action<NameValueMap>? configure)
     {
         var to = app.TransientObjects;
         var context = to.CreateTranslationContext();
         context.Type = IOMechanismEnum.kFileBrowseIOMechanism;
         var options = to.CreateNameValueMap();
+        // Indexed property in the interop — populates DefaultOptions with the translator's keys.
+        _ = translator.HasSaveCopyAsOptions[source, context, options];
+        configure?.Invoke(options);
         var medium = to.CreateDataMedium();
         medium.FileName = outputPath;
-        translator.SaveCopyAs(source, context, options, medium);
+        // The translators return silently even when they never wrote the file (observed with a
+        // missing parent directory), so create the parent and verify the artifact exists —
+        // callers must never see exported:true for a file that does not exist.
+        var dir = System.IO.Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+        using (SilentOperationScope.Enter(app, on: true))   // translators may prompt; never block the STA
+            translator.SaveCopyAs(source, context, options, medium);
+        if (!System.IO.File.Exists(outputPath))
+            throw new InvalidOperationException(
+                $"translator completed but produced no file at '{outputPath}' (silent export failure)");
     }
 }
 #endif

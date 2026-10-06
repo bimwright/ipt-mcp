@@ -8,11 +8,12 @@ public static class ServerInstructions
         ".ipt part files, .iam assembly files, or .idw/.dwg drawings. " +
         "Capabilities: create and open parts and assemblies; list open documents and get document info; " +
         "create and edit 2D sketches (lines, circles, rectangles, constraints) on a part; " +
-        "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole, circular_pattern, rectangular_pattern; " +
+        "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole, combine, circular_pattern, rectangular_pattern, batch_execute; " +
         "create work geometry such as a work plane and work axis; " +
         "place components (IPT/IAM) in assembly, constrain them (mate/flush/insert/angle) using named refs/proxies, create iMates on parts; " +
         "query assembly relationships, BOM, degrees of freedom, interference (clash analysis), and min distance; " +
-        "zoom-fit and orient camera views; " +
+        "inspect part bodies, features, and B-rep port mouths (list_bodies, list_features, probe_brep); " +
+        "zoom-fit, orient, and position camera views (eye/target/up/extents) and capture view images; " +
         "read and write model parameters and user parameters; " +
         "read and write iProperties (iproperty: title, author, part number, description, custom properties); " +
         "compute mass properties (mass, volume, surface area, center of gravity, bounding box) and material; " +
@@ -23,7 +24,10 @@ public static class ServerInstructions
         "inventor_get_current_target reports the selected target. Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
         "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +
-        "inventor_send_code is DISABLED unless the server is started with --enable-send-code " +
-        "(or BIMWRIGHT_INVENTOR_ENABLE_SEND_CODE=1) AND the add-in opts in via " +
-        "BIMWRIGHT_INVENTOR_PLUGIN_ENABLE_SEND_CODE=1.";
+        "Activity toasts group tool calls; they do not indicate that a whole job is finished. " +
+        "If inventor_report_task_result is available, call it once when the requested job is verified complete, failed or cancelled, " +
+        "with a unique agent/job task_id and a truthful concise summary. Never infer success from idle time or a single successful tool. " +
+        "inventor_send_code is enabled by default. Use --disable-send-code to disable it; " +
+        "--read-only and toolset filters always hide code execution. The add-in requires no extra opt-in; " +
+        "BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1 is an optional host-side kill switch.";
 }

@@ -97,7 +97,6 @@ public sealed class TcpTransportServer : ITransportServer
     private void HandleClient(TcpClient client)
     {
         client.ReceiveTimeout = 120000;
-        _clientConnected = true;
         try
         {
             var stream = client.GetStream();
@@ -143,6 +142,7 @@ public sealed class TcpTransportServer : ITransportServer
                     TryWrite(writer, ErrorJson(id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token."));
                     break; // drop the connection on auth failure
                 }
+                _clientConnected = true;   // authenticated attach — ConnectionWatch fires on this edge
 
                 var now = DateTime.UtcNow;
                 while (requestTimestamps.Count > 0 && (now - requestTimestamps.Peek()) > rateLimitWindow)

@@ -1,19 +1,30 @@
 name: build
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
+  public-tree:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject internal documentation and diagnostics
+        shell: pwsh
+        run: ./scripts/check-public-tree.ps1
+
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
       # The MCP server and unit tests are net8.0 and need no Inventor SDK,
       # so they build and run on any runner. The per-version add-ins require
       # the Inventor interop assemblies and are built on a prepared Windows box.
@@ -21,3 +32,38 @@ jobs:
         run: dotnet build src/server -c Release
       - name: Test (server-only)
         run: dotnet test tests/Bimwright.Ipt.Tests -c Release
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test every MCP tool over isolated stdio
+        run: python tests/stdio/release-contract.py --server src/server/bin/Release/net8.0/Bimwright.Ipt.Server.dll --output artifacts/stdio
+      # The host-free toast model tests are part of Bimwright.Ipt.Tests above. Two WPF checks follow:
+      # the card regression harness shared with rvt-mcp and dwg-mcp (a console app, exit code 0 = pass),
+      # and the Inventor toast host tests on net48, net8 and net10. windows-latest supplies
+      # .NET Framework 4.8, and setup-dotnet installs both modern SDKs.
+      - name: Toast card regression (WPF harness)
+        run: dotnet run --project tests/Bimwright.Ipt.Toast.Tests -c Release
+      - name: Test (toast host, WPF)
+        run: dotnet test tests/Bimwright.Ipt.Toast.Wpf.Tests -c Release
+
+  installer:
+    name: installer-${{ matrix.shell }}
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test isolated upgrade, rollback and uninstall
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File ./tests/installer/upgrade.Tests.ps1 -ResultPath artifacts/installer-upgrade-${{ matrix.shell }}.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File ./tests/installer/uninstall.Tests.ps1 -ResultPath artifacts/installer-uninstall-${{ matrix.shell }}.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-${{ matrix.shell }}
+          path: artifacts/installer-*.json

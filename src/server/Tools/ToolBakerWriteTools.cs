@@ -15,6 +15,7 @@ namespace Bimwright.Ipt.Server.Tools;
 /// dismiss/snooze suggestions. Ported from nwd-mcp.
 /// </summary>
 [McpServerToolType]
+[Toolset("toolbaker_write")]
 public sealed class ToolBakerWriteTools
 {
     private readonly PluginClient _client;
@@ -26,7 +27,7 @@ public sealed class ToolBakerWriteTools
         _config = config;
     }
 
-    [McpServerTool(Name = "inventor_run_baked_tool"), Description("Execute a registered baked Inventor tool by name with JSON parameters.")]
+    [McpServerTool(Name = "inventor_run_baked_tool", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Execute a registered baked Inventor tool by name with JSON parameters and update its local usage statistics.")]
     public async Task<string> RunBakedTool(string name, string paramsJson, CancellationToken ct)
     {
         JObject parsed;
@@ -36,7 +37,7 @@ public sealed class ToolBakerWriteTools
         }
         catch (JsonException ex)
         {
-            return JsonConvert.SerializeObject(new { ok = false, error = new { code = "INVALID_ARGUMENT", message = "params must be a JSON object: " + ex.Message } }, Formatting.Indented);
+            return ToolResponse.Error("INVALID_ARGUMENT", "params must be a JSON object: " + ex.Message);
         }
 
         BakePaths.EnsureDir(_config);
@@ -45,21 +46,21 @@ public sealed class ToolBakerWriteTools
         var record = db.GetRegistryRecord(name);
         if (record == null)
         {
-            return JsonConvert.SerializeObject(new { ok = false, error = new { code = "INVALID_ARGUMENT", message = "baked tool not found: " + name } }, Formatting.Indented);
+            return ToolResponse.Error("INVALID_ARGUMENT", "baked tool not found: " + name);
         }
 
         try
         {
             var data = await _client.SendAsync("run_baked_tool", new { name, @params = parsed, tool_record = JObject.FromObject(record) }, ct);
-            return JsonConvert.SerializeObject(data, Formatting.Indented);
+            return ToolResponse.Serialize(data);
         }
         catch (InventorGatewayException ex)
         {
-            return JsonConvert.SerializeObject(new { ok = false, error = new { code = ex.Code, message = ex.Message } }, Formatting.Indented);
+            return ToolResponse.Error(ex.Code, ex.Message);
         }
     }
 
-    [McpServerTool(Name = "inventor_accept_bake_suggestion"), Description("Accept a suggested workflow to compile it into a verified, registered baked Inventor tool.")]
+    [McpServerTool(Name = "inventor_accept_bake_suggestion", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Accept a suggested workflow to compile it into a verified, registered baked Inventor tool.")]
     public async Task<string> AcceptBakeSuggestion(string suggestionId, string desiredName, CancellationToken ct)
     {
         BakePaths.EnsureDir(_config);
@@ -78,7 +79,7 @@ public sealed class ToolBakerWriteTools
             });
     }
 
-    [McpServerTool(Name = "inventor_dismiss_bake_suggestion"), Description("Dismiss or snooze an active ToolBaker suggestion.")]
+    [McpServerTool(Name = "inventor_dismiss_bake_suggestion", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false), Description("Dismiss or snooze an active ToolBaker suggestion.")]
     public Task<string> DismissBakeSuggestion(string suggestionId, CancellationToken ct)
     {
         BakePaths.EnsureDir(_config);

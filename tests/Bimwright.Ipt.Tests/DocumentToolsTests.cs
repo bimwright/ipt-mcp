@@ -16,8 +16,12 @@ public sealed class DocumentToolsTests
     private static readonly string[] ExpectedQueryTools =
     {
         "inventor_health",
+        "inventor_report_task_result",
         "inventor_list_open_documents",
         "inventor_get_document_info",
+        "inventor_list_bodies",
+        "inventor_list_features",
+        "inventor_probe_brep",
     };
 
     private static readonly string[] ExpectedDocumentWriteTools =
@@ -29,6 +33,9 @@ public sealed class DocumentToolsTests
         "inventor_close_document",
         "inventor_set_units",
         "inventor_set_material",
+        "inventor_save_all",
+        "inventor_open_documents",
+        "inventor_close_documents",
     };
 
     private static string[] ToolNamesOf(Type t)

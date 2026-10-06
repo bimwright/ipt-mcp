@@ -28,6 +28,43 @@ public sealed class InventorGatewayException : Exception
 /// </summary>
 public sealed class PluginClient
 {
+    private static readonly System.Threading.AsyncLocal<System.Runtime.CompilerServices.StrongBox<bool>?> ForwardedCall = new();
+    private static readonly AsyncLocal<string?> ActivityCommand = new();
+    internal static System.Runtime.CompilerServices.StrongBox<bool> BeginActivity(string? toolName)
+    {
+        ActivityCommand.Value = toolName?.StartsWith("inventor_", StringComparison.Ordinal) == true ? toolName.Substring(9) : toolName;
+        return ForwardedCall.Value = new System.Runtime.CompilerServices.StrongBox<bool>(false);
+    }
+
+    internal async Task ReportServerActivityAsync(string name, object? arguments,
+        ModelContextProtocol.Protocol.CallToolResult? result, string? error, long durationMs)
+    {
+        var target = CurrentTarget;
+        if (target == null) return;
+        try
+        {
+            var command = name.StartsWith("inventor_", StringComparison.Ordinal) ? name.Substring(9) : name;
+            var text = result?.Content?.OfType<ModelContextProtocol.Protocol.TextContentBlock>().FirstOrDefault()?.Text;
+            JToken? data = null;
+            try { if (text != null) data = JToken.Parse(text); } catch (JsonReaderException) { }
+            if (text?.Length > 10240) data = new JObject { ["summary"] = "Output returned to the MCP client", ["response_bytes"] = Encoding.UTF8.GetByteCount(text) };
+            var envelope = new InventorCommandEnvelope {
+                Id = Guid.NewGuid(), Command = "report_tool_activity", AuthToken = target.AuthToken,
+                TimeoutMs = 300, RecordCalls = _config.EnableCallLog,
+                Tool = ToolCatalog.ForCommand(command, _config.TimeoutMs),
+                Params = new JObject {
+                    ["command"] = command, ["ok"] = error == null && result?.IsError != true,
+                    ["arguments"] = arguments == null ? null : JToken.FromObject(ServerLogger.MaskParams(arguments)!),
+                    ["result"] = data, ["error"] = error, ["duration_ms"] = durationMs
+                }
+            };
+            using var timeout = new CancellationTokenSource(300);
+            await SendLineAsync(target, JsonConvert.SerializeObject(envelope) + "\n", timeout.Token, 300);
+        }
+        catch { /* Activity delivery must not change a server-only tool's result. */ }
+    }
+    private static readonly Lazy<JObject> SetupIdentity = new(() => SetupRuntimeIdentity.Capture(
+        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"), typeof(PluginClient).Assembly, "gateway"));
     private readonly InventorMcpConfig _config;
     private readonly TargetRegistry _registry;
     private TargetDescriptor? _current;
@@ -73,61 +110,109 @@ public sealed class PluginClient
         return true;
     }
 
-    public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct)
+    /// <summary>
+    /// Per-call STA budget (spec F2-b): the envelope carries <paramref name="timeoutMs"/> and the
+    /// add-in's <c>task.Wait</c> is the single owner of the TIMEOUT decision. The transport waits
+    /// an extra 5 s so the add-in's own TIMEOUT response reaches the client first.
+    /// </summary>
+    internal static int ResolveEffectiveTimeout(int configuredMs, int? requestedMs)
     {
-        var target = CurrentTarget ?? throw new InventorGatewayException(
-            InventorErrorCodes.NO_TARGET,
-            "No live Inventor target. Start Inventor with the bimwright add-in loaded.");
+        var t = requestedMs ?? configuredMs;
+        if (t < 1) t = 1;
+        return t > 600_000 ? 600_000 : t;
+    }
 
-        var env = new InventorCommandEnvelope
-        {
-            Id = Guid.NewGuid(),
-            Command = command,
-            Params = parameters as JObject ?? JObject.FromObject(parameters),
-            TimeoutMs = _config.TimeoutMs,
-            AuthToken = target.AuthToken,
-            ReadOnly = _config.ReadOnly
-        };
+    private const int TransportGraceMs = 5000;
 
-        var requestId = env.Id.ToString("N");
+    /// <param name="logParams">What the journal records instead of <paramref name="parameters"/> — send_code
+    /// passes its params with module bodies replaced by name+hash, so helper code is not re-logged on every call.</param>
+    public async Task<JToken> SendAsync(string command, object parameters, CancellationToken ct, int? timeoutMs = null,
+        JObject? logParams = null)
+    {
+        if (ForwardedCall.Value is { } activity) activity.Value = true;
+        // LogStart before target resolution so NO_TARGET calls still leave a journal entry (spec F1-R1).
+        var requestId = Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
-        ServerLogger.LogStart(requestId, command, env.Params);
+        var @params = parameters as JObject ?? JObject.FromObject(parameters);
+        ServerLogger.LogStart(requestId, command, logParams ?? @params);
         var ok = false;
         string? err = null;
+        string? errCode = null;
+        string? targetId = null;
+        long? responseBytes = null;
+        long? pluginDurationMs = null;
+        JToken? data = null;
         try
         {
+            var target = CurrentTarget ?? throw new InventorGatewayException(
+                InventorErrorCodes.NO_TARGET,
+                "No live Inventor target. Start Inventor with the bimwright add-in loaded.");
+            targetId = target.TargetId;
+
+            var effectiveTimeoutMs = ResolveEffectiveTimeout(_config.TimeoutMs, timeoutMs);
+            var env = new InventorCommandEnvelope
+            {
+                Id = new Guid(requestId),
+                Command = command,
+                Params = @params,
+                TimeoutMs = effectiveTimeoutMs,
+                AuthToken = target.AuthToken,
+                ReadOnly = _config.ReadOnly,
+                RecordCalls = _config.EnableCallLog,
+                SpillRetentionHours = _config.SpillRetentionHours,
+                Tool = ToolCatalog.ForCommand(ActivityCommand.Value ?? command, effectiveTimeoutMs)
+            };
+
             var line = JsonConvert.SerializeObject(env) + "\n";
-            var response = await SendLineAsync(target, line, ct);
+            var response = await SendLineAsync(target, line, ct, effectiveTimeoutMs);
+            responseBytes = Encoding.UTF8.GetByteCount(response);
 
             var result = JsonConvert.DeserializeObject<InventorCommandResult>(response)
                          ?? throw new InventorGatewayException(InventorErrorCodes.API_ERROR, "unparseable response");
+            // "meta": null in the wire JSON overrides the initializer, so guard before reading it.
+            targetId = result.Meta?.TargetId ?? targetId;
+            pluginDurationMs = result.Meta?.DurationMs;
+            data = result.Data;
             if (!result.Ok)
             {
                 var code = result.Error?.Code ?? InventorErrorCodes.API_ERROR;
                 var message = result.Error?.Message ?? "unknown error";
                 err = code + ": " + message;
+                errCode = code;
+                // Drawing failures may contain rollback/partial-file effects. Preserve them
+                // for the caller while the journal still records a failed invocation.
+                if (DrawingInput.Commands.Contains(command) && result.Data is JObject drawing && drawing.Value<bool?>("ok") == false)
+                    return drawing;
                 throw new InventorGatewayException(code, message);
             }
 
             ok = true;
+            if (command == "health" && result.Data is JObject healthData)
+                healthData["setup_gateway"] = SetupIdentity.Value.DeepClone();
             return result.Data ?? JValue.CreateNull();
         }
         catch (Exception ex)
         {
             err ??= ex.Message;
+            errCode = (ex as InventorGatewayException)?.Code;
             throw;
         }
         finally
         {
             sw.Stop();
-            ServerLogger.LogFinish(requestId, command, ok, sw.ElapsedMilliseconds, err);
+            ServerLogger.LogFinish(requestId, command, ok, sw.ElapsedMilliseconds, err, errCode, targetId,
+                responseBytes, pluginDurationMs, data);
         }
     }
 
-    private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct)
+    private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct, int timeoutMs)
     {
         Stream stream;
         IDisposable owner;
+
+        // Connect is transport setup, not the STA budget — keep a floor so a pathological
+        // timeout_ms (clamped to 1) cannot starve the loopback handshake.
+        var connectBudgetMs = Math.Max(timeoutMs, TransportGraceMs);
 
         if (string.Equals(target.Transport, "pipe", StringComparison.OrdinalIgnoreCase))
         {
@@ -136,7 +221,7 @@ public sealed class PluginClient
             try
             {
                 var connect = pipe.ConnectAsync(ct);
-                if (await Task.WhenAny(connect, Task.Delay(_config.TimeoutMs, ct)) != connect)
+                if (await Task.WhenAny(connect, Task.Delay(connectBudgetMs, ct)) != connect)
                     throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"connect to target {target.TargetId} timed out");
                 await connect;
             }
@@ -155,7 +240,7 @@ public sealed class PluginClient
             try
             {
                 var connect = client.ConnectAsync("127.0.0.1", target.Port);
-                if (await Task.WhenAny(connect, Task.Delay(_config.TimeoutMs, ct)) != connect)
+                if (await Task.WhenAny(connect, Task.Delay(connectBudgetMs, ct)) != connect)
                     throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"connect to target {target.TargetId} timed out");
                 await connect;
             }
@@ -174,9 +259,12 @@ public sealed class PluginClient
             await stream.WriteAsync(Encoding.UTF8.GetBytes(line), ct);
 
             using var reader = new StreamReader(stream, Encoding.UTF8);
+            // Grace: the add-in declares TIMEOUT at timeoutMs; wait a little longer so its
+            // error response (which carries the useful send_code guidance) reaches us first.
             var readTask = NdjsonLineReader.ReadLineBoundedAsync(reader, _config.MaxResponseBytes);
-            if (await Task.WhenAny(readTask, Task.Delay(_config.TimeoutMs, ct)) != readTask)
-                throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"request {target.TargetId} timed out after {_config.TimeoutMs} ms");
+            if (await Task.WhenAny(readTask, Task.Delay(timeoutMs + TransportGraceMs, ct)) != readTask)
+                throw new InventorGatewayException(InventorErrorCodes.TIMEOUT,
+                    $"add-in did not respond within {timeoutMs + TransportGraceMs} ms (command budget {timeoutMs} ms)");
             var read = await readTask;
             if (read.Overflow)
                 throw new InventorGatewayException(InventorErrorCodes.RESPONSE_TOO_LARGE, $"add-in response exceeded {_config.MaxResponseBytes} bytes");

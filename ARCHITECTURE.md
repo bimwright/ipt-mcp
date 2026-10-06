@@ -28,7 +28,7 @@ Inventor has **no `ExternalEvent`** — the mechanism `rvt-mcp` relies on to hop
 
 - During the add-in's `Activate` (which runs on Inventor's STA thread), the dispatcher creates a **hidden, message-only WinForms `Control`** and forces its window handle to be created so `BeginInvoke` works.
 - The TCP / Named-Pipe **listener runs on a background thread** and never touches the Inventor API directly.
-- Each request is dispatched via `InventorStaDispatcher.InvokeAsync(work, timeoutMs)`, which posts the work through `Control.BeginInvoke` so it executes on the STA (UI) thread, and awaits the result with a timeout.
+- Each request is dispatched via `InventorStaDispatcher.InvokeAsync(work)`, which posts the work through `Control.BeginInvoke` so it executes on the STA (UI) thread; `HandleLine` awaits the result with the `env.TimeoutMs` budget and owns the TIMEOUT decision.
 - `CommandDispatcher.Dispatch` runs **inside** `InvokeAsync`, so every `Inventor.Application` access is STA-bound by construction. The listener thread only ever reaches the marshalled state via `BeginInvoke`.
 - On shutdown (`Deactivate`): dispose the transport, dispose the dispatcher, null out the cached `Application`, and `GC.Collect()` to release the COM references.
 
@@ -102,7 +102,7 @@ Canonical error codes (`InventorErrorCodes`) returned in `error.code`:
 
 `NO_TARGET`, `TARGET_UNAVAILABLE`, `NO_DOCUMENT`, `WRONG_DOCUMENT_TYPE`, `INVALID_ARGUMENT`, `UNSUPPORTED_HOST`, `API_ERROR`, `TIMEOUT`, `RESPONSE_TOO_LARGE`, `READ_ONLY`, `SEND_CODE_DISABLED`, `UNAUTHORIZED`.
 
-The `CommandDispatcher` is the add-in-side line of defense: a write command under `--read-only` → `READ_ONLY`; `send_code` without both opt-in gates → `SEND_CODE_DISABLED`; an unknown command → `INVALID_ARGUMENT`; an oversized response → `RESPONSE_TOO_LARGE`; any handler throw → a sanitized `API_ERROR`.
+The `CommandDispatcher` is the add-in-side line of defense: a write command under `--read-only` → `READ_ONLY`; `send_code` with the host kill switch enabled → `SEND_CODE_DISABLED`; an unknown command → `INVALID_ARGUMENT`; an oversized response → `RESPONSE_TOO_LARGE`; any handler throw → a sanitized `API_ERROR`.
 
 ## Handler contract and units
 
@@ -150,7 +150,7 @@ Default per-request timeout is 30s. The listener cancels pending requests on add
 
 ## Progressive disclosure & gates
 
-The full surface is 58 tools across 13 toolsets by default, or 59 tools when `inventor_send_code` is enabled. Tools are grouped into `[McpServerToolType]` classes by domain. `Program.ResolveToolTypesForRegistration(cfg)` maps each enabled toolset to its tool type and de-dups (`DocumentTools` maps to both `query` and `document`), then registers only those, so disabled tools never appear in `tools/list`. Assembly composition lives in write-capable `assembly`; numeric verification lives in read-only `assembly_query`. `ToolsetFilter.Resolve` handles defaults, the `all` shortcut, silent dropping of unknown names, the `code`/`toolbaker` gates, and `--read-only` post-processing (strips every `WriteCapable` toolset). `ServerInstructions.Text` is keyword-dense so MCP Tool Search can discover the surface.
+The full surface is 84 tools across 13 toolsets by default, or 88 tools when the `code` toolset (`inventor_send_code` + 3 code-module tools) is enabled. Tools are grouped into `[McpServerToolType]` classes by domain. `Program.ResolveToolTypesForRegistration(cfg)` maps each enabled toolset to its tool type and de-dups (`query` maps to `QueryTools`, `document` to `DocumentTools`), then registers only those, so disabled tools never appear in `tools/list`. Assembly composition lives in write-capable `assembly`; numeric verification lives in read-only `assembly_query`. `ToolsetFilter.Resolve` handles defaults, the `all` shortcut, silent dropping of unknown names, the `code`/`toolbaker` gates, and `--read-only` post-processing (strips every `WriteCapable` toolset). `ServerInstructions.Text` is keyword-dense so MCP Tool Search can discover the surface.
 
 ## Configuration precedence
 

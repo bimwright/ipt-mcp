@@ -22,6 +22,9 @@ public static partial class InventorCommandRegistry
         add(new CloseDocumentHandler());
         add(new SetUnitsHandler());
         add(new SetMaterialHandler());
+        add(new SaveAllHandler());
+        add(new OpenDocumentsHandler());
+        add(new CloseDocumentsHandler());
     }
 }
 #endif
