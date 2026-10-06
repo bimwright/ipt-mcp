@@ -34,7 +34,7 @@ public sealed class ILogicTools
         => Call("ilogic_get_rule", Doc(document, ("name", name)), ct);
 
     [McpServerTool(Name = "inventor_ilogic_read_log", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Read the tail of the file-backed iLogic log (LogControl.FullFileName, session-wide — not document-scoped). max_chars: tail length (default 65536, 0 = whole file). Text is secret-masked. Use after run tools to see Logger.Info output and rule errors.")]
+     Description("Read the tail of the file-backed iLogic log (LogControl.FullFileName, session-wide — not document-scoped). max_chars: tail length (default 65536, 0 = whole file). Text is secret-masked. The file log is only populated when this machine's iLogicLogger.config enables file output — when empty, rule diagnostics still arrive in the returned exceptions[] array (iLogic's structured RuleExceptionsLog: rule, line, context, message).")]
     public Task<string> ReadLog(int? max_chars = null, CancellationToken ct = default)
     {
         var p = new JObject();
@@ -43,7 +43,7 @@ public sealed class ILogicTools
     }
 
     [McpServerTool(Name = "inventor_ilogic_run_rule", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
-     Description("Run an internal iLogic rule already stored in the target document (the rule's own side effects apply — parameters, features, saves). name required; arguments: flat object → Inventor NameValueMap for RunRuleWithArguments; document scopes to a document in memory; silent=true suppresses host prompts.")]
+     Description("Run an internal iLogic rule already stored in the target document (the rule's own side effects apply — parameters, features, saves). name required; arguments: flat object → Inventor NameValueMap for RunRuleWithArguments (readable in the rule via RuleArguments(\"key\")); document scopes to a document in memory; silent=true suppresses host prompts. Rule errors surface in exceptions[] (iLogic RuleExceptionsLog).")]
     public Task<string> RunRule(string name, string? document = null, JObject? arguments = null, bool silent = false, CancellationToken ct = default)
         => Call("ilogic_run_rule", Doc(document, ("name", name), ("arguments", arguments), ("silent", silent)), ct);
 
@@ -53,7 +53,7 @@ public sealed class ILogicTools
         => Call("ilogic_run_external_rule", Doc(document, ("name", name), ("arguments", arguments), ("silent", silent)), ct);
 
     [McpServerTool(Name = "inventor_ilogic_upsert_rule", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false),
-     Description("Create or replace an internal iLogic rule's VB text in the target document. Existing rule: sets text without running (auto_ran:false). New rule: iLogic's AddRule compiles AND runs it once (auto_ran:true — cannot be suppressed). run=true additionally runs the rule after upsert. Requires: name, text.")]
+     Description("Create or replace an internal iLogic rule's VB text in the target document. Existing rule: sets text without running (auto_ran:false). New rule: iLogic's AddRule compiles AND runs it once (auto_ran:true — cannot be suppressed). run=true additionally runs the rule after upsert. Compile/runtime errors surface in exceptions[] (iLogic RuleExceptionsLog). Requires: name, text.")]
     public Task<string> UpsertRule(string name, string text, string? document = null, bool run = false, bool silent = false, CancellationToken ct = default)
         => Call("ilogic_upsert_rule", Doc(document, ("name", name), ("text", text), ("run", run), ("silent", silent)), ct);
 

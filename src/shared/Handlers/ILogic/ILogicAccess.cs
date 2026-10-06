@@ -15,6 +15,9 @@ internal abstract class ILogicAccess
 {
     internal sealed record RuleInfo(string Name, bool IsActive, bool IsCodeblocks);
 
+    /// <summary>One entry from iLogic's structured <c>RuleExceptionsLog</c>.</summary>
+    internal sealed record RuleExceptionInfo(string RuleName, int LineNumber, string? Context, string Message);
+
     /// <summary>Rules stored in the document (external rules are not listed).</summary>
     internal abstract IReadOnlyList<RuleInfo> GetRules(global::Inventor.Document doc);
 
@@ -41,5 +44,15 @@ internal abstract class ILogicAccess
 
     /// <summary>iLogic-side dialog suppression (independent of Inventor's SilentOperation).</summary>
     internal abstract bool SilentOperation { get; set; }
+
+    /// <summary>
+    /// Snapshot of <c>RuleExceptionsLog.Exceptions</c> — the only reliable structured channel when
+    /// <c>Logger.Info</c> output is not file-backed on this machine (iLogicLogger.config-driven).
+    /// Never throws: unavailable log → empty list.
+    /// </summary>
+    internal abstract IReadOnlyList<RuleExceptionInfo> GetExceptions();
+
+    /// <summary>Clears <c>RuleExceptionsLog</c>; used by run handlers after draining entries.</summary>
+    internal abstract void ClearExceptions();
 }
 #endif

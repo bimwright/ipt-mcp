@@ -52,6 +52,7 @@ public sealed class ILogicRunRuleHandler : HandlerBase, IInventorCommand
                 ["rule"] = name,
                 ["scope"] = "internal",
                 ["result"] = result,
+                ["exceptions"] = ILogicBridge.DrainExceptions(ilogic),
             });
         }
         catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message); }

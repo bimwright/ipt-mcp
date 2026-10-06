@@ -61,6 +61,26 @@ internal static class ILogicBridge
         return true;
     }
 
+    /// <summary>
+    /// Drains <c>RuleExceptionsLog</c> into a JArray of <c>{rule, line, context, message}</c> and
+    /// clears it — run handlers call this after the rule so stale entries never bleed into the next
+    /// call. Secret-masked like log text (rule code may embed paths/values).
+    /// </summary>
+    internal static JArray DrainExceptions(ILogicAccess ilogic)
+    {
+        var arr = new JArray();
+        foreach (var e in ilogic.GetExceptions())
+            arr.Add(new JObject
+            {
+                ["rule"] = e.RuleName,
+                ["line"] = e.LineNumber,
+                ["context"] = e.Context,
+                ["message"] = e.Message,
+            });
+        if (arr.Count > 0) ilogic.ClearExceptions();
+        return arr;
+    }
+
     /// <summary>Builds an Inventor <c>NameValueMap</c> from a flat JSON object for rule arguments.</summary>
     internal static object? BuildArguments(Application app, JObject? p)
     {

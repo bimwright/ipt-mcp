@@ -37,7 +37,18 @@ public sealed class ILogicReadLogHandler : HandlerBase, IInventorCommand
         {
             var path = ilogic!.LogFullFileName;
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
-                return Ok(ctx, new JObject { ["log_file"] = path, ["text"] = "", ["truncated"] = false });
+            {
+                return Ok(ctx, new JObject
+                {
+                    ["log_file"] = path,
+                    ["text"] = "",
+                    ["truncated"] = false,
+                    ["exceptions"] = ExceptionsSnapshot(ilogic),
+                    ["note"] = "iLogic file log is empty or not file-backed on this machine " +
+                        "(iLogicLogger.config-dependent); Logger.* output goes to the iLogic pane " +
+                        "instead. Rule exceptions are still captured in 'exceptions'.",
+                });
+            }
 
             string text;
             long length;
@@ -61,9 +72,25 @@ public sealed class ILogicReadLogHandler : HandlerBase, IInventorCommand
                 ["log_bytes"] = length,
                 ["text"] = SecretMasker.Mask(text),
                 ["truncated"] = truncated,
+                ["exceptions"] = ExceptionsSnapshot(ilogic),
             });
         }
         catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message); }
+    }
+
+    /// <summary>Read-only snapshot of <c>RuleExceptionsLog</c> — never clears (this is a query).</summary>
+    private static JArray ExceptionsSnapshot(ILogicAccess ilogic)
+    {
+        var arr = new JArray();
+        foreach (var e in ilogic.GetExceptions())
+            arr.Add(new JObject
+            {
+                ["rule"] = e.RuleName,
+                ["line"] = e.LineNumber,
+                ["context"] = e.Context,
+                ["message"] = e.Message,
+            });
+        return arr;
     }
 }
 #endif

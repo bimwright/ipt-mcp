@@ -14,9 +14,13 @@ namespace Bimwright.Ipt.Shared.Handlers.ILogic;
 /// Send-code-grade: only registered when <c>EnableSendCode</c> and additionally fenced in the
 /// dispatcher. Uses the temp-rule pattern — <c>AddRule</c> compiles and runs, then
 /// <c>try/finally DeleteRule</c>; before creating one it sweeps stale <c>TempMCPRule_*</c> residue
-/// left by interrupted runs so agent VB never stays embedded in a customer document. If the
-/// snippet logs <c>MCP_RESULT_BEGIN…MCP_RESULT_END</c> via <c>Logger.Info</c>, the last marker is
-/// scraped from the iLogic log and returned as <c>result</c> (secret-masked).
+/// left by interrupted runs so agent VB never stays embedded in a customer document. Result
+/// channel: the snippet returns a value via the iLogic-safe custom iProperty
+/// <c>iProperties.Value("Custom", "MCP_RESULT") = "..."</c>, which this handler reads back and
+/// deletes (iLogic's safety scanner blocks <c>System.IO</c>, so file transport is not an option).
+/// Fallback: a <c>MCP_RESULT_BEGIN…MCP_RESULT_END</c> marker via <c>Logger.Info</c> is scraped when
+/// this machine file-backs the iLogic log (<c>iLogicLogger.config</c>-dependent). Rule failures
+/// surface as <c>exceptions</c> drained from iLogic's <c>RuleExceptionsLog</c>.
 /// </summary>
 public sealed class ILogicRunSnippetHandler : HandlerBase, IInventorCommand
 {
@@ -26,7 +30,10 @@ public sealed class ILogicRunSnippetHandler : HandlerBase, IInventorCommand
     internal const string TempRulePrefix = "TempMCPRule_";
     internal const string ResultBegin = "MCP_RESULT_BEGIN";
     internal const string ResultEnd = "MCP_RESULT_END";
+    internal const string ResultPropSet = "Inventor User Defined Properties";
+    internal const string ResultPropName = "MCP_RESULT";
     private const int LogTailChars = 262144;
+    private const int ResultMaxChars = 65536;
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
@@ -74,7 +81,8 @@ public sealed class ILogicRunSnippetHandler : HandlerBase, IInventorCommand
                 ["ran"] = true,
                 ["rule_deleted"] = deleted,
                 ["residue_swept"] = swept,
-                ["result"] = ScrapeResultMarker(ilogic),
+                ["result"] = ReadResultProperty(doc) ?? ScrapeResultMarker(ilogic),
+                ["exceptions"] = ILogicBridge.DrainExceptions(ilogic),
             });
         }
         catch (Exception ex)
@@ -85,9 +93,47 @@ public sealed class ILogicRunSnippetHandler : HandlerBase, IInventorCommand
             {
                 d["rule_deleted"] = deleted;
                 d["residue_swept"] = swept;
+                try { d["exceptions"] = ILogicBridge.DrainExceptions(ilogic!); } catch { }
             }
             return err;
         }
+        finally
+        {
+            // Always sweep the result iProperty too — a snippet that sets it must not leak it
+            // into a customer document.
+            try { DeleteResultProperty(doc); } catch { }
+        }
+    }
+
+    /// <summary>Reads + deletes the <c>MCP_RESULT</c> custom iProperty; null when unset.</summary>
+    private static string? ReadResultProperty(global::Inventor.Document doc)
+    {
+        var prop = FindResultProperty(doc);
+        if (prop is null) return null;
+        try
+        {
+            var text = prop.Value?.ToString();
+            try { prop.Delete(); } catch { }
+            if (string.IsNullOrEmpty(text)) return null;
+            if (text!.Length > ResultMaxChars) text = text.Substring(0, ResultMaxChars);
+            return SecretMasker.Mask(text);
+        }
+        catch { return null; }
+    }
+
+    private static void DeleteResultProperty(global::Inventor.Document doc)
+    {
+        try { FindResultProperty(doc)?.Delete(); } catch { }
+    }
+
+    private static Property? FindResultProperty(global::Inventor.Document doc)
+    {
+        try
+        {
+            var set = Handlers.Properties.PropertyAccess.FindSet(doc, ResultPropSet);
+            return set is null ? null : Handlers.Properties.PropertyAccess.FindProperty(set, ResultPropName);
+        }
+        catch { return null; }
     }
 
     /// <summary>Last <c>MCP_RESULT_BEGIN…MCP_RESULT_END</c> payload in the iLogic log tail, or null.</summary>

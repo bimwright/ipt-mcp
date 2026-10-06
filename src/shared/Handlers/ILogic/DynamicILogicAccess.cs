@@ -64,5 +64,24 @@ internal sealed class DynamicILogicAccess : ILogicAccess
         get => (bool)_a.SilentOperation;
         set => _a.SilentOperation = value;
     }
+
+    internal override IReadOnlyList<RuleExceptionInfo> GetExceptions()
+    {
+        var list = new List<RuleExceptionInfo>();
+        try
+        {
+            if (_a.RuleExceptionsLog?.Exceptions is not IEnumerable entries) return list;
+            foreach (dynamic e in entries)
+                list.Add(new RuleExceptionInfo((string)(e.RuleName ?? ""), (int)e.LineNumber,
+                    (string?)e.Context?.ToString(), (string)(e.Message ?? "")));
+        }
+        catch { }
+        return list;
+    }
+
+    internal override void ClearExceptions()
+    {
+        try { _a.RuleExceptionsLog?.Clear(); } catch { }
+    }
 }
 #endif

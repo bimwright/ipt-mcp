@@ -81,7 +81,7 @@ public sealed class ListFacesHandler : HandlerBase, IInventorCommand
                     }
                     try
                     {
-                        var rb = f.SurfaceBody.RangeBox;
+                        var rb = f.Evaluator.RangeBox;
                         row["bbox_mm"] = new JObject
                         {
                             ["min"] = new JArray(UnitConvert.CmToMm(rb.MinPoint.X), UnitConvert.CmToMm(rb.MinPoint.Y), UnitConvert.CmToMm(rb.MinPoint.Z)),

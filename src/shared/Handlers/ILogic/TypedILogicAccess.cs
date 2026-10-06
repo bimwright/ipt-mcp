@@ -63,5 +63,23 @@ internal sealed class TypedILogicAccess : ILogicAccess
         get => _a.SilentOperation;
         set => _a.SilentOperation = value;
     }
+
+    internal override IReadOnlyList<RuleExceptionInfo> GetExceptions()
+    {
+        var list = new List<RuleExceptionInfo>();
+        try
+        {
+            if (_a.RuleExceptionsLog?.Exceptions is not System.Collections.IEnumerable entries) return list;
+            foreach (ExceptionLogEntry e in entries)
+                list.Add(new RuleExceptionInfo(e.RuleName ?? "", e.LineNumber, e.Context.ToString(), e.Message ?? ""));
+        }
+        catch { }
+        return list;
+    }
+
+    internal override void ClearExceptions()
+    {
+        try { _a.RuleExceptionsLog?.Clear(); } catch { }
+    }
 }
 #endif

@@ -68,6 +68,7 @@ public sealed class ILogicUpsertRuleHandler : HandlerBase, IInventorCommand
                 ["created"] = created,
                 ["auto_ran"] = autoRan,
                 ["ran"] = run || autoRan,
+                ["exceptions"] = ILogicBridge.DrainExceptions(ilogic),
             });
         }
         catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message); }
