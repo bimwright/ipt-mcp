@@ -168,9 +168,13 @@ Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/draw
 
 ### query (7) — read-only document/health/model probes and agent outcome reports
 
+Start each Inventor session with `inventor_health` after selecting the intended target if needed. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use informational-version metadata, falling back to the component's module id. Full binary hashes remain in the setup identities.
+
+The default call is local and works offline. If the host is absent or unreachable, server identity is still returned alongside `ok:false`, `host_connected:false` and the original error; this is not a successful host probe. `check_updates=true` additionally queries the [official stable release endpoint](https://docs.github.com/en/rest/releases/releases#get-the-latest-release), with a five-second timeout and a 256 KiB metadata limit. `update.status` is `not_checked`, `checked` or `unknown`; `update_available` stays null when no reliable comparison is available. `comparison_basis=semantic_version` means this only checks for a newer release version; equal versions do not prove that a development build matches released binaries. The response includes update guidance, but never downloads a package or installs it. Follow [the install guide](AGENTS.md) for preview, authorization, rollback and restart verification.
+
 | Tool | Description |
 |---|---|
-| `inventor_health` | Probe the active add-in: inventor_year, process_id, whether a document is open, active document type, STA queue, and `modal_dialog {open, title}` when a dialog is blocking Inventor. |
+| `inventor_health` | Session-start probe: host connectivity, document/modal/STA state and MCP server/plugin versions and build identities. Offline by default; `check_updates=true` also checks the official stable release. |
 | `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`. No model changes. |
 | `inventor_list_open_documents` | List documents in memory: title, path, type, is_active, dirty, visible; optional `filter` / `dirty_only`. |
 | `inventor_get_document_info` | Title, full path, type and dirty flag of the active or a targeted document; `references=true` adds its file references (with missing flags). |

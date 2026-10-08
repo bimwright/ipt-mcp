@@ -22,8 +22,39 @@ public sealed class McpProtocolSmokeTests
             report["inputSchema"]!["required"]!.Values<string>().OrderBy(x => x).ToArray());
     }
 
-    private static async Task<JObject[]> RunProtocolHandshake()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task Health_schema_and_offline_identity_are_available_over_MCP_including_read_only(
+        bool readOnly, bool explicitArgument)
     {
+        var responses = await RunProtocolHandshake(checkHealth: true, readOnly: readOnly, explicitHealthArgument: explicitArgument);
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var health = Assert.Single(tools, tool => (string?)tool["name"] == "inventor_health");
+        Assert.Equal("boolean", (string?)health["inputSchema"]?["properties"]?["check_updates"]?["type"]);
+        Assert.DoesNotContain("check_updates", health["inputSchema"]?["required"]?.Values<string>() ?? Array.Empty<string>());
+        Assert.True(health["annotations"]!.Value<bool>("readOnlyHint"));
+        Assert.False(health["annotations"]!.Value<bool>("destructiveHint"));
+        Assert.True(health["annotations"]!.Value<bool>("openWorldHint"));
+        var result = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.False(result.Value<bool>("ok"));
+        Assert.False(result.Value<bool>("host_connected"));
+        Assert.Equal("NO_TARGET", (string?)result["error"]?["code"]);
+        Assert.Equal((string?)responses[0]["result"]?["serverInfo"]?["version"], (string?)result["mcp"]?["server_version"]);
+        Assert.NotEmpty(result["mcp"]!["server_build_id"]!.Value<string>()!);
+        Assert.Equal("not_checked", (string?)result["update"]?["status"]);
+    }
+
+    private sealed class Profile : IDisposable
+    {
+        internal string Root { get; } = Path.Combine(Path.GetTempPath(), "ipt-protocol-" + Guid.NewGuid().ToString("N"));
+        internal Profile() => Directory.CreateDirectory(Root);
+        public void Dispose() => Directory.Delete(Root, true);
+    }
+
+    private static async Task<JObject[]> RunProtocolHandshake(bool checkHealth = false, bool readOnly = false, bool explicitHealthArgument = false)
+    {
+        using var profile = new Profile();
         var serverAssembly = typeof(Program).Assembly.Location;
         var startInfo = new ProcessStartInfo
         {
@@ -36,6 +67,9 @@ public sealed class McpProtocolSmokeTests
             CreateNoWindow = true,
         };
         startInfo.ArgumentList.Add(serverAssembly);
+        startInfo.ArgumentList.Add("--local-app-data");
+        startInfo.ArgumentList.Add(profile.Root);
+        if (readOnly) startInfo.ArgumentList.Add("--read-only");
 
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start ipt-mcp server.");
         var stderrTask = process.StandardError.ReadToEndAsync();
@@ -46,6 +80,17 @@ public sealed class McpProtocolSmokeTests
         await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}""");
         await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""");
         var toolsList = await ReadJsonResponse(process, "tools/list");
+        JObject? ruleCall = null;
+        if (checkHealth)
+        {
+            var arguments = explicitHealthArgument ? new JObject { ["check_updates"] = false } : new JObject();
+            await process.StandardInput.WriteLineAsync(new JObject
+            {
+                ["jsonrpc"] = "2.0", ["id"] = 3, ["method"] = "tools/call",
+                ["params"] = new JObject { ["name"] = "inventor_health", ["arguments"] = arguments },
+            }.ToString(Newtonsoft.Json.Formatting.None));
+            ruleCall = await ReadJsonResponse(process, "health");
+        }
         process.StandardInput.Close();
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -62,7 +107,7 @@ public sealed class McpProtocolSmokeTests
         var stderr = await stderrTask;
         Assert.True(process.ExitCode == 0, "ipt-mcp server exited with code " + process.ExitCode + ". Stderr: " + stderr);
 
-        var responses = new[] { initialize, toolsList };
+        var responses = ruleCall is null ? new[] { initialize, toolsList } : new[] { initialize, toolsList, ruleCall };
 
         Assert.DoesNotContain(responses, r => r["error"]?["code"]?.Value<int>() == -32601);
         Assert.DoesNotContain(responses, r => r["error"] is not null);

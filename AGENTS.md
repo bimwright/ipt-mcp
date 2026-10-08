@@ -30,7 +30,7 @@ This file is machine-readable install instructions for AI coding agents (Claude 
    - Before running `install.ps1` without `-WhatIf`.
    - Before editing any MCP client config (show the exact command or diff first).
 4. **On any failure, verify rollback.** The installer restores the previous bundle and server on any caught error and reports retained `.iptmcp-rollback-*` backups if recovery fails. It never edits MCP client configs, so back up a client config yourself before editing it. Do not use full uninstall as an upgrade rollback: upgrades replace the bundle and server in place. Personal data is only removed with `-Purge`.
-5. **Verify before claiming done.** After connecting a client, run `tools/list` in it and confirm the single `ipt-mcp` entry responds, then call `inventor_list_available_targets` with no args.
+5. **Verify before claiming done.** After connecting a client, run `tools/list` and confirm the single `ipt-mcp` entry responds. Select the intended target if needed, then call `inventor_health` and verify `host_connected=true` and the running server/add-in identities. A target-registry entry alone does not verify a host connection.
 
 If the user explicitly says "skip the prompts, just install" — still do gate 1 (preview) and gate 5 (verify), but collapse gates 2 and 3 into a single upfront approval. **Never silently skip preview or verify.**
 
@@ -38,6 +38,12 @@ If the user explicitly says "skip the prompts, just install" — still do gate 1
 
 When the user's request may match a personal baked tool, call `inventor_list_baked_tools` first.
 Run accepted tools through `inventor_run_baked_tool` name=<tool_name>.
+
+### Session startup and version checks
+
+At the start of every Inventor session, select the intended target if multiple instances are present, then call `inventor_health`. It reports document/modal/STA state and `mcp` server/plugin versions, build ids, and version/revision alignment. Preserve `setup_gateway` and `setup_plugin` for full binary identities. Alignment is not proof of compatibility or publisher trust.
+
+The default call stays offline. Use `check_updates=true` to query the official stable release; `update.status=unknown` means the release could not be verified, not that no update exists. No target still returns the running server identity, with `ok:false` and `host_connected:false`. Health never installs updates. Follow the preview, approval and rollback steps below; do not automatically replace development builds or save/close documents to enable an update.
 
 ---
 
@@ -131,7 +137,7 @@ JSON-style clients usually take:
 
 1. **List tools.** Ask the host to call `tools/list` against the wired server — expect `inventor_list_available_targets`, `inventor_get_current_target`, and the default query/create/meta surface.
 
-2. **Handshake call.** With Inventor 2022–2027 running and a document open, call `inventor_get_current_target` with no args. A valid response names the pinned Inventor instance and its year.
+2. **Handshake call.** With Inventor 2022–2027 running, select the intended target if needed and call `inventor_health` with no args. Require `host_connected=true`; inspect `mcp` and the full runtime identities before claiming that the intended server and add-in are loaded. A document is not required to verify the connection.
 
 3. **Report.** Tell the user: the detected Inventor year(s), the server path, each client connected and exactly what was changed there, and where any backup you made lives.
 

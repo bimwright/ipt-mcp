@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- `inventor_health` reports running server/add-in versions, build ids and version/revision alignment, preserving existing health and full runtime-identity fields. No target still returns server identity with a failed host status. Optional `check_updates=true` queries the official stable release with bounded network/metadata handling; unknown results never imply that the installation is current. Session-start instructions now call health to verify the host connection. This does not install updates.
+
 ## [0.2.1] - 2026-10-02
 
 ### Changed

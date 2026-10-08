@@ -23,4 +23,8 @@ internal static class ToolResponse
 
     internal static string Error(string code, string message)
         => Serialize(new { ok = false, error = new { code, message } });
+
+    internal static string Error(InventorGatewayException error)
+        => error.ResponseData is null ? Error(error.Code, error.Message)
+            : Serialize(new { ok = false, error = new { code = error.Code, message = error.Message }, data = error.ResponseData });
 }

@@ -15,12 +15,39 @@ namespace Bimwright.Ipt.Server.Tools;
 public sealed class QueryTools
 {
     private readonly PluginClient _client;
-    public QueryTools(PluginClient client) => _client = client;
+    private readonly ReleaseUpdateCheck _updates;
+    public QueryTools(PluginClient client) : this(client, new ReleaseUpdateCheck()) { }
+    internal QueryTools(PluginClient client, ReleaseUpdateCheck updates)
+    { _client = client; _updates = updates; }
 
-    [McpServerTool(Name = "inventor_health", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Probe the active Inventor add-in target: reports inventor_year, process_id, whether a document is open, the active document type, and sta_busy/pending_commands (the STA work queue — check it before retrying a timed-out send_code). Read-only; answers even while the STA thread is jammed.")]
-    public Task<string> Health(CancellationToken ct = default)
-        => Call("health", new JObject(), ct);
+    [McpServerTool(Name = "inventor_health", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true),
+     Description("Call at the start of each Inventor session, after selecting a target if needed. Probes the add-in and reports document/modal/STA state plus mcp server/plugin versions, build ids and version/revision alignment. Server identity is still returned with ok:false and host_connected:false when no add-in can be reached. Default is local/offline; check_updates=true also checks the official stable GitHub release (bounded timeout; unavailable means unknown). Matching versions/revisions do not prove compatibility or publisher trust. Read-only; never downloads packages, installs, saves documents or restarts processes.")]
+    public async Task<string> Health(bool check_updates = false, CancellationToken ct = default)
+    {
+        JObject data;
+        var connected = false;
+        try
+        {
+            data = await _client.SendAsync("health", new JObject(), ct) as JObject
+                ?? throw new InventorGatewayException(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.API_ERROR,
+                    "The add-in returned an invalid health response.");
+            connected = true;
+        }
+        catch (InventorGatewayException ex)
+        {
+            data = JObject.Parse(ToolResponse.Error(ex));
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException or Newtonsoft.Json.JsonException)
+        {
+            data = JObject.Parse(ToolResponse.Error(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.TARGET_UNAVAILABLE,
+                "Health probe failed: " + ex.Message));
+        }
+        HealthRuntimeInfo.Enrich(data, _client.GatewayIdentity, connected);
+        data["update"] = check_updates
+            ? await _updates.CheckAsync(Program.ServerVersion, ct)
+            : ReleaseUpdateCheck.NotChecked();
+        return ToolResponse.Serialize(data);
+    }
 
     [McpServerTool(Name = "inventor_report_task_result", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Report an agent task's final outcome to the user as a summary toast. Call once after verifying the whole requested job, never after each tool or merely because tools went idle. task_id must be unique per agent/job (1-80 chars); outcome is completed, failed or cancelled; summary is a truthful single-line result (1-120 chars). Agent-reported, not independently verified. Does not change the model; respects the Toasts toggle and requires the updated add-in.")]

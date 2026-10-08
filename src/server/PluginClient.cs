@@ -17,7 +17,9 @@ namespace Bimwright.Ipt.Server;
 public sealed class InventorGatewayException : Exception
 {
     public string Code { get; }
-    public InventorGatewayException(string code, string message) : base(message) => Code = code;
+    public JToken? ResponseData { get; }
+    public InventorGatewayException(string code, string message, JToken? responseData = null) : base(message)
+    { Code = code; ResponseData = responseData; }
 }
 
 /// <summary>
@@ -63,8 +65,7 @@ public sealed class PluginClient
         }
         catch { /* Activity delivery must not change a server-only tool's result. */ }
     }
-    private static readonly Lazy<JObject> SetupIdentity = new(() => SetupRuntimeIdentity.Capture(
-        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"), typeof(PluginClient).Assembly, "gateway"));
+    private readonly Lazy<JObject> _setupIdentity;
     private readonly InventorMcpConfig _config;
     private readonly TargetRegistry _registry;
     private TargetDescriptor? _current;
@@ -73,7 +74,17 @@ public sealed class PluginClient
     {
         _config = config;
         _registry = new TargetRegistry(config.DescriptorDirectory);
+        _setupIdentity = new(() =>
+        {
+            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
+            return SetupRuntimeIdentity.Capture(config.LocalAppDataRoot is { } root
+                ? Bimwright.Setup.RuntimeLayout.Resolve(root, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp")
+                : Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"),
+                typeof(PluginClient).Assembly, "gateway");
+        });
     }
+
+    internal JObject GatewayIdentity => (JObject)_setupIdentity.Value.DeepClone();
 
     public IReadOnlyList<TargetDescriptor> ListTargets() => _registry.List();
 
@@ -183,12 +194,12 @@ public sealed class PluginClient
                 // for the caller while the journal still records a failed invocation.
                 if (DrawingInput.Commands.Contains(command) && result.Data is JObject drawing && drawing.Value<bool?>("ok") == false)
                     return drawing;
-                throw new InventorGatewayException(code, message);
+                throw new InventorGatewayException(code, message, result.Data);
             }
 
             ok = true;
             if (command == "health" && result.Data is JObject healthData)
-                healthData["setup_gateway"] = SetupIdentity.Value.DeepClone();
+                healthData["setup_gateway"] = GatewayIdentity;
             return result.Data ?? JValue.CreateNull();
         }
         catch (Exception ex)

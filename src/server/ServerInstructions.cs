@@ -6,6 +6,11 @@ public static class ServerInstructions
         "ipt-mcp - MCP gateway for Autodesk Inventor 2022-2027. " +
         "Tools are prefixed inventor_*. Use whenever the user works with Inventor, " +
         ".ipt part files, .iam assembly files, or .idw/.dwg drawings. " +
+        "At the start of each Inventor session, select the intended target if needed, then call inventor_health " +
+        "to verify host connectivity, document/modal/STA state and the running MCP server/add-in versions and build identities. " +
+        "Health is local by default; use check_updates=true only when checking the official stable release is wanted. " +
+        "A response with host_connected=false or ok=false is not a successful host connection. " +
+        "Version/revision alignment is observed identity, not proof of compatibility or publisher trust. " +
         "Capabilities: create and open parts and assemblies; list open documents and get document info; " +
         "create and edit 2D sketches (lines, circles, rectangles, constraints) on a part; " +
         "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole, combine, circular_pattern, rectangular_pattern, batch_execute; " +
