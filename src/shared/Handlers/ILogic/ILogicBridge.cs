@@ -4,6 +4,7 @@ using Inventor;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Infrastructure;
+using Bimwright.Ipt.Shared.Security;
 
 namespace Bimwright.Ipt.Shared.Handlers.ILogic;
 
@@ -75,7 +76,7 @@ internal static class ILogicBridge
                 ["rule"] = e.RuleName,
                 ["line"] = e.LineNumber,
                 ["context"] = e.Context,
-                ["message"] = e.Message,
+                ["message"] = SecretMasker.Mask(e.Message),
             });
         if (arr.Count > 0) ilogic.ClearExceptions();
         return arr;
@@ -99,6 +100,48 @@ internal static class ILogicBridge
                 });
         }
         return map;
+    }
+
+    /// <summary>Isolates diagnostics and always attaches execution/cleanup state, including failures.</summary>
+    internal static InventorCommandResult ExecuteRule(InventorCommandContext ctx, ILogicAccess ilogic,
+        JObject data, Func<int?> invoke, Action? cleanup = null)
+    {
+        int? status = null;
+        string? error = null;
+        bool? previousSilent = null;
+        try
+        {
+            var previous = DrainExceptions(ilogic);
+            if (previous.Count > 0) data["prior_exceptions"] = previous;
+            previousSilent = ilogic.SilentOperation;
+            ilogic.SilentOperation = true;
+            status = invoke();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally
+        {
+            try { cleanup?.Invoke(); }
+            catch (Exception ex) { data["cleanup_error"] = SecretMasker.Mask(ex.Message); }
+            if (previousSilent is { } value)
+            {
+                try { ilogic.SilentOperation = value; }
+                catch (Exception ex)
+                {
+                    data["cleanup_error"] = SecretMasker.Mask((string?)data["cleanup_error"] + " iLogic silent state: " + ex.Message);
+                }
+            }
+        }
+        try { data["exceptions"] = DrainExceptions(ilogic); }
+        catch (Exception ex)
+        {
+            data["diagnostics_error"] = SecretMasker.Mask(ex.Message);
+            error ??= "iLogic diagnostics could not be read.";
+        }
+        return ILogicOutcome.Complete(data, new InventorResponseMeta
+        {
+            TargetId = ctx.TargetId,
+            InventorYear = ctx.InventorYear == 0 ? null : ctx.InventorYear,
+        }, status, error);
     }
 }
 #endif

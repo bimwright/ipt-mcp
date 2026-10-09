@@ -30,7 +30,7 @@ public sealed class CommandDispatcher
 
     /// <summary>Commands that execute arbitrary caller source in the host; all ride the send-code gate.</summary>
     private static readonly HashSet<string> SendCodeGradeCommands =
-        new(StringComparer.OrdinalIgnoreCase) { "send_code", "ilogic_run_snippet" };
+        new(StringComparer.OrdinalIgnoreCase) { "send_code", "ilogic_run_snippet", "ilogic_upsert_rule" };
 
     public InventorCommandResult Dispatch(InventorCommandContext ctx, InventorCommandEnvelope env)
     {

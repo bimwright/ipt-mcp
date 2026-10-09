@@ -14,7 +14,7 @@ namespace Bimwright.Ipt.Server.Tools;
 /// <see cref="ToolsetFilter.WriteCapable"/> (hidden under <c>--read-only</c>); the wrappers still apply
 /// a basic allowed-output-path check before round-tripping to the add-in. <c>capture_view</c> writes a
 /// PNG to the captures dir by default; <c>inline=true</c> returns a bounded base64 PNG.
-/// <c>export_dxf</c> must declare its DXF source (sketch or sheet-metal flat pattern)
+/// <c>export_dxf</c> must declare its DXF source (sketch or sheet fabrication flat pattern)
 /// because Phase 1 ships no drawing tools.
 /// </summary>
 [McpServerToolType]
@@ -143,10 +143,10 @@ public sealed class ExportTools
     }
 
     [McpServerTool(Name = "inventor_export_dxf", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
-     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Export a 2D DXF (.dxf) at output_path. Because Phase 1 ships no drawing tools, you MUST declare the DXF source: source=sketch with sketch_name, or source=flat_pattern for a sheet-metal part. If the source is unavailable on the active document the add-in returns WRONG_DOCUMENT_TYPE or INVALID_ARGUMENT.")]
+     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Export a 2D DXF (.dxf) at output_path. Because Phase 1 ships no drawing tools, you MUST declare the DXF source: source=sketch with sketch_name, or source=flat_pattern for a sheet fabrication part. If the source is unavailable on the active document the add-in returns WRONG_DOCUMENT_TYPE or INVALID_ARGUMENT.")]
     public Task<string> ExportDxf(
         string outputPath,
-        [Description("DXF source: 'sketch' (requires sketch_name) or 'flat_pattern' (sheet-metal part).")] string source,
+        [Description("DXF source: 'sketch' (requires sketch_name) or 'flat_pattern' (sheet fabrication part).")] string source,
         [Description("Sketch name when source=sketch. Ignored for flat_pattern.")] string? sketchName = null,
         CancellationToken ct = default)
     {

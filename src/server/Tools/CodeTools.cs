@@ -166,8 +166,20 @@ public sealed class CodeTools
             blockedBy != null ? $"module '{name}' is required by: {blockedBy}" : $"no saved module named '{name}'"));
     }
 
+    [McpServerTool(Name = "inventor_ilogic_upsert_rule", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
+     Description("Create or replace an internal iLogic rule's VB source. Requires send-code permission. Existing rule: replace text; run=true executes it once. New rule: AddRule compiles and runs it once, regardless of run, without a second invocation. Compile/runtime failures return an error with exceptions[]; rule side effects are not rolled back. Requires name and text; document selects a document already in memory.")]
+    public Task<string> UpsertRule(string name, string text, string? document = null, bool run = false, bool silent = false, CancellationToken ct = default)
+    {
+        var p = new JObject { ["name"] = name, ["text"] = text, ["run"] = run, ["silent"] = silent };
+        if (!string.IsNullOrWhiteSpace(document)) p["document"] = document;
+        var log = (JObject)p.DeepClone();
+        log.Remove("text");
+        log["code"] = text;
+        return Call("ilogic_upsert_rule", p, ct, null, log);
+    }
+
     [McpServerTool(Name = "inventor_ilogic_run_snippet", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
-     Description("Send-code-grade escape hatch: run arbitrary iLogic VB code against the target document — rides the same gate as inventor_send_code (hidden by --disable-send-code and the add-in kill switch). The code is added as a temporary internal rule (iLogic's AddRule compiles AND runs it) and deleted in a finally block; stale TempMCPRule_* residue from interrupted runs is swept first. Result channel: the snippet returns a value via the iLogic-safe custom iProperty — iProperties.Value(\"Custom\",\"MCP_RESULT\") = \"...\" — which is read back as result and deleted (iLogic's safety scanner blocks System.IO, so no file transport). Fallback: Logger.Info(\"MCP_RESULT_BEGIN\"+json+\"MCP_RESULT_END\") is scraped when the machine file-backs the iLogic log. Rule failures surface in exceptions[] (iLogic RuleExceptionsLog: rule, line, context, message). code: VB rule source; document: name/path of a document already in memory (default: active); silent=true suppresses host prompts. UNSUPPORTED_HOST on Inventor LT (no iLogic).")]
+     Description("Run arbitrary iLogic VB source under the send-code gate. Creates and deletes only this invocation\'s temporary rule; existing rules are never swept by name. Return a string via iProperties.Value(\"Custom\",\"MCP_RESULT\") = \"...\". Existing string values are restored; a non-string property collision fails before execution. Results over 65536 characters fail instead of being truncated. Historical log markers are not used as results. Native status, exceptions and cleanup failures produce an error with diagnostics. Rule side effects are not rolled back. document selects a document already in memory; silent=true suppresses host prompts. UNSUPPORTED_HOST without iLogic.")]
     public async Task<string> ILogicRunSnippet(string code, string? document = null, bool silent = false, int? timeout_ms = null,
         CancellationToken ct = default)
     {
@@ -187,7 +199,7 @@ public sealed class CodeTools
         }
         catch (InventorGatewayException ex)
         {
-            return ToolResponse.Error(ex.Code, ex.Message);
+            return ToolResponse.Error(ex);
         }
     }
 }

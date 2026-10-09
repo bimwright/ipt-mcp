@@ -8,7 +8,7 @@ using Bimwright.Ipt.Shared.Handlers.ILogic;
 
 /// <summary>
 /// iLogic registrar: the <c>ilogic_*</c> wire commands plus the generic <c>list_commands</c>,
-/// <c>run_command</c> and <c>undo</c>. <c>ilogic_run_snippet</c> is send-code-grade — it registers
+/// <c>run_command</c> and <c>undo</c>. Upsert and snippet are send-code-grade — they register
 /// only when <c>o.EnableSendCode</c>, exactly like <c>send_code</c>, and is additionally fenced in
 /// the dispatcher. All other handlers register unconditionally and report their own
 /// <see cref="IInventorCommand.IsReadOnly"/>.
@@ -22,9 +22,11 @@ public static partial class InventorCommandRegistry
         add(new ILogicReadLogHandler());
         add(new ILogicRunRuleHandler());
         add(new ILogicRunExternalRuleHandler());
-        add(new ILogicUpsertRuleHandler());
         if (o.EnableSendCode)
+        {
+            add(new ILogicUpsertRuleHandler());
             add(new ILogicRunSnippetHandler());
+        }
         add(new ListCommandsHandler());
         add(new RunCommandHandler());
         add(new UndoHandler());

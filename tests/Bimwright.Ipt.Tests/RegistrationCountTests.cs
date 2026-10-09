@@ -9,7 +9,7 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Declares the Phase 3 surface: 131 all-enabled, 126 code-off and 35 read-only.
+/// Declares the Phase 3 surface: 131 all-enabled, 125 code-off and 35 read-only.
 /// These expectations do not claim that the current source has been built or tested.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -85,7 +85,7 @@ public sealed class RegistrationCountTests
             "inventor_capture_view", "inventor_export_step", "inventor_export_stl", "inventor_export_dxf",
             "inventor_view_fit", "inventor_set_view_orientation", "inventor_set_camera", "inventor_export_sat",
             "inventor_derive_envelope", "inventor_set_view_state",
-            // code (5: send_code + modules + ilogic_run_snippet riding the same gate)
+            // code (6: send_code + modules + iLogic source authoring)
             "inventor_send_code", "inventor_save_code_module", "inventor_list_code_modules", "inventor_delete_code_module",
             "inventor_ilogic_run_snippet",
             // toolbaker (6)
@@ -99,11 +99,11 @@ public sealed class RegistrationCountTests
             // assembly_query (5 read-only)
             "inventor_list_interfaces", "inventor_check_interference", "inventor_measure_min_distance",
             "inventor_get_assembly_bom", "inventor_list_constraints", "inventor_list_occurrences",
-            // sheetmetal (7 write) + sheetmetal_query (1 read-only)
-            "inventor_new_sheet_metal_part", "inventor_sheet_metal_face", "inventor_sheet_metal_flange",
-            "inventor_sheet_metal_cut", "inventor_flat_pattern", "inventor_set_sheet_metal_thickness",
-            "inventor_unwrap_try", "inventor_sheet_metal_info",
-            // ilogic (4 read-only: list_rules/get_rule/read_log/list_commands; 5 write)
+            // sheet_fabrication (7 write) + sheet_fabrication_query (1 read-only)
+            "inventor_new_sheet_fabrication_part", "inventor_sheet_fabrication_face", "inventor_sheet_fabrication_flange",
+            "inventor_sheet_fabrication_cut", "inventor_flat_pattern", "inventor_set_sheet_fabrication_thickness",
+            "inventor_unwrap_try", "inventor_sheet_fabrication_info",
+            // ilogic (4 read-only: list_rules/get_rule/read_log/list_commands; 4 write)
             "inventor_ilogic_list_rules", "inventor_ilogic_get_rule", "inventor_ilogic_read_log",
             "inventor_ilogic_run_rule", "inventor_ilogic_run_external_rule", "inventor_ilogic_upsert_rule",
             "inventor_list_commands", "inventor_run_command", "inventor_undo",
@@ -129,6 +129,37 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
+    public void Disabling_source_execution_hides_upsert_but_keeps_existing_rule_execution()
+    {
+        var names = ToolNames(new InventorMcpConfig { Toolsets = { "all" }, EnableSendCode = false });
+        Assert.Equal(125, names.Length);
+        Assert.DoesNotContain("inventor_ilogic_upsert_rule", names);
+        Assert.DoesNotContain("inventor_ilogic_run_snippet", names);
+        Assert.Contains("inventor_ilogic_run_rule", names);
+        Assert.Contains("inventor_ilogic_run_external_rule", names);
+    }
+
+    [Theory]
+    [InlineData(false, 8)]
+    [InlineData(true, 1)]
+    public void SheetFabrication_toolsets_can_be_selected_by_their_new_names(bool readOnly, int expectedCount)
+    {
+        var cfg = new InventorMcpConfig
+        {
+            Toolsets = { "SHEET_FABRICATION", "sheet_fabrication_query" },
+            ReadOnly = readOnly,
+        };
+        var names = ToolNames(cfg);
+
+        Assert.Equal(expectedCount, names.Length);
+        Assert.Contains("inventor_sheet_fabrication_info", names);
+        if (readOnly)
+            Assert.DoesNotContain("inventor_sheet_fabrication_flange", names);
+        else
+            Assert.Contains("inventor_sheet_fabrication_flange", names);
+    }
+
+    [Fact]
     public void ReadOnly_registration_keeps_meta_query_assemblyquery_and_readonly_toolbaker_types()
     {
         var cfg = new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true, EnableSendCode = true };
@@ -142,8 +173,8 @@ public sealed class RegistrationCountTests
         Assert.Contains(typeof(ToolBakerTools), types);
         Assert.Contains(typeof(DrawingQueryTools), types);
         Assert.DoesNotContain(typeof(DrawingTools), types);
-        Assert.Contains(typeof(SheetMetalQueryTools), types);
-        Assert.DoesNotContain(typeof(SheetMetalTools), types);
+        Assert.Contains(typeof(SheetFabricationQueryTools), types);
+        Assert.DoesNotContain(typeof(SheetFabricationTools), types);
         Assert.Contains(typeof(ILogicTools), types);
         Assert.Equal(11, types.Length);
         Assert.Equal(35, names.Length);

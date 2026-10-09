@@ -27,7 +27,7 @@ public static partial class InventorCommandRegistry
         AddAssembly(d, Add);      // Phase 3 Assembly
         AddAssemblyQuery(d, Add); // Phase 3 Assembly Query
         AddDrawing(d, Add);
-        AddSheetMetal(d, Add);    // Sheet metal (sm_*, unwrap_try, new_sheet_metal_part)
+        AddSheetFabrication(d, Add);    // Sheet Fabrication (sheet_fabrication_*, unwrap_try, new_sheet_fabrication_part)
         AddILogic(d, o, Add);     // iLogic bridge + command/undo tools
         return d;
     }
@@ -43,6 +43,6 @@ public static partial class InventorCommandRegistry
     static partial void AddAssembly(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddAssemblyQuery(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddDrawing(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
-    static partial void AddSheetMetal(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
+    static partial void AddSheetFabrication(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddILogic(Dictionary<string, IInventorCommand> d, PluginOptions o, Action<IInventorCommand> add);
 }

@@ -6,23 +6,23 @@ using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Handlers.Feature;
 using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Ipt.Shared.Handlers.SheetMetal;
+namespace Bimwright.Ipt.Shared.Handlers.SheetFabrication;
 
 /// <summary>
-/// <c>sm_face</c> — build a sheet-metal face (the base plate) from a closed sketch profile.
+/// <c>sheet_fabrication_face</c> — build a sheet fabrication face (the base plate) from a closed sketch profile.
 /// <c>sketch</c> is a sketch name or <c>"Sketch:N"</c> profile spec resolved by
 /// <see cref="FeatureSupport.ProfileOf"/>. Uses <c>FaceFeatures.CreateFaceFeatureDefinition</c> →
 /// <c>Add</c>. Returns the feature name plus fresh face/edge counts (topology ids shift on every
 /// feature — re-list before reusing ids).
 /// </summary>
-public sealed class SheetMetalFaceHandler : HandlerBase, IInventorCommand
+public sealed class SheetFabricationFaceHandler : HandlerBase, IInventorCommand
 {
-    public string Name => "sm_face";
+    public string Name => "sheet_fabrication_face";
     public bool IsReadOnly => false;
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        if (!SheetMetalSupport.TryGetSheetMetalPart(ctx, p, "sm_face", out var app, out var part, out var smDef, out var failure))
+        if (!SheetFabricationSupport.TryGetSheetFabricationPart(ctx, p, "sheet_fabrication_face", out var app, out var part, out var fabricationDef, out var failure))
             return failure!;
 
         var sketch = (string?)p["sketch"];
@@ -32,11 +32,11 @@ public sealed class SheetMetalFaceHandler : HandlerBase, IInventorCommand
         try
         {
             var def = part.ComponentDefinition;
-            var smFeatures = SheetMetalSupport.SmFeatures(smDef)
-                ?? throw new InvalidOperationException("sheet-metal features are unavailable");
+            var fabricationFeatures = SheetFabricationSupport.FabricationFeatures(fabricationDef)
+                ?? throw new InvalidOperationException("sheet fabrication features are unavailable");
             var profile = FeatureSupport.ProfileOf(def, sketch!);
-            var faceDef = smFeatures.FaceFeatures.CreateFaceFeatureDefinition(profile);
-            var feature = smFeatures.FaceFeatures.Add(faceDef);
+            var faceDef = fabricationFeatures.FaceFeatures.CreateFaceFeatureDefinition(profile);
+            var feature = fabricationFeatures.FaceFeatures.Add(faceDef);
 
             var data = new JObject { ["feature_name"] = feature.Name };
             var requestedName = (string?)p["name"];
@@ -44,7 +44,7 @@ public sealed class SheetMetalFaceHandler : HandlerBase, IInventorCommand
             {
                 try { feature.Name = requestedName; data["feature_name"] = feature.Name; } catch { }
             }
-            data.Merge(SheetMetalSupport.TopologyCounts(part.ComponentDefinition));
+            data.Merge(SheetFabricationSupport.TopologyCounts(part.ComponentDefinition));
             return Ok(ctx, data);
         }
         catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }

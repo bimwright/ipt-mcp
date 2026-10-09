@@ -65,7 +65,7 @@ public sealed class PluginClient
         }
         catch { /* Activity delivery must not change a server-only tool's result. */ }
     }
-    private readonly Lazy<JObject> _setupIdentity;
+    private readonly JObject _setupIdentity;
     private readonly InventorMcpConfig _config;
     private readonly TargetRegistry _registry;
     private TargetDescriptor? _current;
@@ -74,17 +74,14 @@ public sealed class PluginClient
     {
         _config = config;
         _registry = new TargetRegistry(config.DescriptorDirectory);
-        _setupIdentity = new(() =>
-        {
-            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
-            return SetupRuntimeIdentity.Capture(config.LocalAppDataRoot is { } root
-                ? Bimwright.Setup.RuntimeLayout.Resolve(root, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp")
-                : Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"),
-                typeof(PluginClient).Assembly, "gateway");
-        });
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
+        _setupIdentity = SetupRuntimeIdentity.Capture(config.LocalAppDataRoot is { } root
+            ? Bimwright.Setup.RuntimeLayout.Resolve(root, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp")
+            : Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"),
+            typeof(PluginClient).Assembly, "gateway");
     }
 
-    internal JObject GatewayIdentity => (JObject)_setupIdentity.Value.DeepClone();
+    internal JObject GatewayIdentity => (JObject)_setupIdentity.DeepClone();
 
     public IReadOnlyList<TargetDescriptor> ListTargets() => _registry.List();
 

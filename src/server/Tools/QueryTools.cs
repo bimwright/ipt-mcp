@@ -21,7 +21,7 @@ public sealed class QueryTools
     { _client = client; _updates = updates; }
 
     [McpServerTool(Name = "inventor_health", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true),
-     Description("Call at the start of each Inventor session, after selecting a target if needed. Probes the add-in and reports document/modal/STA state plus mcp server/plugin versions, build ids and version/revision alignment. Server identity is still returned with ok:false and host_connected:false when no add-in can be reached. Default is local/offline; check_updates=true also checks the official stable GitHub release (bounded timeout; unavailable means unknown). Matching versions/revisions do not prove compatibility or publisher trust. Read-only; never downloads packages, installs, saves documents or restarts processes.")]
+     Description("At session start select the intended target, then call inventor_health(check_updates=true) once. Routine calls stay offline by default; not_checked/unknown never means up to date. Inspect update.components and report update.notification code/message according to agent_action. UPDATE_CHECK_UNAVAILABLE describes the external lookup_reason, not a local identity fault; no installation authorization is requested. LOCAL_VERSION_AHEAD is informational. Preserve protected_components and explain protected_component_reasons; unobserved_components require connection/runtime observation, not a warning about a known loaded build. Read lookup_reason, protection/unobserved fields and the full message before summarizing; notification.components is only the primary affected set. comparison_reason=release_revision_unavailable reports missing external release evidence even with RELEASE_IDENTITY_UNVERIFIED; stop the update workflow, not otherwise healthy Inventor work. Follow update_guidance.mode: only prepare_update, with bundle_update_proposal_allowed=true, contains installation steps and needs installation authorization (reuse existing permission). Other modes contain only check/review steps. No add-in returns server identity with ok:false and host_connected:false. Matching revisions do not verify artifact bytes, compatibility or publisher trust; never downgrade an ahead_of_release component or automatically replace a development build. After reconnect, compare fresh initialize serverInfo and tools/list runtime metadata/schema/annotations with client_verification. Read-only; never downloads packages, installs, saves documents or restarts processes.")]
     public async Task<string> Health(bool check_updates = false, CancellationToken ct = default)
     {
         JObject data;
@@ -42,10 +42,13 @@ public sealed class QueryTools
             data = JObject.Parse(ToolResponse.Error(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.TARGET_UNAVAILABLE,
                 "Health probe failed: " + ex.Message));
         }
-        HealthRuntimeInfo.Enrich(data, _client.GatewayIdentity, connected);
+        var gateway = _client.GatewayIdentity;
+        var plugin = connected ? data["setup_plugin"] as JObject : null;
+        HealthRuntimeInfo.Enrich(data, gateway, connected);
         data["update"] = check_updates
-            ? await _updates.CheckAsync(Program.ServerVersion, ct)
-            : ReleaseUpdateCheck.NotChecked();
+            ? await _updates.CheckAsync(gateway, plugin, ct)
+            : ReleaseUpdateCheck.NotChecked(gateway, plugin);
+        data["update_guidance"] = HealthRuntimeInfo.UpdateGuidance((JObject)data["update"]!);
         return ToolResponse.Serialize(data);
     }
 
@@ -86,7 +89,7 @@ public sealed class QueryTools
     }
 
     [McpServerTool(Name = "inventor_list_edges", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("List the target part's edges: {id:'body:B/edge:E', curve_type (line|line_segment|circle|circular_arc|ellipse_full|elliptical_arc|bspline|polyline|unknown), length_mm, radius_mm (circular edges only)}. ids round-trip into edge:E / body:B/edge:E refs (fillet, chamfer, create_work_axis, inventor_sheet_metal_flange). body scopes to one body ('1'/'body:N'/name); curve_type filters; max_items caps (default 200), truncated reports overflow. Read-only. Optional document: a document already open or loaded in Inventor — never opened or activated; omit for the active document.")]
+     Description("List the target part's edges: {id:'body:B/edge:E', curve_type (line|line_segment|circle|circular_arc|ellipse_full|elliptical_arc|bspline|polyline|unknown), length_mm, radius_mm (circular edges only)}. ids round-trip into edge:E / body:B/edge:E refs (fillet, chamfer, create_work_axis, inventor_sheet_fabrication_flange). body scopes to one body ('1'/'body:N'/name); curve_type filters; max_items caps (default 200), truncated reports overflow. Read-only. Optional document: a document already open or loaded in Inventor — never opened or activated; omit for the active document.")]
     public Task<string> ListEdges(string? body = null, string? curve_type = null, int max_items = 200, string? document = null, CancellationToken ct = default)
     {
         var p = new JObject { ["max_items"] = max_items };

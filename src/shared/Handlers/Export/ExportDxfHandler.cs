@@ -11,7 +11,7 @@ namespace Bimwright.Ipt.Shared.Handlers.Export;
 /// <summary>
 /// <c>export_dxf</c> — writes a 2D DXF (.dxf). Because Phase 1 ships no drawing tools, the DXF source
 /// must be declared explicitly: <c>source=sketch</c> (a named planar sketch on the active part) or
-/// <c>source=flat_pattern</c> (the active sheet-metal part's flat pattern). The DXF is produced through
+/// <c>source=flat_pattern</c> (the active sheet fabrication part's flat pattern). The DXF is produced through
 /// the relevant entity's <c>DataIO.WriteDataToFile</c>. If the requested source is not available on the
 /// active document the handler returns <c>WRONG_DOCUMENT_TYPE</c> or <c>INVALID_ARGUMENT</c>.
 /// </summary>
@@ -43,7 +43,7 @@ public sealed class ExportDxfHandler : HandlerBase, IInventorCommand
 
         if (doc.DocumentType != DocumentTypeEnum.kPartDocumentObject)
             return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE,
-                "export_dxf requires an active part document (sketch or sheet-metal flat-pattern source)");
+                "export_dxf requires an active part document (sketch or sheet fabrication flat-pattern source)");
 
         var partDef = ((PartDocument)doc).ComponentDefinition;
 
@@ -72,15 +72,15 @@ public sealed class ExportDxfHandler : HandlerBase, IInventorCommand
             }
             else // flat_pattern
             {
-                if (partDef is not SheetMetalComponentDefinition smDef)
+                if (partDef is not SheetMetalComponentDefinition fabricationDef)
                     return Fail(ctx, InventorErrorCodes.WRONG_DOCUMENT_TYPE,
-                        "source=flat_pattern requires an active sheet-metal part document");
+                        "source=flat_pattern requires an active sheet fabrication part document");
 
-                if (!smDef.HasFlatPattern)
+                if (!fabricationDef.HasFlatPattern)
                     return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT,
-                        "the sheet-metal part has no flat pattern; create one before exporting DXF");
+                        "the sheet fabrication part has no flat pattern; create one before exporting DXF");
 
-                smDef.FlatPattern.DataIO.WriteDataToFile(FlatPatternDxfFormat, outputPath);
+                fabricationDef.FlatPattern.DataIO.WriteDataToFile(FlatPatternDxfFormat, outputPath);
 
                 return Ok(ctx, new JObject
                 {

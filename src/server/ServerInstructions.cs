@@ -6,11 +6,24 @@ public static class ServerInstructions
         "ipt-mcp - MCP gateway for Autodesk Inventor 2022-2027. " +
         "Tools are prefixed inventor_*. Use whenever the user works with Inventor, " +
         ".ipt part files, .iam assembly files, or .idw/.dwg drawings. " +
-        "At the start of each Inventor session, select the intended target if needed, then call inventor_health " +
+        "At the start of each Inventor session, select the intended target if needed, then call inventor_health(check_updates=true) once " +
         "to verify host connectivity, document/modal/STA state and the running MCP server/add-in versions and build identities. " +
-        "Health is local by default; use check_updates=true only when checking the official stable release is wanted. " +
+        "If network access is unavailable or disallowed, use the offline default and keep the update status not_checked/unknown. " +
+        "Later routine health probes stay offline by default. Inspect both update.components, including release_mismatch and unknown. " +
+        "When update.notification is present, report its code/message and follow agent_action: propose the release ZIP only if " +
+        "bundle_update_proposal_allowed=true and update_guidance.mode=prepare_update; other modes contain only check/review steps. " +
+        "UPDATE_CHECK_UNAVAILABLE reports an external lookup_reason, not a runtime fault or request for installation authorization. " +
+        "Report LOCAL_VERSION_AHEAD neutrally; preserve protected_components and explain protected_component_reasons. " +
+        "unobserved_components need connection/runtime observation, not a corruption warning. " +
+        "Read lookup_reason, protection/unobserved fields and the full message before summarizing; notification.components is only the primary affected set. " +
+        "comparison_reason=release_revision_unavailable reports missing external release evidence, even with RELEASE_IDENTITY_UNVERIFIED; stop the update workflow, not otherwise healthy Inventor work. " +
+        "A review/identity warning does not mean a new version exists. Installation authorization applies only to a permitted update proposal. " +
+        "Never claim not_checked/unknown is up to date, recommend a downgrade or automatically replace a development build. " +
         "A response with host_connected=false or ok=false is not a successful host connection. " +
         "Version/revision alignment is observed identity, not proof of compatibility or publisher trust. " +
+        "The optional release check reports server and loaded plugin separately against one release; inspect both components. " +
+        "After an upgrade/reconnect, verify fresh initialize serverInfo and tools/list (health runtime metadata, schema and annotations) " +
+        "against health.client_verification on that same connection. Only the client can verify its cache refresh; unavailable client evidence stays unverified. " +
         "Capabilities: create and open parts and assemblies; list open documents and get document info; " +
         "create and edit 2D sketches (lines, circles, rectangles, constraints) on a part; " +
         "build solid features from sketch profiles - extrude, revolve, fillet, chamfer, hole, combine, circular_pattern, rectangular_pattern, batch_execute; " +
@@ -22,7 +35,7 @@ public static class ServerInstructions
         "read and write model parameters and user parameters; " +
         "read and write iProperties (iproperty: title, author, part number, description, custom properties); " +
         "compute mass properties (mass, volume, surface area, center of gravity, bounding box) and material; " +
-        "export the model to STEP (step), STL (stl), and DXF (dxf, sketch or sheet-metal flat pattern). " +
+        "export the model to STEP (step), STL (stl), and DXF (dxf, sketch or sheet fabrication flat pattern). " +
         "Lengths are in millimeters (the Inventor API internal length unit is centimeters; the server converts). " +
         "Multi-instance: if more than one Inventor may be open, call inventor_list_available_targets " +
         "then inventor_switch_target to select the target session by year, pid, or descriptor id; " +

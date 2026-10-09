@@ -33,7 +33,9 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 builder.Services.AddSingleton(cfg);
 builder.Services.AddSingleton<ServerState>();
-builder.Services.AddSingleton<PluginClient>();
+// Capture the running gateway identity before initialize/tools/list can be served.
+var pluginClient = new PluginClient(cfg);
+builder.Services.AddSingleton(pluginClient);
 builder.Services.AddSingleton(_ => new CodeModuleStore(System.IO.Path.Combine(cfg.DataDirectory, "modules")));
 
 var mcp = builder.Services
@@ -44,7 +46,7 @@ var mcp = builder.Services
         {
             Name = "ipt-mcp",
             Title = "Inventor MCP",
-            Version = Program.ServerVersion,
+            Version = Program.ServerInformationalVersion,
             Description = "Model Context Protocol gateway for Autodesk Inventor 2022-2027",
             WebsiteUrl = "https://github.com/bimwright/ipt-mcp"
         };
@@ -80,27 +82,43 @@ var mcp = builder.Services
                     ctx.Params?.Name ?? "?", ctx.Params?.Arguments, result, thrown, sw.ElapsedMilliseconds);
         }
     }));
-mcp = Program.RegisterToolsets(mcp, Program.ResolveToolTypesForRegistration(cfg), cfg.ReadOnly);
+mcp = Program.RegisterToolsets(mcp, Program.ResolveToolTypesForRegistration(cfg), cfg.ReadOnly, pluginClient.GatewayIdentity);
 
 await builder.Build().RunAsync();
 
 internal static partial class Program
 {
-    // InformationalVersion carries "+githash"; report clean semver to MCP clients.
-    internal static readonly string ServerVersion =
+    // Keep the build identity in the handshake; clean semver remains available for comparisons.
+    internal static readonly string ServerInformationalVersion =
         (Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion ?? "0.0.0").Split('+')[0];
+            ?.InformationalVersion ?? "0.0.0");
+    internal static readonly string ServerVersion = ServerInformationalVersion.Split('+')[0];
 
-    internal static IMcpServerBuilder RegisterToolsets(IMcpServerBuilder mcp, IEnumerable<Type> toolTypes, bool readOnly = false)
+    internal static IMcpServerBuilder RegisterToolsets(IMcpServerBuilder mcp, IEnumerable<Type> toolTypes, bool readOnly = false,
+        Newtonsoft.Json.Linq.JObject? gatewayIdentity = null)
     {
         foreach (var type in toolTypes)
             foreach (var method in type.GetMethods())
             {
                 var attribute = method.GetCustomAttribute<McpServerToolAttribute>();
                 if (attribute == null || (readOnly && !attribute.ReadOnly)) continue;
-                mcp.WithTools(new[] { McpServerTool.Create(method,
-                    context => ActivatorUtilities.CreateInstance(context.Services!, type)) });
+                var tool = McpServerTool.Create(method,
+                    context => ActivatorUtilities.CreateInstance(context.Services!, type));
+                if (attribute.Name == "inventor_health" && gatewayIdentity is not null)
+                    tool.ProtocolTool.Meta = new System.Text.Json.Nodes.JsonObject
+                    {
+                        [HealthRuntimeInfo.ClientRuntimeMetadataKey] = System.Text.Json.Nodes.JsonNode.Parse(
+                            HealthRuntimeInfo.ClientRuntime(gatewayIdentity).ToString()),
+                    };
+                if (attribute.Name is "inventor_ilogic_run_rule" or "inventor_ilogic_run_external_rule")
+                {
+                    var schema = Newtonsoft.Json.Linq.JObject.Parse(tool.ProtocolTool.InputSchema.GetRawText());
+                    schema["properties"]!["arguments"] = Newtonsoft.Json.Linq.JObject.Parse(
+                        "{\"type\":[\"object\",\"null\"],\"additionalProperties\":{\"type\":[\"string\",\"number\",\"boolean\",\"null\"]}}");
+                    tool.ProtocolTool.InputSchema = System.Text.Json.JsonDocument.Parse(schema.ToString()).RootElement.Clone();
+                }
+                mcp.WithTools(new[] { tool });
             }
         return mcp;
     }
@@ -129,7 +147,7 @@ internal static partial class Program
             "",
             "Safety:",
             "  --enable-send-code      Expose code tools (default ON; read-only still excludes execution).",
-            "  --disable-send-code     Hide all five code tools.",
+            "  --disable-send-code     Hide code tools, including iLogic source authoring.",
             "  --enable-call-log       Record redacted tool calls (default OFF).",
             "  --disable-call-log      Disable server and plug-in call logging.",
             "",
@@ -188,8 +206,8 @@ internal static partial class Program
         Add("assembly_query",  typeof(AssemblyQueryTools));
         Add("drawing_query", typeof(DrawingQueryTools));
         Add("drawing", typeof(DrawingTools));
-        Add("sheetmetal_query", typeof(SheetMetalQueryTools));
-        Add("sheetmetal", typeof(SheetMetalTools));
+        Add("sheet_fabrication_query", typeof(SheetFabricationQueryTools));
+        Add("sheet_fabrication", typeof(SheetFabricationTools));
         Add("ilogic", typeof(ILogicTools));
         return cfg.ReadOnly ? types.Where(t => t.GetMethods().Any(m => m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true)).ToArray() : types;
     }

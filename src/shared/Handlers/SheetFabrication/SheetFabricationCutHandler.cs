@@ -6,25 +6,25 @@ using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Handlers.Feature;
 using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Ipt.Shared.Handlers.SheetMetal;
+namespace Bimwright.Ipt.Shared.Handlers.SheetFabrication;
 
 /// <summary>
-/// <c>sm_cut</c> — punch a closed-profile cutout through the sheet. <c>sketch</c> is a sketch name
-/// or <c>"Sketch:N"</c> profile spec. Unlike the surveyed Python implementation this actually
-/// implements <c>cut_across_bends</c> (<c>CutDefinition.CutAcrossBends</c>, default false) and
+/// <c>sheet_fabrication_cut</c> — punch a closed-profile cutout through the sheet. <c>sketch</c> is a sketch name
+/// or <c>"Sketch:N"</c> profile spec. Supports
+/// <c>cut_across_bends</c> (<c>CutDefinition.CutAcrossBends</c>, default false) and
 /// <c>cut_normal_to_flat</c> (<c>CutDefinition.CutNormalToFlat</c>, default false — true keeps the
 /// cut wall normal to the flat pattern, what CNC tooling wants). The extent is through-all in the
 /// <c>direction</c> sense (positive|negative, default positive). Returns feature_name + fresh
 /// face/edge counts.
 /// </summary>
-public sealed class SheetMetalCutHandler : HandlerBase, IInventorCommand
+public sealed class SheetFabricationCutHandler : HandlerBase, IInventorCommand
 {
-    public string Name => "sm_cut";
+    public string Name => "sheet_fabrication_cut";
     public bool IsReadOnly => false;
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        if (!SheetMetalSupport.TryGetSheetMetalPart(ctx, p, "sm_cut", out var app, out var part, out var smDef, out var failure))
+        if (!SheetFabricationSupport.TryGetSheetFabricationPart(ctx, p, "sheet_fabrication_cut", out var app, out var part, out var fabricationDef, out var failure))
             return failure!;
 
         var sketch = (string?)p["sketch"];
@@ -43,17 +43,17 @@ public sealed class SheetMetalCutHandler : HandlerBase, IInventorCommand
         try
         {
             var def = part.ComponentDefinition;
-            var smFeatures = SheetMetalSupport.SmFeatures(smDef)
-                ?? throw new InvalidOperationException("sheet-metal features are unavailable");
+            var fabricationFeatures = SheetFabricationSupport.FabricationFeatures(fabricationDef)
+                ?? throw new InvalidOperationException("sheet fabrication features are unavailable");
             var profile = FeatureSupport.ProfileOf(def, sketch!);
-            var cutDef = smFeatures.CutFeatures.CreateCutDefinition(profile);
+            var cutDef = fabricationFeatures.CutFeatures.CreateCutDefinition(profile);
             // CutAcrossBends is get-only in the interop: cutting across bends is requested via
             // SetCutAcrossBendsExtent(distance) — the cut depth through the flattened bend zone,
             // which is exactly the sheet thickness.
-            if (cutAcrossBends) cutDef.SetCutAcrossBendsExtent(smDef.Thickness.Expression);
+            if (cutAcrossBends) cutDef.SetCutAcrossBendsExtent(fabricationDef.Thickness.Name);
             else cutDef.SetThroughAllExtent(direction);
             cutDef.CutNormalToFlat = cutNormalToFlat;
-            var feature = smFeatures.CutFeatures.Add(cutDef);
+            var feature = fabricationFeatures.CutFeatures.Add(cutDef);
 
             var data = new JObject
             {
@@ -66,7 +66,7 @@ public sealed class SheetMetalCutHandler : HandlerBase, IInventorCommand
             {
                 try { feature.Name = requestedName; data["feature_name"] = feature.Name; } catch { }
             }
-            data.Merge(SheetMetalSupport.TopologyCounts(part.ComponentDefinition));
+            data.Merge(SheetFabricationSupport.TopologyCounts(part.ComponentDefinition));
             return Ok(ctx, data);
         }
         catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }

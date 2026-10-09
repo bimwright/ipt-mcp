@@ -44,7 +44,7 @@ This is a human-reviewed presentation example, **not a fabrication release or a 
 
 Two processes, one local pipe:
 
-- **`Bimwright.Ipt.Server.exe`** — a .NET 8 MCP stdio server launched by Claude Code, Cursor, Cline, Codex, or another stdio MCP client. It has **no Inventor reference**; it only compiles the API-agnostic contract files, so it builds and runs on any machine with the .NET 8 SDK.
+- **`Bimwright.Ipt.Server.exe`** — a .NET 8 MCP stdio server launched by Claude Code, Cursor, Cline, Codex, or another stdio MCP client. It has **no Inventor reference** and can be built/tested on Windows without Inventor installed. The gateway runtime requires Windows for its user identity and setup lifecycle; server-only describes independence from the Inventor SDK, not cross-platform runtime support.
 - **`Bimwright.Ipt.Plugin.InvNN.dll`** — an `ApplicationAddInServer` add-in that loads inside `Inventor.exe`, runs a TCP or Named-Pipe listener, and executes commands on Inventor's main UI (STA) thread. One thin shell per Inventor year, all compiled from the same `src/shared/**` source glob.
 
 Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshals work onto the STA thread through a hidden message-only WinForms control (`InventorStaDispatcher`). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
@@ -102,11 +102,11 @@ Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwri
 
 ## Build & Develop
 
-Autodesk Inventor binaries and the Inventor SDK are **not redistributed** in this repo (see [Not Redistributed](#not-redistributed)). Building the **server and tests** needs only the .NET 8 SDK; building a **per-version add-in** needs the matching SDK plus the Inventor interop reference assembly.
+Autodesk Inventor binaries and the Inventor SDK are **not redistributed** in this repo (see [Not Redistributed](#not-redistributed)). Building and running the **server and tests** requires Windows and the .NET 8 SDK, with no Inventor installation required; building a **per-version add-in** needs the matching SDK plus the Inventor interop reference assembly.
 
-```bash
-# Server + tests (server-only; NO Inventor required — works on any machine with the .NET 8 SDK):
-dotnet build src/IptMcp.sln -c Debug
+```powershell
+# Server + tests on Windows (server-only; .NET 8 SDK, no Inventor installation required):
+dotnet build src/server -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
 # Legacy TFM compatibility check using the installed 2027 interop reference:
@@ -128,9 +128,9 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-Full mode exposes **111 tools** by default (`--toolsets all`); `--disable-send-code` exposes **107 tools**, and `--read-only` exposes **28 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface.
+The development checkout exposes **131 tools** by default (`--toolsets all`); `--disable-send-code` exposes **125 tools**, and `--read-only` exposes **35 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
-All 15 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
+All 18 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
 
@@ -158,6 +158,41 @@ Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/draw
 [Generic live smoke record](docs/benchmarks/drawing-phase1-smoke.json) ·
 [Declared read-only inventory](docs/testing/readonly-tools.json).
 
+### Sheet Fabrication in the development checkout
+
+Select `sheet_fabrication` for authoring and `sheet_fabrication_query` for read-only inspection:
+
+```bash
+bimwright-ipt --toolsets sheet_fabrication,sheet_fabrication_query
+```
+
+| Tool | Purpose |
+|---|---|
+| `inventor_new_sheet_fabrication_part` | Create a part from an Inventor sheet template. |
+| `inventor_sheet_fabrication_info` | Inspect thickness, style and flat-pattern state. |
+| `inventor_set_sheet_fabrication_thickness` | Override the part thickness with a value or parameter expression. |
+| `inventor_sheet_fabrication_face` | Create a base plate from a closed sketch profile. |
+| `inventor_sheet_fabrication_flange` | Add a flange to selected boundary edges. |
+| `inventor_sheet_fabrication_cut` | Cut a sketch profile through the sheet. |
+| `inventor_flat_pattern` | Create or inspect the flat pattern. |
+| `inventor_unwrap_try` | Try unwrapping selected faces; also applies to ordinary parts. |
+
+`--read-only` retains the inspection tool and removes the authoring tools. The response fields are `is_sheet_fabrication` and `use_sheet_fabrication_style_thickness`. Workflows using the earlier development names must update their tool and toolset references. Use a server and add-in built from the same revision. Autodesk's `SheetMetal*` API identifiers and template filenames remain unchanged.
+
+### iLogic rules and source execution
+
+The `ilogic` toolset runs existing internal/external rules, lists or reads rules, reads diagnostics, and provides command/undo tools. Its four query tools remain available under `--read-only`.
+
+Creating or changing VB source through `inventor_ilogic_upsert_rule`, and executing `inventor_ilogic_run_snippet`, requires the `code` toolset and send-code permission. `--disable-send-code` hides both; the add-in kill switch rejects them independently. Rule execution, source authoring, UI commands and undo are blocked inside `batch_execute`, because their effects can escape its document transaction.
+
+`upsert_rule` runs a newly created rule once through Autodesk's AddRule. For an existing rule, `run=true` executes it once after replacing the text. Native failure status, rule exceptions, and incomplete cleanup return `ok:false` with diagnostics in `data`; arbitrary rule side effects are not rolled back.
+
+Snippets return a string through `iProperties.Value("Custom", "MCP_RESULT")`. An existing string property is restored, and a channel created by the invocation is deleted. A non-string collision is rejected before execution. Existing rules sharing the temporary-rule prefix are preserved. Results above 65,536 characters fail rather than returning truncated JSON. Historical `MCP_RESULT_BEGIN/END` log markers are no longer treated as snippet results.
+
+`ilogic_read_log` bounds reads for positive `max_chars` (default 65,536, maximum 1,048,576). `max_chars=0` explicitly requests the whole file. The response reports `bytes_read` and `truncated`. Rule arguments are flat JSON objects containing strings, numbers, booleans or null.
+
+Sheet Fabrication creation requires a sheet fabrication template and cannot run inside a batch. Failed thickness edits restore the previous thickness/style state; across-bends cut depth follows the native Thickness parameter as the sheet changes. A flange radius override must be finite and greater than zero.
+
 ### meta (3) — server-side target tools, never round-trip to the add-in; stay exposed under `--read-only`
 
 | Tool | Description |
@@ -168,13 +203,27 @@ Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/draw
 
 ### query (7) — read-only document/health/model probes and agent outcome reports
 
-Start each Inventor session with `inventor_health` after selecting the intended target if needed. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use informational-version metadata, falling back to the component's module id. Full binary hashes remain in the setup identities.
+Start each Inventor session with one `inventor_health(check_updates=true)` call after selecting the intended target if needed, so the agent discovers newer stable releases. If network access is unavailable or disallowed, use the offline default and leave the update check not checked/unknown. Later routine probes stay offline. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `server_informational_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use loaded assembly informational-version metadata, falling back to the component's module id. Runtime identity is captured at server startup or add-in activation. `artifact_sha256` is a disk observation at that capture time (`artifact_hash_basis=on_disk_at_identity_capture`), not a digest of loaded memory or proof that a later file replacement has taken effect.
 
-The default call is local and works offline. If the host is absent or unreachable, server identity is still returned alongside `ok:false`, `host_connected:false` and the original error; this is not a successful host probe. `check_updates=true` additionally queries the [official stable release endpoint](https://docs.github.com/en/rest/releases/releases#get-the-latest-release), with a five-second timeout and a 256 KiB metadata limit. `update.status` is `not_checked`, `checked` or `unknown`; `update_available` stays null when no reliable comparison is available. `comparison_basis=semantic_version` means this only checks for a newer release version; equal versions do not prove that a development build matches released binaries. The response includes update guidance, but never downloads a package or installs it. Follow [the install guide](AGENTS.md) for preview, authorization, rollback and restart verification.
+The default call is local and works offline. If the host is absent or unreachable, server identity is still returned alongside `ok:false`, `host_connected:false` and the original error; this is not a successful host probe. `check_updates=true` fetches one [official stable release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) and resolves its tag to a source commit. All requests share a five-second budget; each metadata response is limited to 256 KiB. `update.components.server` and `.plugin` each report `current_version`, `current_build_id`, `version_status`, `build_status` and `status`. Component status is `update_available`, `release_match`, `release_mismatch`, `ahead_of_release`, `unknown` or `not_checked`. Revision comparison uses a full Git hash in loaded assembly metadata; other build ids stay unknown. An older loaded plugin remains visible even when the server matches the release. Tag-resolution failure preserves the version comparison but leaves build status unknown.
+
+`update.status=checked` means the release lookup succeeded, not that both components are current. Per-component `update_available` compares semantic versions only. When a component version matches the release, `release_mismatch` requires a full Git SHA on both sides and different SHAs. Revision metadata such as `+development`, `+build` or no revision instead gives that component status `unknown`. For a pair at the release version with no confirmed revision mismatch, missing revision evidence is reported as `RELEASE_IDENTITY_UNVERIFIED`. Neither result recommends an automatic downgrade. The overall flag is true if either component has a newer stable version available, false only if both versions/revisions match the release, and null otherwise. Source revision equality does not verify release artifact bytes (`artifact_verification=not_performed`). The response never downloads packages or installs them. Follow [the install guide](AGENTS.md) for preview, authorization, rollback and restart verification.
+
+Inspect both `update.components` and `update.notification`, then follow its `agent_action`. Codes distinguish `NEW_RELEASE_AVAILABLE`, `RELEASE_REVIEW_REQUIRED`, `RELEASE_IDENTITY_UNVERIFIED`, `UPDATE_CHECK_UNAVAILABLE` and informational `LOCAL_VERSION_AHEAD`. Lookup failure reports `lookup_reason` (such as `http_403`, `timeout` or `network_unavailable`), leaves reported runtime identities unchanged, and does not claim a local fault or request installation authorization. A local version ahead of the release is reported even without an older peer. Per-component `update_available=false` only means no higher semantic version was established; it does not mean release identity matched. Null notification alone never proves up to date.
+
+The notification names `protected_components` with `protected_component_reasons`; known ahead or unresolved observed builds are preserved. A plugin whose identity has not been observed is listed separately in `unobserved_components`, with `identity_observed=false`: check the intended Inventor connection and obtain metadata, without assuming the host is closed or the installed plugin is corrupt. `comparison_reason` distinguishes missing runtime evidence from unavailable release lookup/revision evidence. Missing artifact hashes do not by themselves determine protection; release artifact-byte verification remains separate.
+
+Read both component comparisons, protection/unobserved fields and the full notification message before summarizing; notification `components` names the primary affected set, not all runtime facts. An ahead server with an unobserved plugin returns `RELEASE_IDENTITY_UNVERIFIED` for the plugin while separately protecting the server. When both component versions match the release but tag resolution fails, the same code accompanies `comparison_reason=release_revision_unavailable` and an external `lookup_reason`. This alone does not mark the component protected or faulty; the false proposal flag still blocks installation. Stop the update workflow and obtain the missing release evidence; otherwise healthy Inventor work can continue.
+
+`update_guidance.mode` is `check_only`, `retry_check`, `review`, `none` or `prepare_update`. Only `prepare_update`, with `bundle_update_proposal_allowed=true`, returns the installation workflow and `requires_user_authorization=true`; reuse existing authorization when applicable. Other modes contain only check/report/review steps, no install.ps1 or installer commands, and no request for installation authorization. A newer local server plus an old plugin blocks the full ZIP proposal; failed tag resolution or an unobserved peer also blocks it while preserving any known newer-version fact. Health never installs anything. The four annotations remain read-only true, destructive false, idempotent true and open-world true.
+
+For a permitted update, keep the exact release tag from the health proposal. Verify the official ZIP against its companion `.zip.sha256` asset before extraction, require `manifest.json`, and preview the installer to validate extracted file checksums before replacement. Health returns no expected ZIP digest and performs no package verification. The manifest checks individual payload files; it does not replace the whole-ZIP checksum or establish independent publisher authentication.
+
+After reconnect/restart, the **client** must record a new `initialize` and a fresh `tools/list`, then call health on that same connection. `serverInfo.version` includes the full informational version. Compare `serverInfo.name/version` with `client_verification.expected_server_info` and the health tool's `_meta["bimwright/ipt-mcp/runtime"]` with `client_verification.expected_runtime` (version, module id, PID and process start time). Also verify its current schema and annotations, including optional boolean `check_updates` and read-only/open-world hints. Tool count alone is insufficient. `client_verification.status=not_observable_by_server` makes the boundary explicit; when a client hides handshake/catalog evidence, its refresh remains unverified. A direct-server smoke test validates the candidate protocol but cannot certify another client's cache.
 
 | Tool | Description |
 |---|---|
-| `inventor_health` | Session-start probe: host connectivity, document/modal/STA state and MCP server/plugin versions and build identities. Offline by default; `check_updates=true` also checks the official stable release. |
+| `inventor_health` | Call with `check_updates=true` once at session start to discover releases and notify the user when `update.notification` is present. Routine probes stay offline by default. Reports host state and loaded server/plugin identities. |
 | `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`. No model changes. |
 | `inventor_list_open_documents` | List documents in memory: title, path, type, is_active, dirty, visible; optional `filter` / `dirty_only`. |
 | `inventor_get_document_info` | Title, full path, type and dirty flag of the active or a targeted document; `references=true` adds its file references (with missing flags). |

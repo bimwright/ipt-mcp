@@ -8,14 +8,15 @@ using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Shared.Contracts;
 
-/// <summary>Observed runtime identity. The installer must match it to signed artifact bytes;
-/// these fields alone are not installation or publisher verification.</summary>
+/// <summary>Loaded assembly identity plus an explicitly scoped disk observation.
+/// These fields alone are not installation or publisher verification.</summary>
 public static class SetupRuntimeIdentity
 {
     public static JObject Capture(RuntimeLayout layout, Assembly assembly, string component, int? hostYear = null)
     {
         if (component != "gateway" && component != "plugin") throw new ArgumentException("Unknown setup component.", nameof(component));
         using var process = Process.GetCurrentProcess();
+        var capturedAt = DateTimeOffset.UtcNow.ToString("o");
         var location = assembly.Location;
         // Single-file gateways have no managed Assembly.Location. Identify their
         // executable instead; never attribute the Inventor executable to a plugin.
@@ -24,9 +25,14 @@ public static class SetupRuntimeIdentity
         string? hash = null;
         if (!string.IsNullOrEmpty(location))
         {
-            using var stream = new FileStream(location, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var sha = SHA256.Create();
-            hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
+            try
+            {
+                using var stream = new FileStream(location, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var sha = SHA256.Create();
+                hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            { /* A missing/replaced disk file must not hide the loaded assembly identity. */ }
         }
         return new JObject
         {
@@ -39,10 +45,13 @@ public static class SetupRuntimeIdentity
             ["host_year"] = hostYear,
             ["process_id"] = process.Id,
             ["process_started_utc"] = process.StartTime.ToUniversalTime().ToString("o"),
+            ["identity_captured_utc"] = capturedAt,
+            ["identity_basis"] = "loaded_assembly",
             ["assembly_informational_version"] = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
             ["module_version_id"] = assembly.ManifestModule.ModuleVersionId.ToString("D"),
             ["artifact_file"] = string.IsNullOrEmpty(location) ? null : Path.GetFileName(location),
             ["artifact_sha256"] = hash,
+            ["artifact_hash_basis"] = "on_disk_at_identity_capture",
             ["publisher_verified"] = false,
         };
     }

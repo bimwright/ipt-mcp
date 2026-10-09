@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Setup;
@@ -24,7 +25,29 @@ public sealed class SetupRuntimeIdentityTests
         Assert.Equal(2027, value.Value<int>("host_year"));
         Assert.Equal(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly.Location))).ToLowerInvariant(), value.Value<string>("artifact_sha256"));
         Assert.Equal(assembly.ManifestModule.ModuleVersionId.ToString("D"), value.Value<string>("module_version_id"));
+        Assert.Equal("loaded_assembly", value.Value<string>("identity_basis"));
+        Assert.Equal("on_disk_at_identity_capture", value.Value<string>("artifact_hash_basis"));
+        Assert.NotNull(value.Value<string>("identity_captured_utc"));
         Assert.False(Directory.Exists(root));
+    }
+
+    [Fact]
+    public void Memory_loaded_plugin_keeps_runtime_identity_without_attributing_the_host_executable_to_it()
+    {
+        var context = new System.Runtime.Loader.AssemblyLoadContext("runtime-identity", isCollectible: true);
+        try
+        {
+            var assembly = typeof(SetupRuntimeIdentity).Assembly;
+            using var stream = new MemoryStream(File.ReadAllBytes(assembly.Location));
+            var loaded = context.LoadFromStream(stream);
+            var identity = SetupRuntimeIdentity.Capture(RuntimeLayout.Resolve(Path.GetTempPath(), "fixture-sid", "ipt-mcp"), loaded, "plugin", 2027);
+            Assert.Equal(loaded.ManifestModule.ModuleVersionId.ToString("D"), identity.Value<string>("module_version_id"));
+            Assert.Equal(assembly.GetCustomAttributes<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion,
+                identity.Value<string>("assembly_informational_version"));
+            Assert.Null(identity.Value<string>("artifact_file"));
+            Assert.Null(identity.Value<string>("artifact_sha256"));
+        }
+        finally { context.Unload(); }
     }
 
     [Fact]

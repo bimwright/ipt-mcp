@@ -27,14 +27,10 @@ internal sealed class DynamicILogicAccess : ILogicAccess
     }
 
     internal override object? FindRule(global::Inventor.Document doc, string name)
-    {
-        try { return _a.GetRule(doc, name); } catch { return null; }
-    }
+        => _a.GetRule(doc, name);
 
-    internal override string? GetRuleText(global::Inventor.Document doc, string name)
-    {
-        try { return (string?)_a.GetRule(doc, name)?.Text; } catch { return null; }
-    }
+    internal override string? GetRuleText(object rule)
+        => (string?)((dynamic)rule).Text;
 
     internal override object AddRule(global::Inventor.Document doc, string name, string text)
         => _a.AddRule(doc, name, text)!;
@@ -75,13 +71,13 @@ internal sealed class DynamicILogicAccess : ILogicAccess
                 list.Add(new RuleExceptionInfo((string)(e.RuleName ?? ""), (int)e.LineNumber,
                     (string?)e.Context?.ToString(), (string)(e.Message ?? "")));
         }
-        catch { }
+        catch { throw; }
         return list;
     }
 
     internal override void ClearExceptions()
     {
-        try { _a.RuleExceptionsLog?.Clear(); } catch { }
+        _a.RuleExceptionsLog?.Clear();
     }
 }
 #endif

@@ -31,7 +31,8 @@ public sealed class ILogicReadLogHandler : HandlerBase, IInventorCommand
         int maxChars;
         try { maxChars = (int?)p["max_chars"] ?? DefaultMaxChars; }
         catch (Exception) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "max_chars must be an integer"); }
-        if (maxChars < 0) return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "max_chars must be >= 0");
+        if (maxChars < 0 || maxChars > ILogicLogReader.MaxTailChars)
+            return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "max_chars must be 0..1048576 (0 reads the whole file)");
 
         try
         {
@@ -50,28 +51,14 @@ public sealed class ILogicReadLogHandler : HandlerBase, IInventorCommand
                 });
             }
 
-            string text;
-            long length;
-            using (var fs = new FileStream(path!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-            using (var sr = new StreamReader(fs, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
-            {
-                length = fs.Length;
-                text = sr.ReadToEnd();
-            }
-
-            var truncated = false;
-            if (maxChars > 0 && text.Length > maxChars)
-            {
-                text = text.Substring(text.Length - maxChars);
-                truncated = true;
-            }
-
+            var tail = ILogicLogReader.Read(path!, maxChars);
             return Ok(ctx, new JObject
             {
                 ["log_file"] = path,
-                ["log_bytes"] = length,
-                ["text"] = SecretMasker.Mask(text),
-                ["truncated"] = truncated,
+                ["log_bytes"] = tail.Length,
+                ["bytes_read"] = tail.BytesRead,
+                ["text"] = SecretMasker.Mask(tail.Text),
+                ["truncated"] = tail.Truncated,
                 ["exceptions"] = ExceptionsSnapshot(ilogic),
             });
         }

@@ -40,7 +40,7 @@ public sealed class ILogicGetRuleHandler : HandlerBase, IInventorCommand
             {
                 ["name"] = name,
                 ["scope"] = "internal",
-                ["text"] = ilogic.GetRuleText(doc, name!),
+                ["text"] = ilogic.GetRuleText(rule),
             });
         }
         catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message); }

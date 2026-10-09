@@ -22,7 +22,7 @@ namespace Bimwright.Ipt.Shared.Contracts;
 ///       | { polyline: [[x,y] | [x,y,bulge]…] }        (closed; bulge = tan(sweep/4), + = CCW)
 ///       | any shape + inner: [shape…]                  (voids inside it)
 /// </code>
-/// Out of scope for v1 (use send_code + modules): revolve/loft/sweep, patterns, sheet metal, miters.
+/// Out of scope for v1 (use send_code + modules): revolve/loft/sweep, patterns, sheet fabrication, miters.
 /// </summary>
 public sealed class PartRecipe
 {

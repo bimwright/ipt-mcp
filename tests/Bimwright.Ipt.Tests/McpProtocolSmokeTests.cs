@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Bimwright.Ipt.Server;
 using Newtonsoft.Json.Linq;
 
 namespace Bimwright.Ipt.Tests;
@@ -22,6 +23,20 @@ public sealed class McpProtocolSmokeTests
             report["inputSchema"]!["required"]!.Values<string>().OrderBy(x => x).ToArray());
     }
 
+    [Fact]
+    public async Task ILogic_scalar_arguments_bind_through_the_real_MCP_protocol()
+    {
+        var responses = await RunProtocolHandshake(checkILogicArguments: true);
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var rule = Assert.Single(tools, tool => (string?)tool["name"] == "inventor_ilogic_run_rule");
+        var schema = rule["inputSchema"]!["properties"]!["arguments"]!;
+        Assert.Contains("object", schema["type"]!.Values<string>());
+        Assert.Contains("number", schema["additionalProperties"]!["type"]!.Values<string>());
+        var response = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.False((bool)response["ok"]!);
+        Assert.Equal("NO_TARGET", (string?)response["error"]!["code"]);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, true)]
@@ -35,14 +50,46 @@ public sealed class McpProtocolSmokeTests
         Assert.DoesNotContain("check_updates", health["inputSchema"]?["required"]?.Values<string>() ?? Array.Empty<string>());
         Assert.True(health["annotations"]!.Value<bool>("readOnlyHint"));
         Assert.False(health["annotations"]!.Value<bool>("destructiveHint"));
+        Assert.True(health["annotations"]!.Value<bool>("idempotentHint"));
         Assert.True(health["annotations"]!.Value<bool>("openWorldHint"));
+        Assert.Contains("inventor_health(check_updates=true)", (string?)health["description"]);
+        Assert.Contains("update.notification", (string?)health["description"]);
+        Assert.Contains("bundle_update_proposal_allowed", (string?)health["description"]);
+        Assert.Contains("protected_components", (string?)health["description"]);
+        Assert.Contains("update_guidance.mode", (string?)health["description"]);
+        Assert.Contains("unobserved_components", (string?)health["description"]);
+        Assert.Contains("inventor_health(check_updates=true)", (string?)responses[0]["result"]?["instructions"]);
+        Assert.Contains("update.notification", (string?)responses[0]["result"]?["instructions"]);
+        Assert.Contains("bundle_update_proposal_allowed", (string?)responses[0]["result"]?["instructions"]);
+        Assert.Contains("protected_components", (string?)responses[0]["result"]?["instructions"]);
         var result = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
         Assert.False(result.Value<bool>("ok"));
         Assert.False(result.Value<bool>("host_connected"));
         Assert.Equal("NO_TARGET", (string?)result["error"]?["code"]);
-        Assert.Equal((string?)responses[0]["result"]?["serverInfo"]?["version"], (string?)result["mcp"]?["server_version"]);
+        Assert.Equal((string?)responses[0]["result"]?["serverInfo"]?["version"], (string?)result["mcp"]?["server_informational_version"]);
+        Assert.Equal(Program.ServerInformationalVersion, (string?)responses[0]["result"]?["serverInfo"]?["version"]);
+        Assert.True(JToken.DeepEquals(health["_meta"]?[HealthRuntimeInfo.ClientRuntimeMetadataKey],
+            result["client_verification"]?["expected_runtime"]));
+        Assert.Equal("not_observable_by_server", (string?)result["client_verification"]?["status"]);
         Assert.NotEmpty(result["mcp"]!["server_build_id"]!.Value<string>()!);
         Assert.Equal("not_checked", (string?)result["update"]?["status"]);
+        Assert.Equal(JTokenType.Null, result["update"]!["notification"]!.Type);
+        Assert.Equal("check_only", (string?)result["update_guidance"]?["mode"]);
+        Assert.DoesNotContain("install.ps1", result["update_guidance"]!["steps"]!.ToString());
+    }
+
+    [Fact]
+    public async Task Reconnected_client_can_detect_a_catalog_cached_from_the_previous_process_with_the_same_version()
+    {
+        var previous = await RunProtocolHandshake(checkHealth: true);
+        var current = await RunProtocolHandshake(checkHealth: true);
+        var oldHealthTool = ((JArray)previous[1]["result"]!["tools"]!).Single(t => (string?)t["name"] == "inventor_health");
+        var newHealthTool = ((JArray)current[1]["result"]!["tools"]!).Single(t => (string?)t["name"] == "inventor_health");
+        var health = JObject.Parse((string)current[2]["result"]!["content"]![0]!["text"]!);
+        var expected = health["client_verification"]!["expected_runtime"]!;
+        Assert.Equal((string?)previous[0]["result"]?["serverInfo"]?["version"], (string?)current[0]["result"]?["serverInfo"]?["version"]);
+        Assert.False(JToken.DeepEquals(oldHealthTool["_meta"]?[HealthRuntimeInfo.ClientRuntimeMetadataKey], expected));
+        Assert.True(JToken.DeepEquals(newHealthTool["_meta"]?[HealthRuntimeInfo.ClientRuntimeMetadataKey], expected));
     }
 
     private sealed class Profile : IDisposable
@@ -52,7 +99,8 @@ public sealed class McpProtocolSmokeTests
         public void Dispose() => Directory.Delete(Root, true);
     }
 
-    private static async Task<JObject[]> RunProtocolHandshake(bool checkHealth = false, bool readOnly = false, bool explicitHealthArgument = false)
+    private static async Task<JObject[]> RunProtocolHandshake(bool checkILogicArguments = false,
+        bool checkHealth = false, bool readOnly = false, bool explicitHealthArgument = false)
     {
         using var profile = new Profile();
         var serverAssembly = typeof(Program).Assembly.Location;
@@ -70,6 +118,11 @@ public sealed class McpProtocolSmokeTests
         startInfo.ArgumentList.Add("--local-app-data");
         startInfo.ArgumentList.Add(profile.Root);
         if (readOnly) startInfo.ArgumentList.Add("--read-only");
+        if (checkILogicArguments)
+        {
+            startInfo.ArgumentList.Add("--target");
+            startInfo.ArgumentList.Add("__isolated_ilogic_binding_test__");
+        }
 
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start ipt-mcp server.");
         var stderrTask = process.StandardError.ReadToEndAsync();
@@ -81,6 +134,11 @@ public sealed class McpProtocolSmokeTests
         await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""");
         var toolsList = await ReadJsonResponse(process, "tools/list");
         JObject? ruleCall = null;
+        if (checkILogicArguments)
+        {
+            await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inventor_ilogic_run_rule","arguments":{"name":"unit-test-rule","arguments":{"increment":2,"flag":true,"text":"value","empty":null}}}}""");
+            ruleCall = await ReadJsonResponse(process, "iLogic arguments");
+        }
         if (checkHealth)
         {
             var arguments = explicitHealthArgument ? new JObject { ["check_updates"] = false } : new JObject();

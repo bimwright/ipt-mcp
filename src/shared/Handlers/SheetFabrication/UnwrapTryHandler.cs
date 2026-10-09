@@ -6,18 +6,18 @@ using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Handlers.Feature;
 using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Ipt.Shared.Handlers.SheetMetal;
+namespace Bimwright.Ipt.Shared.Handlers.SheetFabrication;
 
 /// <summary>
 /// <c>unwrap_try</c> — trial-unwrap a set of faces into a flat surface body, measure it, then roll
-/// back unless <c>keep</c> is true (the effectustasi rollback-by-default pattern worth copying —
-/// the caller probes manufacturability without committing a feature). <c>faces</c> is a non-empty
+/// back unless <c>keep</c> is true, so the caller can probe manufacturability without committing
+/// a feature. <c>faces</c> is a non-empty
 /// array of face ids (<c>"face:F"</c>/<c>"body:B/face:F"</c> — see <c>list_faces</c>).
 /// <c>alignment</c> = origin|xy|xz|yz (default origin) maps to
 /// <see cref="UnwrapResultAlignmentEnum"/>; <c>auto_face_chain</c> (default false) chains tangent
 /// faces automatically; <c>merge_result_body</c> (default false) merges into the source body.
-/// Unwrap is a general part feature, not sheet-metal-only, so the target is any part — the
-/// sheet-metal guard is NOT applied. On failure the Inventor <c>ErrorManager.LastMessage</c> is
+/// Unwrap is a general part feature, not sheet fabrication-only, so the target is any part — the
+/// sheet fabrication guard is NOT applied. On failure the Inventor <c>ErrorManager.LastMessage</c> is
 /// attached — it usually names the exact reason a face set cannot unwrap.
 /// </summary>
 public sealed class UnwrapTryHandler : HandlerBase, IInventorCommand

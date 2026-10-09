@@ -36,21 +36,15 @@ public sealed class ILogicRunExternalRuleHandler : HandlerBase, IInventorCommand
         {
             var args = ILogicBridge.BuildArguments(app, p);
             using var silent = SilentOperationScope.Enter(app, p);
-            var prevSilent = ilogic!.SilentOperation;
-            int result;
-            try
+            var data = new JObject { ["rule"] = name, ["scope"] = "external" };
+            return ILogicBridge.ExecuteRule(ctx, ilogic!, data, () =>
             {
-                ilogic.SilentOperation = true;
-                result = ilogic.RunExternalRule(doc, name!, args);
-            }
-            finally { ilogic.SilentOperation = prevSilent; }
-
-            return Ok(ctx, new JObject
-            {
-                ["rule"] = name,
-                ["scope"] = "external",
-                ["result"] = result,
-                ["exceptions"] = ILogicBridge.DrainExceptions(ilogic),
+                data["execution_attempted"] = true;
+                data["effects_may_have_occurred"] = true;
+                var result = ilogic!.RunExternalRule(doc, name!, args);
+                data["result"] = result;
+                data["ran"] = result == 0;
+                return result;
             });
         }
         catch (Exception ex) { return Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message); }

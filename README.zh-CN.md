@@ -146,9 +146,21 @@ Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/draw
 
 ### query (7) —— 只读的 document/health/model 探测及任务结果报告
 
+每个 Inventor session 开始时先选择目标，再调用一次 `inventor_health(check_updates=true)`。网络不可用或不允许访问时使用默认离线调用，后续常规探测也保持离线。除连接、document、STA/queue/modal 状态外，`mcp` 还返回正在运行的 server 和已加载 plugin 的 version/build ID。`setup_gateway`/`setup_plugin` 中的 assembly version、MVID 是运行时身份；文件 hash 是 capture 时的磁盘观察，磁盘上的新文件不能证明运行时已经重新加载。没有 host 时仍返回 server 身份及 `ok:false`、`host_connected:false`，plugin 身份保持未验证。
+
+`update.components.server` 和 `.plugin` 使用同一稳定 release 基准，各自包含 `version_status`、`build_status`、`status`（`update_available`、`release_match`、`release_mismatch`、`ahead_of_release`、`unknown`、`not_checked`）。`update.status=checked` 仅说明 release lookup 成功。`update_available=false` 只表示未发现更高的 semantic version，不证明 build 与 release 一致。`update.notification` 用 `NEW_RELEASE_AVAILABLE` 表示新版本、`RELEASE_REVIEW_REQUIRED` 表示 revision 不一致、`RELEASE_IDENTITY_UNVERIFIED` 表示身份未验证、`UPDATE_CHECK_UNAVAILABLE` 表示 lookup 失败。agent 应报告 code/message 并遵循 `agent_action`。只有 `bundle_update_proposal_allowed=true` 才能建议安装完整 Setup ZIP；为 false 时应保留 `protected_components`，先检查 server/plugin 组合。即使旧 plugin 需要升级，也不能降级比 release 更新的 server。notification 为 null 不代表已是最新。安装仍需用户授权和 package 验证，参见[安装指南](AGENTS.md)；health 不会自动安装、保存/关闭 document 或重启进程。
+
+`UPDATE_CHECK_UNAVAILABLE` 通过 `lookup_reason` 报告外部查询失败，不表示本机 identity 有故障，也不请求安装授权。`LOCAL_VERSION_AHEAD` 中性地说明本地版本高于 release。`protected_component_reasons` 说明保留各已观察 build 的原因；`unobserved_components`/`identity_observed=false` 只表示 identity 尚未观察，应检查目标 Inventor 连接，不能推断 plugin 损坏或 host 已关闭。`comparison_reason` 区分 runtime 证据不足与 release 证据不足。遵循 `update_guidance.mode`：只有 `prepare_update` 且 `bundle_update_proposal_allowed=true` 才包含安装步骤和 `requires_user_authorization=true`。`check_only`、`retry_check`、`review`、`none` 仅含检查/报告步骤，没有 installer 命令。即使已知有新版本，revision 查询失败或 peer 未观察也会阻止整个 ZIP 的安装建议。
+
+component version 与 release 相同时，`release_mismatch` 要求两侧都有完整 Git SHA，且 SHA 不同。`+development`、`+build` 或没有 revision 时，该 component 返回 `unknown`。两个 component version 都与 release 相同且没有已确认的 revision 不一致时，revision 证据不足通过 `RELEASE_IDENTITY_UNVERIFIED` 报告。总结前应读取两个 component、`lookup_reason`、保护原因、未观察 identity 和完整 message；`notification.components` 仅列出主要关注对象。server ahead 且 plugin 未观察时，要分别报告这两个事实。tag lookup 失败导致的 `comparison_reason=release_revision_unavailable` 表示缺少外部 release 证据；未列入 `protected_components` 不代表允许安装。应停止 update 流程，报告 lookup 原因并获取证据；正常的 Inventor 工作仍可继续。
+
+对于允许提出的 update，应保留 health 中的确切 tag，在解压前使用同一 release 的 `.zip.sha256` asset 对照 ZIP 的 SHA-256，并在 installer preview 前要求存在 `manifest.json`。manifest 检查解压后的各文件；health 不返回 ZIP digest，也不验证 package。checksum 本身不证明 publisher 身份。[安装指南](AGENTS.md)区分首次安装与 update，并在 proposal 不允许时停止 update 流程。
+
+重新连接/重启后，client 必须在同一 connection 上把新的 `initialize.serverInfo`、`tools/list` 与 `client_verification.expected_server_info`/`expected_runtime` 对照，并检查 `_meta["bimwright/ipt-mcp/runtime"]`、schema 和四项 annotations：read-only=true、destructive=false、idempotent=true、open-world=true。`not_observable_by_server` 表示 server 无法自行证明 client 已丢弃旧 cache；缺少 client 证据时仍未验证。源代码 revision 一致不能替代 release bytes 或 publisher 验证。完整说明见[英文 README](README.md)。
+
 | Tool | 描述 |
 |---|---|
-| `inventor_health` | 探测 active add-in：inventor_year、process_id、是否有 document 打开、active document type。 |
+| `inventor_health` | 探测 host 状态及运行中的 server/已加载 plugin 身份；session 开始时检查 release，返回通知和受保护组件。默认离线，不自动安装更新。 |
 | `inventor_report_task_result` | agent 用 `task_id`、`outcome`（`completed`/`failed`/`cancelled`）及单行 `summary` 显式报告任务结果；不修改模型。 |
 | `inventor_list_open_documents` | 列出所有打开的 documents：标题、路径、类型，以及哪个是 active。 |
 | `inventor_get_document_info` | 获取 active document 的标题、完整路径和 document type。 |

@@ -142,9 +142,21 @@ Earlier Inventor 2027 fixture results: [Phase 3 tool behavior](docs/testing/draw
 
 ### query (7) — 読み取り専用のドキュメント/ヘルス/モデルプローブとタスク結果報告
 
+Inventor セッションの開始時に対象を選び、`inventor_health(check_updates=true)` を一度呼び出します。ネットワークが利用できない、または禁止されている場合は既定のオフライン呼び出しを使い、通常の再確認もオフラインで行います。接続、ドキュメント、STA/キュー/モーダル状態に加え、`mcp` は実行中サーバーとロード済みプラグインの version/build ID を返します。`setup_gateway`/`setup_plugin` の assembly version と MVID はロード済みの識別情報で、ファイル hash は capture 時のディスク観測です。ディスク上の新しいファイルだけでは再ロードを証明できません。ホスト不在でもサーバー情報と `ok:false`、`host_connected:false` を返し、プラグイン情報は未検証になります。
+
+`update.components.server` と `.plugin` は同じ安定 release と比較され、`version_status`、`build_status`、`status`（`update_available`、`release_match`、`release_mismatch`、`ahead_of_release`、`unknown`、`not_checked`）を持ちます。`update.status=checked` は release lookup の成功だけを示します。`update_available=false` は上位の semantic version が確認されていないという意味で、release build の一致を証明しません。`update.notification` の `NEW_RELEASE_AVAILABLE` は新バージョン、`RELEASE_REVIEW_REQUIRED` は revision 不一致、`RELEASE_IDENTITY_UNVERIFIED` は未検証の識別情報、`UPDATE_CHECK_UNAVAILABLE` は lookup 失敗を示します。agent は code/message を報告して `agent_action` に従います。Setup ZIP 全体のインストールを提案できるのは `bundle_update_proposal_allowed=true` の場合だけです。false の場合は `protected_components` を変更せず、サーバーとプラグインの組み合わせを確認します。プラグインが古くても、release より新しいサーバーをダウングレードしてはいけません。null 通知だけでは最新と判断できません。インストールには利用者の許可と package 検証が必要です（[手順](AGENTS.md)）。health はインストール、ドキュメントの保存/終了、プロセス再起動を行いません。
+
+`UPDATE_CHECK_UNAVAILABLE` は外部 lookup の失敗を `lookup_reason` とともに報告し、ローカル identity の故障やインストール許可の要求を意味しません。`LOCAL_VERSION_AHEAD` は release より新しいローカル版の情報通知です。保持理由は `protected_component_reasons` にあり、`unobserved_components`/`identity_observed=false` は identity 未観測を示します。対象の Inventor 接続を確認してください。プラグイン破損やホスト終了を推測してはいけません。`comparison_reason` は runtime 証拠不足と release 証拠不足を区別します。`update_guidance.mode` に従い、インストール手順と `requires_user_authorization=true` があるのは `prepare_update` かつ `bundle_update_proposal_allowed=true` の場合だけです。`check_only`、`retry_check`、`review`、`none` は確認・報告のみで installer コマンドを含みません。新バージョンが判明しても、revision lookup 失敗や未観測の peer がある場合は ZIP 全体の提案を停止します。
+
+component の version が release と同じ場合、`release_mismatch` は両側に完全な Git SHA があり、その SHA が異なる場合だけです。`+development`、`+build`、revision なしの場合、その component は `unknown` になります。両 component の version が release と同じで、確定した revision 不一致がない場合、revision 証拠不足は `RELEASE_IDENTITY_UNVERIFIED` で報告されます。要約前に両 component、`lookup_reason`、保持理由、未観測 identity、message 全文を読んでください。`notification.components` は主な対象だけを示します。server が ahead で plugin が未観測の場合は、両方の事実を別々に報告します。tag lookup 失敗による `comparison_reason=release_revision_unavailable` は外部 release 証拠不足であり、`protected_components` にないことはインストール許可を意味しません。update 手順を停止して lookup 理由を報告し、証拠を取得してください。正常な Inventor 作業は続行できます。
+
+許可された update 提案では health の正確な tag を維持し、展開前に同じ release の `.zip.sha256` asset と ZIP の SHA-256 を比較します。installer の preview 前には `manifest.json` が必要です。manifest は展開済みファイルを検証します。health は ZIP digest を返さず、package を検証しません。checksum だけでは publisher の身元を証明できません。[インストール手順](AGENTS.md)は初回インストールと update を分け、許可されていない提案では update 手順を停止します。
+
+再接続/再起動後は client が同じ connection 上の新しい `initialize.serverInfo` と `tools/list` を `client_verification.expected_server_info`/`expected_runtime` と比較します。`_meta["bimwright/ipt-mcp/runtime"]`、schema、read-only=true・destructive=false・idempotent=true・open-world=true の annotations も確認してください。`not_observable_by_server` はサーバー自身が client cache の更新を証明できないことを表し、client の証拠がなければ未検証です。ソース revision の一致は release bytes や publisher の検証を代替しません。詳細は[英語 README](README.md)を参照してください。
+
 | ツール | 説明 |
 |---|---|
-| `inventor_health` | アクティブなアドインをプローブ: inventor_year、process_id、ドキュメントが開いているか、アクティブドキュメントの種類。 |
+| `inventor_health` | ホスト状態と実行中サーバー/ロード済みプラグインを確認。開始時に release を確認し通知と保護対象を返す。既定はオフライン、自動更新なし。 |
 | `inventor_report_task_result` | agent が `task_id`、`outcome`（`completed`/`failed`/`cancelled`）、1 行の `summary` で結果を明示的に報告。モデル変更なし。 |
 | `inventor_list_open_documents` | 開いているすべてのドキュメントを一覧: タイトル、パス、種類、アクティブかどうか。 |
 | `inventor_get_document_info` | アクティブドキュメントのタイトル、完全パス、ドキュメントの種類を取得。 |

@@ -26,8 +26,8 @@ jobs:
             8.0.x
             10.0.x
       # The MCP server and unit tests are net8.0 and need no Inventor SDK,
-      # so they build and run on any runner. The per-version add-ins require
-      # the Inventor interop assemblies and are built on a prepared Windows box.
+      # so they build and run on this Windows runner without Inventor installed.
+      # Per-version add-ins require Inventor interop and are built on a prepared Windows box.
       - name: Build server
         run: dotnet build src/server -c Release
       - name: Test (server-only)

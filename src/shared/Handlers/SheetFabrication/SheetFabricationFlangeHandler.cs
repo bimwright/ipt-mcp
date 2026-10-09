@@ -6,28 +6,27 @@ using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.Handlers.Feature;
 using Bimwright.Ipt.Shared.Infrastructure;
 
-namespace Bimwright.Ipt.Shared.Handlers.SheetMetal;
+namespace Bimwright.Ipt.Shared.Handlers.SheetFabrication;
 
 /// <summary>
-/// <c>sm_flange</c> — bend a flange up from sheet edges. <c>edges</c> is a non-empty array of edge
+/// <c>sheet_fabrication_flange</c> — bend a flange up from sheet edges. <c>edges</c> is a non-empty array of edge
 /// ids (<c>"edge:E"</c>/<c>"body:B/edge:E"</c> — see <c>list_edges</c>; straight sheet-boundary
 /// edges). <c>angle_deg</c> defaults 90; <c>height</c> accepts a number (mm) or an expression
 /// string (<c>"25 mm"</c>, <c>"flange_h"</c>) — passed to
 /// <c>FlangeFeatures.CreateFlangeDefinition</c> as an expression <b>string</b>, the Variant form
-/// Autodesk documents, which also dodges the ignored-Distance quirk competitors hit when passing
-/// a raw double on Inventor 2026. After <c>Add</c> the applied height is read back from
+/// Autodesk documents. After <c>Add</c> the applied height is read back from
 /// <c>HeightExtent.Distance.Expression</c> and rewritten once if Inventor dropped the argument.
 /// Optional <c>bend_radius_mm</c> overrides the style bend radius for this flange.
 /// Returns feature_name + fresh face/edge counts.
 /// </summary>
-public sealed class SheetMetalFlangeHandler : HandlerBase, IInventorCommand
+public sealed class SheetFabricationFlangeHandler : HandlerBase, IInventorCommand
 {
-    public string Name => "sm_flange";
+    public string Name => "sheet_fabrication_flange";
     public bool IsReadOnly => false;
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        if (!SheetMetalSupport.TryGetSheetMetalPart(ctx, p, "sm_flange", out var app, out var part, out var smDef, out var failure))
+        if (!SheetFabricationSupport.TryGetSheetFabricationPart(ctx, p, "sheet_fabrication_flange", out var app, out var part, out var fabricationDef, out var failure))
             return failure!;
 
         if (p["edges"] is not JArray edgeIds || edgeIds.Count == 0)
@@ -58,17 +57,27 @@ public sealed class SheetMetalFlangeHandler : HandlerBase, IInventorCommand
         else
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "height must be a number (mm) or an expression string");
 
+        double? bend = null;
+        if (p["bend_radius_mm"] is { Type: not JTokenType.Null } bendToken)
+        {
+            if (bendToken.Type is not (JTokenType.Integer or JTokenType.Float))
+                return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "bend_radius_mm must be a number (mm)");
+            bend = bendToken.Value<double>();
+            if (double.IsNaN(bend.Value) || double.IsInfinity(bend.Value) || bend.Value <= 0)
+                return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "bend_radius_mm must be a finite number greater than 0");
+        }
+
         EdgeCollection edges;
         try { edges = FeatureSupport.EdgeCollection(app, part.ComponentDefinition, edgeIds); }
         catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
 
         try
         {
-            var smFeatures = SheetMetalSupport.SmFeatures(smDef)
-                ?? throw new InvalidOperationException("sheet-metal features are unavailable");
+            var fabricationFeatures = SheetFabricationSupport.FabricationFeatures(fabricationDef)
+                ?? throw new InvalidOperationException("sheet fabrication features are unavailable");
             var angleExpr = angleDeg.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + " deg";
-            var flangeDef = smFeatures.FlangeFeatures.CreateFlangeDefinition(edges, angleExpr, heightExpr);
-            var feature = smFeatures.FlangeFeatures.Add(flangeDef);
+            var flangeDef = fabricationFeatures.FlangeFeatures.CreateFlangeDefinition(edges, angleExpr, heightExpr);
+            var feature = fabricationFeatures.FlangeFeatures.Add(flangeDef);
 
             var data = new JObject
             {
@@ -77,7 +86,7 @@ public sealed class SheetMetalFlangeHandler : HandlerBase, IInventorCommand
                 ["edge_count"] = edges.Count,
             };
 
-            // Post-verify: if the height Variant was dropped on Add (the competitor's 2026 quirk),
+            // Post-verify: if the height Variant was dropped on Add,
             // rewrite the expression on the applied distance extent.
             try
             {
@@ -95,7 +104,6 @@ public sealed class SheetMetalFlangeHandler : HandlerBase, IInventorCommand
             }
             catch { }
 
-            var bend = p["bend_radius_mm"]?.Value<double?>();
             if (bend is > 0)
             {
                 try
@@ -112,7 +120,7 @@ public sealed class SheetMetalFlangeHandler : HandlerBase, IInventorCommand
             {
                 try { feature.Name = requestedName; data["feature_name"] = feature.Name; } catch { }
             }
-            data.Merge(SheetMetalSupport.TopologyCounts(part.ComponentDefinition));
+            data.Merge(SheetFabricationSupport.TopologyCounts(part.ComponentDefinition));
             return Ok(ctx, data);
         }
         catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }

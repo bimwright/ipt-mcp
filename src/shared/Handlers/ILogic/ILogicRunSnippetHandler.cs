@@ -1,6 +1,6 @@
 #if INVENTOR2022 || INVENTOR2023 || INVENTOR2024 || INVENTOR2025 || INVENTOR2026 || INVENTOR2027
 using System;
-using System.IO;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using Inventor;
 using Bimwright.Ipt.Shared.Contracts;
@@ -9,156 +9,107 @@ using Bimwright.Ipt.Shared.Security;
 
 namespace Bimwright.Ipt.Shared.Handlers.ILogic;
 
-/// <summary>
-/// <c>ilogic_run_snippet</c> — run arbitrary iLogic VB <c>code</c> as a temporary internal rule.
-/// Send-code-grade: only registered when <c>EnableSendCode</c> and additionally fenced in the
-/// dispatcher. Uses the temp-rule pattern — <c>AddRule</c> compiles and runs, then
-/// <c>try/finally DeleteRule</c>; before creating one it sweeps stale <c>TempMCPRule_*</c> residue
-/// left by interrupted runs so agent VB never stays embedded in a customer document. Result
-/// channel: the snippet returns a value via the iLogic-safe custom iProperty
-/// <c>iProperties.Value("Custom", "MCP_RESULT") = "..."</c>, which this handler reads back and
-/// deletes (iLogic's safety scanner blocks <c>System.IO</c>, so file transport is not an option).
-/// Fallback: a <c>MCP_RESULT_BEGIN…MCP_RESULT_END</c> marker via <c>Logger.Info</c> is scraped when
-/// this machine file-backs the iLogic log (<c>iLogicLogger.config</c>-dependent). Rule failures
-/// surface as <c>exceptions</c> drained from iLogic's <c>RuleExceptionsLog</c>.
-/// </summary>
+/// <summary>Executes only this invocation's temporary rule and restores its result channel.
+/// Existing rules are never swept by name. Log markers are not an invocation-scoped result channel.</summary>
 public sealed class ILogicRunSnippetHandler : HandlerBase, IInventorCommand
 {
     public string Name => "ilogic_run_snippet";
     public bool IsReadOnly => false;
-
     internal const string TempRulePrefix = "TempMCPRule_";
-    internal const string ResultBegin = "MCP_RESULT_BEGIN";
-    internal const string ResultEnd = "MCP_RESULT_END";
     internal const string ResultPropSet = "Inventor User Defined Properties";
     internal const string ResultPropName = "MCP_RESULT";
-    private const int LogTailChars = 262144;
-    private const int ResultMaxChars = 65536;
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
         var code = (string?)p["code"];
         if (string.IsNullOrWhiteSpace(code))
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "code is required (iLogic VB source)");
-
         var doc = ActiveDocumentSupport.ResolveTarget(ctx, p, out var failure);
         if (failure != null) return failure;
-        if (doc is null)
-            return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
-
+        if (doc is null) return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
         var app = (Application)ctx.Application!;
-        if (!ILogicBridge.TryGet(ctx, Name, app, out var ilogic, out failure))
-            return failure!;
+        if (!ILogicBridge.TryGet(ctx, Name, app, out var ilogic, out failure)) return failure!;
 
-        var ruleName = TempRulePrefix + Guid.NewGuid().ToString("N").Substring(0, 8);
-        var swept = 0;
-        var deleted = false;
+        var ruleName = TempRulePrefix + Guid.NewGuid().ToString("N");
+        var data = new JObject
+        {
+            ["rule"] = ruleName, ["ran"] = false, ["rule_deleted"] = true,
+            ["residue_swept"] = 0, ["result"] = null,
+        };
+        ILogicResultChannel? channel = null;
+        var ruleAttempted = false;
         try
         {
             using var silent = SilentOperationScope.Enter(app, p);
-            var prevSilent = ilogic!.SilentOperation;
-            try
+            return ILogicBridge.ExecuteRule(ctx, ilogic!, data, () =>
             {
-                ilogic.SilentOperation = true;
-
-                // Residue sweep: a crashed run would otherwise leave agent VB embedded in the doc.
-                foreach (var r in ilogic.GetRules(doc))
+                if (ilogic!.FindRule(doc, ruleName) is not null)
+                    throw new InvalidOperationException("The temporary rule name already exists; no rule was overwritten.");
+                channel = new ILogicResultChannel(new ResultStore(doc));
+                channel.Begin();
+                ruleAttempted = true;
+                data["rule_deleted"] = false;
+                data["execution_attempted"] = true;
+                data["effects_may_have_occurred"] = true;
+                ilogic.AddRule(doc, ruleName, code!);
+                var result = channel.Read();
+                data["result"] = result is null ? null : SecretMasker.Mask(result);
+                data["result_present"] = result is not null;
+                data["ran"] = true;
+                return null;
+            }, () =>
+            {
+                var errors = new List<string>();
+                if (ruleAttempted)
                 {
-                    if (!r.Name.StartsWith(TempRulePrefix, StringComparison.Ordinal)) continue;
-                    try { ilogic.DeleteRule(doc, r.Name); swept++; } catch { }
+                    try
+                    {
+                        if (ilogic!.FindRule(doc, ruleName) is not null) ilogic.DeleteRule(doc, ruleName);
+                        data["rule_deleted"] = ilogic.FindRule(doc, ruleName) is null;
+                        if (data["rule_deleted"]?.Value<bool>() != true)
+                            errors.Add("The invocation's temporary rule remains after cleanup.");
+                    }
+                    catch (Exception ex) { errors.Add("Temporary rule: " + ex.Message); }
                 }
-
-                ilogic.AddRule(doc, ruleName, code!); // AddRule compiles AND runs
-            }
-            finally
-            {
-                try { deleted = ilogic.DeleteRule(doc, ruleName) >= 0; } catch { }
-                ilogic.SilentOperation = prevSilent;
-            }
-
-            return Ok(ctx, new JObject
-            {
-                ["ran"] = true,
-                ["rule_deleted"] = deleted,
-                ["residue_swept"] = swept,
-                ["result"] = ReadResultProperty(doc) ?? ScrapeResultMarker(ilogic),
-                ["exceptions"] = ILogicBridge.DrainExceptions(ilogic),
+                try
+                {
+                    channel?.Restore();
+                    data["result_property_restored"] = true;
+                }
+                catch (Exception ex)
+                {
+                    data["result_property_restored"] = false;
+                    errors.Add("Result property: " + ex.Message);
+                }
+                if (errors.Count > 0) throw new InvalidOperationException(string.Join(" ", errors));
             });
         }
-        catch (Exception ex)
-        {
-            // Even on failure, report whether the temp rule leaked so the agent can act on it.
-            var err = Fail(ctx, InventorErrorCodes.API_ERROR, ex.Message);
-            if (err.Data is JObject d)
-            {
-                d["rule_deleted"] = deleted;
-                d["residue_swept"] = swept;
-                try { d["exceptions"] = ILogicBridge.DrainExceptions(ilogic!); } catch { }
-            }
-            return err;
-        }
-        finally
-        {
-            // Always sweep the result iProperty too — a snippet that sets it must not leak it
-            // into a customer document.
-            try { DeleteResultProperty(doc); } catch { }
-        }
+        catch (Exception ex) { return ILogicOutcome.Complete(data, Meta(ctx), error: ex.Message); }
     }
 
-    /// <summary>Reads + deletes the <c>MCP_RESULT</c> custom iProperty; null when unset.</summary>
-    private static string? ReadResultProperty(global::Inventor.Document doc)
+    private sealed class ResultStore : ILogicResultStore
     {
-        var prop = FindResultProperty(doc);
-        if (prop is null) return null;
-        try
+        private readonly PropertySet _set;
+        internal ResultStore(global::Inventor.Document doc)
         {
-            var text = prop.Value?.ToString();
-            try { prop.Delete(); } catch { }
-            if (string.IsNullOrEmpty(text)) return null;
-            if (text!.Length > ResultMaxChars) text = text.Substring(0, ResultMaxChars);
-            return SecretMasker.Mask(text);
+            _set = Handlers.Properties.PropertyAccess.FindSet(doc, ResultPropSet)
+                ?? throw new InvalidOperationException("The document has no custom iProperty set.");
         }
-        catch { return null; }
-    }
 
-    private static void DeleteResultProperty(global::Inventor.Document doc)
-    {
-        try { FindResultProperty(doc)?.Delete(); } catch { }
-    }
-
-    private static Property? FindResultProperty(global::Inventor.Document doc)
-    {
-        try
+        public bool TryRead(out object? value)
         {
-            var set = Handlers.Properties.PropertyAccess.FindSet(doc, ResultPropSet);
-            return set is null ? null : Handlers.Properties.PropertyAccess.FindProperty(set, ResultPropName);
+            var property = Handlers.Properties.PropertyAccess.FindProperty(_set, ResultPropName);
+            value = property?.Value;
+            return property is not null;
         }
-        catch { return null; }
-    }
-
-    /// <summary>Last <c>MCP_RESULT_BEGIN…MCP_RESULT_END</c> payload in the iLogic log tail, or null.</summary>
-    private static string? ScrapeResultMarker(ILogicAccess ilogic)
-    {
-        try
+        public void Write(object value)
         {
-            var path = ilogic.LogFullFileName;
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return null;
-            string tail;
-            using (var fs = new FileStream(path!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-            using (var sr = new StreamReader(fs, System.Text.Encoding.UTF8, true))
-            {
-                var all = sr.ReadToEnd();
-                tail = all.Length > LogTailChars ? all.Substring(all.Length - LogTailChars) : all;
-            }
-            var end = tail.LastIndexOf(ResultEnd, StringComparison.Ordinal);
-            if (end < 0) return null;
-            var begin = tail.LastIndexOf(ResultBegin, end, StringComparison.Ordinal);
-            if (begin < 0) return null;
-            begin += ResultBegin.Length;
-            var payload = tail.Substring(begin, end - begin).Trim();
-            return payload.Length == 0 ? null : SecretMasker.Mask(payload);
+            var property = Handlers.Properties.PropertyAccess.FindProperty(_set, ResultPropName);
+            if (property is null) _set.Add(value, ResultPropName);
+            else property.Value = value;
         }
-        catch { return null; }
+        public void Delete()
+            => Handlers.Properties.PropertyAccess.FindProperty(_set, ResultPropName)?.Delete();
     }
 }
 #endif

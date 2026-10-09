@@ -11,7 +11,7 @@ namespace Bimwright.Ipt.Shared.Handlers.Query;
 /// <c>list_edges</c> — read-only edge enumeration of the target part's solid bodies. Rows are
 /// <c>{id:"body:B/edge:E", curve_type, length_mm, radius_mm?}</c>; ids round-trip into the
 /// <c>edge:E</c>/<c>body:B/edge:E</c> refs accepted by fillet, chamfer, create_work_axis and
-/// sm_flange. <c>curve_type</c> is the lowercase enum core (line|line_segment|circle|
+/// sheet_fabrication_flange. <c>curve_type</c> is the lowercase enum core (line|line_segment|circle|
 /// circular_arc|ellipse_full|elliptical_arc|bspline|polyline|unknown); <c>radius_mm</c> is
 /// emitted for circular edges only. <c>body</c> scopes to one body ("1"/"body:N"/name),
 /// <c>curve_type</c> filters by the same lowercase names, <c>max_items</c> caps the list

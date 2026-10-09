@@ -24,7 +24,7 @@ internal abstract class ILogicAccess
     /// <summary>The named rule object, or null when absent.</summary>
     internal abstract object? FindRule(global::Inventor.Document doc, string name);
 
-    internal abstract string? GetRuleText(global::Inventor.Document doc, string name);
+    internal abstract string? GetRuleText(object rule);
 
     /// <summary>Compiles AND runs the rule text — iLogic's AddRule auto-runs on creation.</summary>
     internal abstract object AddRule(global::Inventor.Document doc, string name, string text);
@@ -48,7 +48,7 @@ internal abstract class ILogicAccess
     /// <summary>
     /// Snapshot of <c>RuleExceptionsLog.Exceptions</c> — the only reliable structured channel when
     /// <c>Logger.Info</c> output is not file-backed on this machine (iLogicLogger.config-driven).
-    /// Never throws: unavailable log → empty list.
+    /// Access failures propagate so an unavailable diagnostics channel cannot imply success.
     /// </summary>
     internal abstract IReadOnlyList<RuleExceptionInfo> GetExceptions();
 

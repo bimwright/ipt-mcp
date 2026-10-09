@@ -23,12 +23,15 @@ public static class BatchExecutor
     {
         "batch_execute",   // nesting would re-enter the transaction wrapper
         "send_code",       // escape hatch — its own gate, timeout path, and audit trail
+        // Rules and UI commands can change documents, undo transactions or perform external I/O.
+        "ilogic_run_rule", "ilogic_run_external_rule", "ilogic_upsert_rule", "ilogic_run_snippet",
+        "run_command", "undo",
         "run_baked_tool",  // ToolBaker runtime — its own dispatch authorizer
         "apply_bake",      // ToolBaker registration — mutates the tool cache, not the model
         // Document lifecycle: every sub-handler resolves app.ActiveDocument fresh, so these
         // would silently move later steps onto a different document than the transaction's
         // (rolled_back would lie) or fail End/Abort by invalidating the current transaction.
-        "new_part", "new_assembly", "open_document", "close_document", "save_document",
+        "new_part", "new_sheet_fabrication_part", "new_assembly", "open_document", "close_document", "save_document",
         "derive_envelope",  // also creates + activates a new document mid-transaction
         "create_part",      // creates, saves and may close a new part
         "save_all", "open_documents", "close_documents",

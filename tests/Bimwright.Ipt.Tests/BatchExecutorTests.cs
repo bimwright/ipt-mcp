@@ -87,6 +87,25 @@ public sealed class BatchExecutorTests
         Assert.Equal("boom", (string?)outcome.Results[1]?["error"]);
     }
 
+    [Theory]
+    [InlineData("new_sheet_fabrication_part", false)]
+    [InlineData("NEW_SHEET_FABRICATION_PART", false)]
+    [InlineData("new_sheet_fabrication_part", true)]
+    [InlineData("NEW_SHEET_FABRICATION_PART", true)]
+    public void Sheet_fabrication_creation_never_redirects_batch_writes(string command, bool continueOnError)
+    {
+        var invoked = new List<string>();
+        var outcome = BatchExecutor.Run(Cmds(
+            new { command },
+            new { command = "sheet_fabrication_info" }), continueOnError,
+            (name, _) => { invoked.Add(name); return BatchExecutor.StepResult.Success(null); });
+
+        Assert.True(outcome.AnyFailed);
+        Assert.DoesNotContain(command, invoked);
+        Assert.Contains("cannot run inside batch_execute", (string?)outcome.Results[0]?["error"]);
+        Assert.Equal(continueOnError ? new[] { "sheet_fabrication_info" } : Array.Empty<string>(), invoked);
+    }
+
     [Fact]
     public void Continue_on_error_runs_remaining_steps()
     {

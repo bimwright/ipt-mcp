@@ -44,10 +44,49 @@ public sealed class HealthToolsTests : IDisposable
         Assert.Equal("unknown", (string?)result["mcp"]?["version_alignment"]);
         Assert.NotEmpty(result["setup_gateway"]!["artifact_sha256"]!.Value<string>()!);
         Assert.Equal("not_checked", (string?)result["update"]?["status"]);
+        Assert.Equal(JTokenType.Null, result["update"]!["notification"]!.Type);
+        Assert.Equal("not_checked", (string?)result["update"]?["components"]?["plugin"]?["status"]);
+        Assert.Equal("not_observable_by_server", (string?)result["client_verification"]?["status"]);
         Assert.Null(result["update"]?["update_available"]?.Value<bool?>());
         Assert.False(result["update_guidance"]!.Value<bool>("automatic_update_supported"));
         Assert.Equal(0, _http.Calls);
         Assert.Empty(Directory.EnumerateFileSystemEntries(_root));
+    }
+
+    [Fact]
+    public async Task Gateway_snapshot_is_captured_once_and_response_mutations_cannot_change_it()
+    {
+        var first = JObject.Parse(await _tools.Health());
+        var snapshot = first["setup_gateway"]!.DeepClone();
+        first["setup_gateway"]!["assembly_informational_version"] = "0.0.0+cached";
+        var next = JObject.Parse(await _tools.Health());
+        Assert.True(JToken.DeepEquals(snapshot, next["setup_gateway"]));
+        Assert.Equal("loaded_assembly", (string?)next["setup_gateway"]?["identity_basis"]);
+        Assert.Equal("on_disk_at_identity_capture", (string?)next["setup_gateway"]?["artifact_hash_basis"]);
+    }
+
+    [Theory]
+    [InlineData(false, "check_only")]
+    [InlineData(true, "retry_check")]
+    public async Task Offline_and_failed_lookup_guidance_has_no_installation_commands(bool checkUpdates, string mode)
+    {
+        _http.Status = System.Net.HttpStatusCode.Forbidden;
+        var health = JObject.Parse(await _tools.Health(checkUpdates));
+        var guidance = Assert.IsType<JObject>(health["update_guidance"]);
+        Assert.Equal(mode, guidance.Value<string>("mode"));
+        Assert.False(guidance.Value<bool>("requires_user_authorization"));
+        Assert.DoesNotContain("install.ps1", guidance["steps"]!.ToString());
+        Assert.DoesNotContain("Run the installer", guidance["steps"]!.ToString());
+    }
+
+    [Fact]
+    public async Task Observed_development_pair_gets_review_guidance_without_installation_commands()
+    {
+        _http.Body = """{"tag_name":"v0.2.1","draft":false,"prerelease":false}""";
+        var health = await Probe(new JObject { ["sta_busy"] = false, ["setup_plugin"] = Identity("0.2.1+development") }, checkUpdates: true);
+        Assert.Equal("review", (string?)health["update_guidance"]?["mode"]);
+        Assert.DoesNotContain("install.ps1", health["update_guidance"]!["steps"]!.ToString());
+        Assert.DoesNotContain("Run the installer", health["update_guidance"]!["steps"]!.ToString());
     }
 
     [Theory]
@@ -99,10 +138,29 @@ public sealed class HealthToolsTests : IDisposable
     public async Task Explicit_release_check_works_without_a_host_and_does_not_hide_no_target()
     {
         var result = JObject.Parse(await _tools.Health(check_updates: true));
-        Assert.Equal(1, _http.Calls);
+        Assert.Equal(2, _http.Calls);
         Assert.Equal("checked", (string?)result["update"]?["status"]);
         Assert.False(result.Value<bool>("host_connected"));
         Assert.Equal("NO_TARGET", (string?)result["error"]?["code"]);
+        Assert.Equal("unknown", (string?)result["update"]?["components"]?["plugin"]?["status"]);
+    }
+
+    [Fact]
+    public async Task Release_check_compares_the_replying_plugin_not_the_installed_file_or_gateway_version()
+    {
+        var result = await Probe(new JObject { ["sta_busy"] = false, ["setup_plugin"] = Identity("0.1.0+" + new string('b', 40)) }, checkUpdates: true);
+        Assert.Equal(2, _http.Calls);
+        Assert.Equal("0.1.0", (string?)result["update"]?["components"]?["plugin"]?["current_version"]);
+        Assert.Equal("update_available", (string?)result["update"]?["components"]?["plugin"]?["status"]);
+        Assert.Equal("mismatch", (string?)result["update"]?["components"]?["plugin"]?["build_status"]);
+        Assert.Equal("NEW_RELEASE_AVAILABLE", (string?)result["update"]?["notification"]?["code"]);
+        Assert.Equal(new[] { "server", "plugin" }, result["update"]!["notification"]!["components"]!.Values<string>());
+        Assert.Equal("prepare_update", (string?)result["update_guidance"]?["mode"]);
+        Assert.Contains("install.ps1 -WhatIf", result["update_guidance"]!["steps"]!.ToString());
+        Assert.Contains("exact confirmed release tag", result["update_guidance"]!["steps"]!.ToString());
+        Assert.Contains(".zip.sha256", result["update_guidance"]!["steps"]!.ToString());
+        Assert.Contains("before extraction", result["update_guidance"]!["steps"]!.ToString());
+        Assert.Contains("Require manifest.json", result["update_guidance"]!["steps"]!.ToString());
     }
 
     [Fact]

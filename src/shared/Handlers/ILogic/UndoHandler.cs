@@ -36,6 +36,7 @@ public sealed class UndoHandler : HandlerBase, IInventorCommand
             var done = 0;
             for (var i = 0; i < steps; i++)
             {
+                if (!undo.Enabled) break;
                 try { undo.Execute2(true); done++; }
                 catch { break; }
             }
