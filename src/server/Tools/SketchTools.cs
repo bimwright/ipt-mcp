@@ -50,9 +50,9 @@ public sealed class SketchTools
         => Call("draw_arc", new JObject { ["cx"] = cx, ["cy"] = cy, ["radius"] = radius, ["start_deg"] = startDeg, ["end_deg"] = endDeg }, ct);
 
     [McpServerTool(Name = "inventor_add_sketch_dimension", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
-     Description("Add a dimension constraint driving a sketch entity (by entity_id) to value mm. Returns the dimension constraint name.")]
-    public Task<string> AddSketchDimension(string entityId, double value, CancellationToken ct = default)
-        => Call("add_sketch_dimension", new JObject { ["entity_id"] = entityId, ["value_mm"] = value }, ct);
+     Description("Add a dimension constraint driving a sketch entity (by entity_id): a line gets its length, a circle/arc its RADIUS. value must be positive: number (mm) or an expression string referencing parameters ('plate_w', 'Shaft_D / 2', '40 mm'). Bare numeric strings mean mm; unitless compound expressions use document length units. Expressions retain parameter dependencies, including existing linked Excel parameters. Recompute failures roll back the operation. Returns the dimension constraint name, its evaluated value_mm, and the expression when one was given.")]
+    public Task<string> AddSketchDimension(string entityId, System.Text.Json.JsonElement value, CancellationToken ct = default)
+        => Call("add_sketch_dimension", new JObject { ["entity_id"] = entityId, ["value_mm"] = JToken.Parse(value.GetRawText()) }, ct);
 
     [McpServerTool(Name = "inventor_add_sketch_constraint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add a geometric sketch constraint over entity_ids. type=coincident|parallel|perpendicular|horizontal|vertical|tangent|concentric|equal|collinear|symmetric. Returns the constraint name.")]

@@ -6,6 +6,25 @@ namespace Bimwright.Ipt.Tests;
 
 public sealed class McpProtocolSmokeTests
 {
+    [Theory]
+    [InlineData("inventor_add_sketch_dimension", "value", "12.5")]
+    [InlineData("inventor_add_sketch_dimension", "value", "\"driver / 2\"")]
+    [InlineData("inventor_revolve", "angle", "-90")]
+    [InlineData("inventor_revolve", "angle", "\"sweep_angle\"")]
+    public async Task Expression_inputs_bind_over_MCP_with_B_compatible_schemas(string tool, string field, string value)
+    {
+        var args = tool == "inventor_revolve"
+            ? new JObject { ["sketchName"] = "profile", ["axisId"] = "YAxis" }
+            : new JObject { ["entityId"] = "1" };
+        args[field] = JToken.Parse(value);
+        var responses = await RunProtocolHandshake(expressionTool: tool, expressionArguments: args);
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var published = Assert.Single(tools, item => (string?)item["name"] == tool);
+        Assert.IsType<JObject>(published["inputSchema"]!["properties"]![field]);
+        var response = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)response["error"]?["code"]);
+    }
+
     [Fact]
     public async Task Server_exposes_tools_list_over_stdio()
     {
@@ -100,7 +119,8 @@ public sealed class McpProtocolSmokeTests
     }
 
     private static async Task<JObject[]> RunProtocolHandshake(bool checkILogicArguments = false,
-        bool checkHealth = false, bool readOnly = false, bool explicitHealthArgument = false)
+        bool checkHealth = false, bool readOnly = false, bool explicitHealthArgument = false,
+        string? expressionTool = null, JObject? expressionArguments = null)
     {
         using var profile = new Profile();
         var serverAssembly = typeof(Program).Assembly.Location;
@@ -118,7 +138,7 @@ public sealed class McpProtocolSmokeTests
         startInfo.ArgumentList.Add("--local-app-data");
         startInfo.ArgumentList.Add(profile.Root);
         if (readOnly) startInfo.ArgumentList.Add("--read-only");
-        if (checkILogicArguments)
+        if (checkILogicArguments || expressionTool is not null)
         {
             startInfo.ArgumentList.Add("--target");
             startInfo.ArgumentList.Add("__isolated_ilogic_binding_test__");
@@ -127,54 +147,76 @@ public sealed class McpProtocolSmokeTests
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start ipt-mcp server.");
         var stderrTask = process.StandardError.ReadToEndAsync();
 
-        await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"0.0"}}}""");
-        var initialize = await ReadJsonResponse(process, "initialize");
-
-        await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}""");
-        await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""");
-        var toolsList = await ReadJsonResponse(process, "tools/list");
-        JObject? ruleCall = null;
-        if (checkILogicArguments)
-        {
-            await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inventor_ilogic_run_rule","arguments":{"name":"unit-test-rule","arguments":{"increment":2,"flag":true,"text":"value","empty":null}}}}""");
-            ruleCall = await ReadJsonResponse(process, "iLogic arguments");
-        }
-        if (checkHealth)
-        {
-            var arguments = explicitHealthArgument ? new JObject { ["check_updates"] = false } : new JObject();
-            await process.StandardInput.WriteLineAsync(new JObject
-            {
-                ["jsonrpc"] = "2.0", ["id"] = 3, ["method"] = "tools/call",
-                ["params"] = new JObject { ["name"] = "inventor_health", ["arguments"] = arguments },
-            }.ToString(Newtonsoft.Json.Formatting.None));
-            ruleCall = await ReadJsonResponse(process, "health");
-        }
-        process.StandardInput.Close();
-
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try
         {
-            await process.WaitForExitAsync(timeout.Token);
+            await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"0.0"}}}""");
+            var initialize = await ReadJsonResponse(process, "initialize");
+
+            await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}""");
+            await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""");
+            var toolsList = await ReadJsonResponse(process, "tools/list");
+            JObject? ruleCall = null;
+            if (expressionTool is not null)
+            {
+                await process.StandardInput.WriteLineAsync(new JObject
+                {
+                    ["jsonrpc"] = "2.0", ["id"] = 3, ["method"] = "tools/call",
+                    ["params"] = new JObject { ["name"] = expressionTool, ["arguments"] = expressionArguments },
+                }.ToString(Newtonsoft.Json.Formatting.None));
+                ruleCall = await ReadJsonResponse(process, "expression binding");
+            }
+            if (checkILogicArguments)
+            {
+                await process.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inventor_ilogic_run_rule","arguments":{"name":"unit-test-rule","arguments":{"increment":2,"flag":true,"text":"value","empty":null}}}}""");
+                ruleCall = await ReadJsonResponse(process, "iLogic arguments");
+            }
+            if (checkHealth)
+            {
+                var arguments = explicitHealthArgument ? new JObject { ["check_updates"] = false } : new JObject();
+                await process.StandardInput.WriteLineAsync(new JObject
+                {
+                    ["jsonrpc"] = "2.0", ["id"] = 3, ["method"] = "tools/call",
+                    ["params"] = new JObject { ["name"] = "inventor_health", ["arguments"] = arguments },
+                }.ToString(Newtonsoft.Json.Formatting.None));
+                ruleCall = await ReadJsonResponse(process, "health");
+            }
+            process.StandardInput.Close();
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException("ipt-mcp server did not exit after stdin closed.");
+            }
+
+            var stderr = await stderrTask;
+            Assert.True(process.ExitCode == 0, "ipt-mcp server exited with code " + process.ExitCode + ". Stderr: " + stderr);
+
+            var responses = ruleCall is null ? new[] { initialize, toolsList } : new[] { initialize, toolsList, ruleCall };
+
+            Assert.DoesNotContain(responses, r => r["error"]?["code"]?.Value<int>() == -32601);
+            Assert.DoesNotContain(responses, r => r["error"] is not null);
+            return responses;
         }
-        catch (OperationCanceledException)
+        finally
         {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException("ipt-mcp server did not exit after stdin closed.");
+            // A startup/read timeout must not leave the owned server holding the temporary profile lock.
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            await stderrTask;
         }
-
-        var stderr = await stderrTask;
-        Assert.True(process.ExitCode == 0, "ipt-mcp server exited with code " + process.ExitCode + ". Stderr: " + stderr);
-
-        var responses = ruleCall is null ? new[] { initialize, toolsList } : new[] { initialize, toolsList, ruleCall };
-
-        Assert.DoesNotContain(responses, r => r["error"]?["code"]?.Value<int>() == -32601);
-        Assert.DoesNotContain(responses, r => r["error"] is not null);
-        return responses;
     }
 
     private static async Task<JObject> ReadJsonResponse(Process process, string label)
     {
-        var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(15));
         if (string.IsNullOrWhiteSpace(line))
         {
             throw new InvalidOperationException("No MCP response received for " + label + ".");

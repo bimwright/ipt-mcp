@@ -11,6 +11,20 @@ namespace Bimwright.Ipt.Tests;
 /// </summary>
 public sealed class BatchExecutorTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Failed_step_rollback_stops_even_a_continue_on_error_batch(bool continueOnError)
+    {
+        var calls = 0;
+        var outcome = BatchExecutor.Run(Cmds(new { command = "first" }, new { command = "second" }),
+            continueOnError, (_, _) => { calls++; return BatchExecutor.StepResult.Failure("rollback failed", requiresRollback: true); });
+        Assert.True(outcome.AnyFailed);
+        Assert.True(outcome.RequiresRollback);
+        Assert.Equal(1, calls);
+        Assert.Single(outcome.Results);
+    }
+
     private static JArray Cmds(params object[] items)
         => new(items.Select(i => JObject.FromObject(i)).Cast<JToken>().ToArray());
 

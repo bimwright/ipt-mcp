@@ -141,13 +141,13 @@ public sealed class FeatureTools
     }
 
     [McpServerTool(Name = "inventor_revolve", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
-     Description("Revolve the profile of a named sketch about an axis (axis_id = a sketch line entity id or an origin axis XAxis|YAxis|ZAxis). angle in degrees; operation=join|cut|intersect. Returns the new feature name.")]
-    public Task<string> Revolve(string sketchName, string axisId, double angle, string operation = "join", CancellationToken ct = default)
+     Description("Revolve the profile of a named sketch about an axis (axis_id = a sketch line entity id or an origin axis XAxis|YAxis|ZAxis). angle: number in degrees (0 or ±360 = full, negative = reverse direction) or an expression string ('sweep_angle', '90 deg') evaluating to >0 and <=360 degrees, revolved in the positive direction. Bare numeric strings mean degrees; unitless compound expressions use the document angle units. operation=join|cut|intersect. Recompute failures roll back the operation. Returns the new feature name.")]
+    public Task<string> Revolve(string sketchName, string axisId, System.Text.Json.JsonElement angle, string operation = "join", CancellationToken ct = default)
         => Call("revolve", new JObject
         {
             ["sketch_name"] = sketchName,
             ["axis_id"] = axisId,
-            ["angle_deg"] = angle,
+            ["angle_deg"] = JToken.Parse(angle.GetRawText()),
             ["operation"] = operation,
         }, ct);
 

@@ -48,6 +48,7 @@ public static class BatchExecutor
     {
         public JArray Results { get; } = new();
         public bool AnyFailed { get; set; }
+        public bool RequiresRollback { get; set; }
     }
 
     public sealed class StepResult
@@ -55,9 +56,11 @@ public static class BatchExecutor
         public bool Ok { get; init; }
         public JToken? Data { get; init; }
         public string? Error { get; init; }
+        public bool RequiresRollback { get; init; }
 
         public static StepResult Success(JToken? data) => new() { Ok = true, Data = data };
-        public static StepResult Failure(string error) => new() { Error = error };
+        public static StepResult Failure(string error, bool requiresRollback = false)
+            => new() { Error = error, RequiresRollback = requiresRollback };
     }
 
     public static string TooManyCommandsMessage(int count)
@@ -123,6 +126,13 @@ public static class BatchExecutor
                 continue;
             }
 
+            if (r.RequiresRollback)
+            {
+                // An uncertain step must not be followed by more writes or committed by continue_on_error.
+                outcome.RequiresRollback = true;
+                AddFailure(outcome, i, r.Error ?? "step rollback failed", false);
+                return outcome;
+            }
             if (r.Ok)
             {
                 outcome.Results.Add(new JObject

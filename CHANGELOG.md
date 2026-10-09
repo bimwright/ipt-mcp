@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `inventor_add_sketch_dimension` and `inventor_revolve` accept parameter expressions as well as numeric inputs, based on a contribution by `gavinmcutler`. Line dimensions drive length; circles/arcs drive radius. Expression parameters remain linked when source parameters change. Bare numeric strings use mm/degrees; unitless compound expressions use document units. Dimension values must be positive; expression revolve angles must evaluate to more than 0 and at most 360 degrees. Numeric revolve angles retain their existing full/reverse behavior. This does not add Excel link/reload tools.
+- Dimension and revolve creation validate expressions, verify recompute/readback, and abort their own transaction on failure. Inside `batch_execute`, failed operations roll back without discarding successful steps when `continue_on_error=true`; an uncertain rollback stops further batch writes and forces rollback. Responses do not claim restoration if transaction abort itself fails.
+
 ### Changed
 
 - Input schemas publish empty objects instead of bare `true` schema nodes for client compatibility. Boolean defaults, examples, object-openness policies and native argument handling are preserved.

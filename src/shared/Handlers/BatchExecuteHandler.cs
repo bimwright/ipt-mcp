@@ -38,9 +38,8 @@ public sealed class BatchExecuteHandler : HandlerBase, IInventorCommand
         try { continueOnError = (bool?)p["continue_on_error"] ?? false; }
         catch (Exception) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "continue_on_error must be a boolean"); }
 
-        // No current handler opens its own transaction, but Inventor End/Abort fail when the
-        // transaction is not current — a future handler that leaks a child tx would wedge this
-        // wrapper, so keep transactions out of sub-handlers.
+        // Sub-handlers may use child transactions, but must finish them before returning.
+        // A failed child rollback forces this batch to stop even with continue_on_error.
         Transaction? tx = null;
         try
         {
@@ -56,10 +55,11 @@ public sealed class BatchExecuteHandler : HandlerBase, IInventorCommand
                 var r = handler.Execute(ctx, subParams);
                 return r.Ok
                     ? BatchExecutor.StepResult.Success(r.Data)
-                    : BatchExecutor.StepResult.Failure($"{r.Error?.Code}: {r.Error?.Message}");
+                    : BatchExecutor.StepResult.Failure($"{r.Error?.Code}: {r.Error?.Message}",
+                        (bool?)(r.Data as JObject)?["rollback_failed"] == true);
             });
 
-            var rolledBack = outcome.AnyFailed && !continueOnError;
+            var rolledBack = outcome.RequiresRollback || (outcome.AnyFailed && !continueOnError);
             if (rolledBack) tx.Abort();
             else tx.End();
             tx = null;
@@ -77,8 +77,15 @@ public sealed class BatchExecuteHandler : HandlerBase, IInventorCommand
         }
         catch (Exception ex)
         {
-            try { tx?.Abort(); } catch { }
-            return Fail(ctx, InventorErrorCodes.API_ERROR, "batch_execute failed: " + ex.Message);
+            var aborted = false;
+            try { if (tx is not null) { tx.Abort(); aborted = true; } } catch { }
+            var failure = Fail(ctx, InventorErrorCodes.API_ERROR, "batch_execute failed: " + ex.Message);
+            failure.Data = new JObject
+            {
+                ["rolled_back"] = aborted,
+                ["mutation_applied"] = aborted ? new JValue(false) : new JValue("unknown"),
+            };
+            return failure;
         }
     }
 }
