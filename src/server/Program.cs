@@ -118,6 +118,7 @@ internal static partial class Program
                         "{\"type\":[\"object\",\"null\"],\"additionalProperties\":{\"type\":[\"string\",\"number\",\"boolean\",\"null\"]}}");
                     tool.ProtocolTool.InputSchema = System.Text.Json.JsonDocument.Parse(schema.ToString()).RootElement.Clone();
                 }
+                tool.ProtocolTool.InputSchema = BooleanInputSchema.Normalize(tool.ProtocolTool.InputSchema);
                 mcp.WithTools(new[] { tool });
             }
         return mcp;
