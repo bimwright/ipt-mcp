@@ -7,6 +7,25 @@ namespace Bimwright.Ipt.Tests;
 public sealed class McpProtocolSmokeTests
 {
     [Theory]
+    [InlineData("inventor_list_excel_tables", "{}", true)]
+    [InlineData("inventor_link_excel_table", "{path:'C:/fixture.xlsx',start_cell:'A6'}", false)]
+    [InlineData("inventor_reload_excel_table", "{table_id:'excel:fixture'}", false)]
+    public async Task Excel_tools_bind_over_MCP_and_obey_read_only_registration(string tool, string input, bool readOnly)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly, expressionTool: tool, expressionArguments: JObject.Parse(input));
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var published = Assert.Single(tools, item => (string?)item["name"] == tool);
+        Assert.Equal(readOnly, (bool)published["annotations"]!["readOnlyHint"]!);
+        if (readOnly)
+        {
+            Assert.DoesNotContain(tools, item => (string?)item["name"] == "inventor_link_excel_table");
+            Assert.DoesNotContain(tools, item => (string?)item["name"] == "inventor_reload_excel_table");
+        }
+        var response = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)response["error"]?["code"]);
+    }
+
+    [Theory]
     [InlineData("inventor_add_sketch_dimension", "value", "12.5")]
     [InlineData("inventor_add_sketch_dimension", "value", "\"driver / 2\"")]
     [InlineData("inventor_revolve", "angle", "-90")]

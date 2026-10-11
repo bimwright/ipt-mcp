@@ -128,7 +128,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **131 tools** by default (`--toolsets all`); `--disable-send-code` exposes **125 tools**, and `--read-only` exposes **35 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **134 tools** by default (`--toolsets all`); `--disable-send-code` exposes **128 tools**, and `--read-only` exposes **36 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 18 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -246,7 +246,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_open_documents` | Open several documents in one call (default without windows, for `document`-targeted edits). |
 | `inventor_close_documents` | Close documents by path/name, or all visible ones (`keep_active`); optional save. |
 
-### parameters (4) — model & user parameters (write)
+### parameters (7) — model, user & Excel parameters
 
 | Tool | Description |
 |---|---|
@@ -254,6 +254,15 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_get_parameter` | Get one parameter by name: expression, value, unit. |
 | `inventor_set_parameter` | Set an existing parameter's expression/value, then update the document. |
 | `inventor_create_parameter` | Create a new user parameter (name, expression, unit). |
+| `inventor_list_excel_tables` | List native spreadsheet tables, stable linked-table IDs, parameter values and health. |
+| `inventor_link_excel_table` | Link a local `.xlsx` parameter block and verify native readback after recompute. |
+| `inventor_reload_excel_table` | Reload a linked table by ID, verify saved values and geometry health, and report changes since its last verified link/reload. |
+
+Excel blocks use the **first worksheet**, with vertical columns `name`, `value`, `units`, and optional `comment`. `start_cell` points to the first parameter row, not its header. Names must be unique ASCII identifiers; values must be finite saved numbers or formula results; specify `mm`, `deg`, `ul` (unitless), or another Inventor unit. Recalculate and save the workbook before linking/reloading. The tools do not calculate Excel formulas, edit the workbook, or save the part. Limits: local-drive `.xlsx`, 16 MiB, 1,000 contiguous rows; no macros, external workbook links, UNC paths, or changed parameter membership during reload.
+
+For example, link with `inventor_link_excel_table(path="C:/parts/flange.xlsx", start_cell="A6", document="flange.ipt")`, then reuse its `table_id` with `inventor_reload_excel_table`. Sketch dimensions, thickness and pattern counts must reference the linked parameter names for the geometry to change. Native links already present in a part establish their change baseline on the first successful reload; that call reports `changed_parameters=null` rather than inventing a previous value.
+
+Excel writes run outside `batch_execute` and own their document transaction. Inventor may retain refreshed spreadsheet parameters after aborting a failed geometry update. Reload therefore compares the post-failure state with its persisted verified checkpoint and reports `rollback_failed` / `recovery_required` when restoration cannot be verified. In that case restore the last verified Excel values, reload successfully, and inspect the part before saving. `transaction_aborted` alone is not proof that linked values were restored.
 
 ### properties (4) — iProperties & mass properties (write)
 
