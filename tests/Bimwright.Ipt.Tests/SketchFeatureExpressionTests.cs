@@ -158,6 +158,56 @@ public sealed class SketchFeatureExpressionTests : IDisposable
         return Assert.IsType<JObject>(envelope["params"]);
     }
 
+    [Theory]
+    [InlineData("add_sketch_dimension", false)]
+    [InlineData("add_sketch_dimension", true)]
+    [InlineData("revolve", false)]
+    [InlineData("revolve", true)]
+    [InlineData("batch_execute", false)]
+    [InlineData("batch_execute", true)]
+    [InlineData("sheet_fabrication_set_thickness", false)]
+    [InlineData("sheet_fabrication_set_thickness", true)]
+    public async Task Mutation_failures_preserve_rollback_receipts(string command, bool rollbackFailed)
+    {
+        var data = new JObject
+        {
+            ["rolled_back"] = !rollbackFailed,
+            ["mutation_applied"] = rollbackFailed ? new JValue("unknown") : new JValue(false),
+            ["rollback_failed"] = rollbackFailed,
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var server = new NamedPipeServerStream(
+            _pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        var receive = ReplyWithFailureAsync(server, data, timeout.Token);
+        var invoke = command switch
+        {
+            "add_sketch_dimension" => new SketchTools(_client).AddSketchDimension("3", Json("\"Shaft_D / 2\""), timeout.Token),
+            "revolve" => new FeatureTools(_client).Revolve("Sketch1", "XAxis", Json("\"sweep_angle\""), ct: timeout.Token),
+            "batch_execute" => new FeatureTools(_client).BatchExecute(Json("[{\"command\":\"get_document_info\"}]"), ct: timeout.Token),
+            _ => new SheetFabricationTools(_client).SetSheetFabricationThickness(Json("2"), ct: timeout.Token),
+        };
+        var result = JObject.Parse(await invoke);
+        Assert.Equal(command, await receive);
+        Assert.False(result.Value<bool>("ok"));
+        Assert.Equal("API_ERROR", (string?)result["error"]?["code"]);
+        Assert.True(JToken.DeepEquals(data, result["data"]), result.ToString());
+    }
+
+    private static async Task<string> ReplyWithFailureAsync(NamedPipeServerStream server, JObject data, CancellationToken ct)
+    {
+        await server.WaitForConnectionAsync(ct);
+        using var reader = new StreamReader(server, leaveOpen: true);
+        using var writer = new StreamWriter(server, leaveOpen: true) { AutoFlush = true };
+        var envelope = JObject.Parse((await reader.ReadLineAsync(ct))!);
+        await writer.WriteLineAsync(new JObject
+        {
+            ["id"] = envelope["id"], ["ok"] = false,
+            ["error"] = new JObject { ["code"] = "API_ERROR", ["message"] = "Mutation failed" },
+            ["data"] = data, ["meta"] = new JObject(),
+        }.ToString(Formatting.None));
+        return envelope.Value<string>("command")!;
+    }
+
     private static async Task<JObject> ReceiveOnceAsync(NamedPipeServerStream server)
     {
         await server.WaitForConnectionAsync();
