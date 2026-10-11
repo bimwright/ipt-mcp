@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Positional dimensions distinguish an actual parent transaction from Inventor's unidentified idle transaction, allowing existing parts to be edited while preserving cross-document transaction checks and rollback receipts.
+
 ### Added
 
 - `inventor_list_sketch_points` discovers document-scoped sketch point references, centres, endpoints and the origin without changing geometry. `inventor_add_sketch_point_dimension` creates horizontal, vertical or aligned driving distances between these references, with numeric mm or parameter expressions, explicit document targeting, recompute/geometry verification and transactional rollback.

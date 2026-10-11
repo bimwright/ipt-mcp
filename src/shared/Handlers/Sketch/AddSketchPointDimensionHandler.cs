@@ -17,10 +17,13 @@ public sealed class AddSketchPointDimensionHandler : HandlerBase, IInventorComma
         SketchPointDimensionInput input;
         try { input = SketchPointDimensionInput.Parse(p); }
         catch (ArgumentException ex) { return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
-        if (app.TransactionManager.CurrentTransaction is { } outer && !outer.Document.Equals(part))
-            return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "An active transaction targets another document; add dimensions to that document or finish the transaction first");
         return PartMutation.Run(ctx, app, part, Name, () =>
         {
+            // Inventor can expose an unidentified idle transaction whose Document throws.
+            // The owned transaction tells us whether an actual parent transaction exists.
+            if (app.TransactionManager.CurrentTransaction is { HasParentTransaction: true } current
+                && !current.ParentTransaction.Document.Equals(part))
+                throw new ArgumentException("An active transaction targets another document; add dimensions to that document or finish the transaction first");
             var expected = input.Expression is null ? UnitConvert.MmToCm(input.ValueMm!.Value)
                 : PartMutation.Evaluate(part.ComponentDefinition.Parameters, input.Expression, part.UnitsOfMeasure.LengthUnits, "value");
             if (expected <= 0) throw new ArgumentException("value must evaluate to a positive distance; use geometric constraints for zero offsets");
