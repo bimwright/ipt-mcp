@@ -128,9 +128,9 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **136 tools** by default (`--toolsets all`); `--disable-send-code` exposes **130 tools**, and `--read-only` exposes **37 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **144 tools** by default (`--toolsets all`); `--disable-send-code` exposes **138 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
-All 18 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
+All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
 
@@ -246,6 +246,29 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_save_all` | Update a root document and save it with every dirty referenced document, silently; per-file saved / read_only / error; `dry_run`. |
 | `inventor_open_documents` | Open several documents in one call (default without windows, for `document`-targeted edits). |
 | `inventor_close_documents` | Close documents by path/name, or all visible ones (`keep_active`); optional save. |
+
+### ipart (8) — Standard iPart families and Excel catalogs
+
+| Tool | Purpose |
+|---|---|
+| `inventor_get_ipart_info` | Inspect an open ordinary part, factory or member, table rows, Excel binding and generation state. Read-only. |
+| `inventor_create_ipart_factory` | Copy a clean saved ordinary part to a new factory path and configure parameter, material, description and feature-suppression columns. |
+| `inventor_update_ipart_table` | Preview/apply complete row upserts before an Excel catalog owns the table. |
+| `inventor_set_ipart_row` | Select and verify one factory row without changing assembly occurrences. |
+| `inventor_generate_ipart_members` | Preview/generate selected rows, verify their bodies and properties, and reuse verified unchanged members. |
+| `inventor_sync_ipart_excel` | Preview/apply a saved `.xlsx` catalog to the factory in one direction. |
+| `inventor_place_ipart_member` | Place a previously generated member in an open assembly. |
+| `inventor_change_ipart_member` | Switch one exact top-level occurrence to another verified row of the same factory. |
+
+Start with a parametrically modeled part. Configure columns such as `{name:"Length",kind:"parameter",target:"Length"}` and `{name:"Hole",kind:"suppression",target:"MountHole"}`. The factory includes Member and Part Number automatically. Row input is `{member:"BUSH-020",part_number:"BUSH-020",values:{Length:40,Hole:false}}`, with every configured column present. Numeric parameters use the original parameter's units; strings accept Inventor expressions. Boolean suppression means `true = suppress`, `false = compute`. Materials must already be available in the factory document.
+
+For Excel, use one header row with `member`, `part_number` and the configured column names, followed by complete contiguous rows. Configured cells must be nonempty, including Description if that optional column is configured; clearing native property cells is not supported. Supply `path`, `sheet` and `header_cell` on the first sync; optional `mapping` maps these names to other Excel headers. Later calls can reuse the binding. Table update, Excel sync and generation default to `dry_run=true`; applying requires `dry_run=false`. Save/recalculate the workbook before syncing: these tools read saved values, including cached formula results, and never write back to Excel. After binding, edit rows in Excel and sync instead of writing the table through JSON. Reordering Excel rows preserves member identity; omitted existing members are rejected instead of deleted.
+
+The workflow is **edit Excel → sync table → generate selected members → place or switch occurrences**. Sync rebuilds and verifies changed factory rows; it does not generate files or refresh assemblies automatically. Native member `.ipt` files remain necessary for assembly references. Manage the factory, its adjacent `.ipart-mcp.json` checkpoint file, the workbook and the generated member folder together.
+
+Write tools currently support managed Standard iPart factories created by `inventor_create_ipart_factory`. Sources must be clean, saved ordinary solid parts with independent parameters; custom iParts, sheet metal, native Excel parameter links, existing-factory adoption and iAssemblies are outside this scope. Output paths must be new local-drive `.ipt` paths; shared/proxy caches are refused. Catalog limits are 16 MiB, 1,000 rows and 48 configured columns; generation accepts 1–50 named members per call. No macros or external workbook links are accepted.
+
+Factory operations explicitly save their managed copy and checkpoint. Assembly operations leave saving to the user. All writes reject `batch_execute`, nested transactions, dirty factories and conflicting operations. A failed multi-file operation may leave files on disk: inspect `file_effects` and the pending operation, restore a clean factory if necessary, then resume that same operation. Transaction abort does not imply file rollback. Member generation compares native bodies and reads back properties before marking a file current.
 
 ### parameters (7) — model, user & Excel parameters
 

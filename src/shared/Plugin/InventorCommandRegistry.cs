@@ -29,6 +29,7 @@ public static partial class InventorCommandRegistry
         AddDrawing(d, Add);
         AddSheetFabrication(d, Add);    // Sheet Fabrication (sheet_fabrication_*, unwrap_try, new_sheet_fabrication_part)
         AddILogic(d, o, Add);     // iLogic bridge + command/undo tools
+        AddIPart(d, Add);
         return d;
     }
 
@@ -45,4 +46,5 @@ public static partial class InventorCommandRegistry
     static partial void AddDrawing(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddSheetFabrication(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
     static partial void AddILogic(Dictionary<string, IInventorCommand> d, PluginOptions o, Action<IInventorCommand> add);
+    static partial void AddIPart(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add);
 }

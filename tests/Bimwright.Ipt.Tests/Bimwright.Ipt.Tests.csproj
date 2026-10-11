@@ -45,6 +45,8 @@
     <Compile Include="..\..\src\shared\Handlers\Core\ReportTaskResultHandler.cs" LinkBase="Shared\Handlers\Core" />
     <Compile Include="..\..\src\shared\Handlers\BatchExecutor.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\Parameters\ExcelParameterSource.cs" LinkBase="Shared\Handlers\Parameters" />
+    <Compile Include="..\..\src\shared\Handlers\IPart\IPartInput.cs" LinkBase="Shared\Handlers\IPart" />
+    <Compile Include="..\..\src\shared\Handlers\IPart\IPartExcelCatalog.cs" LinkBase="Shared\Handlers\IPart" />
     <Compile Include="..\..\src\shared\Handlers\SheetFabrication\SheetFabricationThicknessRecovery.cs" LinkBase="Shared\Handlers\SheetFabrication" />
     <Compile Include="..\..\src\shared\Handlers\ILogic\ILogicOutcome.cs" LinkBase="Shared\Handlers\ILogic" />
     <Compile Include="..\..\src\shared\Handlers\ILogic\ILogicResultChannel.cs" LinkBase="Shared\Handlers\ILogic" />

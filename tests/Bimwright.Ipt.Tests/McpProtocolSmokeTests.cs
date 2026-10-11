@@ -7,8 +7,26 @@ namespace Bimwright.Ipt.Tests;
 public sealed class McpProtocolSmokeTests
 {
     [Theory]
-    [InlineData(false, 136)]
-    [InlineData(true, 37)]
+    [InlineData("inventor_get_ipart_info", "{max_rows:10,row_offset:0}", true)]
+    [InlineData("inventor_create_ipart_factory", "{output_path:'C:/copy.ipt',base_member:'A',columns:[{name:'L',kind:'parameter',target:'Length'}]}", false)]
+    [InlineData("inventor_update_ipart_table", "{rows:[{member:'A',values:{L:20}}]}", false)]
+    [InlineData("inventor_set_ipart_row", "{member:'A'}", false)]
+    [InlineData("inventor_generate_ipart_members", "{members:['A'],dry_run:true}", false)]
+    [InlineData("inventor_sync_ipart_excel", "{path:'C:/catalog.xlsx',sheet:'Shafts',mapping:{member:'Code',part_number:'PN',L:'Length'}}", false)]
+    [InlineData("inventor_place_ipart_member", "{factory_document:'copy.ipt',member:'A',position_mm:[10,20,30]}", false)]
+    [InlineData("inventor_change_ipart_member", "{occurrence:'A:1',member:'B'}", false)]
+    public async Task Standard_ipart_tools_bind_over_MCP_and_filter_writes(string name,string input,bool readOnly)
+    {
+        var responses=await RunProtocolHandshake(readOnly:readOnly,expressionTool:name,expressionArguments:JObject.Parse(input));
+        var catalog=(JArray)responses[1]["result"]!["tools"]!;
+        Assert.Equal(readOnly,Assert.Single(catalog,t=>(string?)t["name"]==name)["annotations"]!.Value<bool>("readOnlyHint"));
+        if(readOnly)Assert.Single(catalog.Where(t=>((string?)t["name"])?.Contains("ipart")==true));
+        var result=JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);Assert.Equal("NO_TARGET",(string?)result["error"]?["code"]);
+    }
+
+    [Theory]
+    [InlineData(false, 144)]
+    [InlineData(true, 38)]
     public async Task Combined_excel_and_point_dimension_catalog_preserves_both_surfaces(bool readOnly, int count)
     {
         var responses = await RunProtocolHandshake(readOnly: readOnly);

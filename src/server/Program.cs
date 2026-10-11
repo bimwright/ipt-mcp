@@ -210,6 +210,7 @@ internal static partial class Program
         Add("sheet_fabrication_query", typeof(SheetFabricationQueryTools));
         Add("sheet_fabrication", typeof(SheetFabricationTools));
         Add("ilogic", typeof(ILogicTools));
+        Add("ipart", typeof(IPartTools));
         return cfg.ReadOnly ? types.Where(t => t.GetMethods().Any(m => m.GetCustomAttribute<McpServerToolAttribute>()?.ReadOnly == true)).ToArray() : types;
     }
 }
