@@ -9,7 +9,7 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Declares the Phase 3 surface: 131 all-enabled, 125 code-off and 35 read-only.
+/// Declares the Phase 3 surface: 133 all-enabled, 127 code-off and 36 read-only.
 /// These expectations do not claim that the current source has been built or tested.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -36,7 +36,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_131_tools()
+    public void All_toolsets_with_send_code_register_exactly_133_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -44,16 +44,17 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(131, names.Length);
+        Assert.Equal(133, names.Length);
     }
 
     [Fact]
-    public void The_131_tools_match_the_frozen_surface()
+    public void The_133_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
         var expected = new[]
         {
+            "inventor_list_sketch_points", "inventor_add_sketch_point_dimension",
             // drawing (22: 2 query, 20 write)
             "inventor_find_view_geometry", "inventor_sketch_on_view", "inventor_hide_view_edges",
             "inventor_get_drawing_info", "inventor_new_drawing", "inventor_add_sheet", "inventor_set_title_block",
@@ -109,7 +110,7 @@ public sealed class RegistrationCountTests
             "inventor_list_commands", "inventor_run_command", "inventor_undo",
         };
 
-        Assert.Equal(131, expected.Length);
+        Assert.Equal(133, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
         // and nothing extra beyond the 111 expected
@@ -132,7 +133,7 @@ public sealed class RegistrationCountTests
     public void Disabling_source_execution_hides_upsert_but_keeps_existing_rule_execution()
     {
         var names = ToolNames(new InventorMcpConfig { Toolsets = { "all" }, EnableSendCode = false });
-        Assert.Equal(125, names.Length);
+        Assert.Equal(127, names.Length);
         Assert.DoesNotContain("inventor_ilogic_upsert_rule", names);
         Assert.DoesNotContain("inventor_ilogic_run_snippet", names);
         Assert.Contains("inventor_ilogic_run_rule", names);
@@ -177,7 +178,7 @@ public sealed class RegistrationCountTests
         Assert.DoesNotContain(typeof(SheetFabricationTools), types);
         Assert.Contains(typeof(ILogicTools), types);
         Assert.Equal(11, types.Length);
-        Assert.Equal(35, names.Length);
+        Assert.Equal(36, names.Length);
         Assert.Contains("inventor_find_view_geometry", names);
 
         // Dropped: every write/export/code/toolbaker_write owner.
@@ -202,11 +203,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_131_tools_with_send_code()
+    public void Default_config_registers_133_tools_with_send_code()
     {
         var names = ToolNames(new InventorMcpConfig());
         Assert.Contains("inventor_send_code", names);
         Assert.Contains("inventor_ilogic_run_snippet", names);
-        Assert.Equal(131, names.Length);
+        Assert.Equal(133, names.Length);
     }
 }

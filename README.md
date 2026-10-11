@@ -128,7 +128,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **131 tools** by default (`--toolsets all`); `--disable-send-code` exposes **125 tools**, and `--read-only` exposes **35 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **133 tools** by default (`--toolsets all`); `--disable-send-code` exposes **127 tools**, and `--read-only` exposes **36 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 18 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -201,7 +201,7 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
 | `inventor_switch_target` | Select the active target by descriptor id, Inventor year, process id, or pipe/session name. Server-side only. |
 
-### query (7) — read-only document/health/model probes and agent outcome reports
+### query (10) — read-only document/health/model probes and agent outcome reports
 
 Start each Inventor session with one `inventor_health(check_updates=true)` call after selecting the intended target if needed, so the agent discovers newer stable releases. If network access is unavailable or disallowed, use the offline default and leave the update check not checked/unknown. Later routine probes stay offline. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `server_informational_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use loaded assembly informational-version metadata, falling back to the component's module id. Runtime identity is captured at server startup or add-in activation. `artifact_sha256` is a disk observation at that capture time (`artifact_hash_basis=on_disk_at_identity_capture`), not a digest of loaded memory or proof that a later file replacement has taken effect.
 
@@ -230,6 +230,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_list_bodies` | List the part's solid bodies: id (`body:N`), name, volume_mm3, bbox_mm, face_count, created_by feature, visible. |
 | `inventor_list_features` | List the part's features in tree order: name, type, health, suppressed, body_names. |
 | `inventor_probe_brep` | Survey the part's B-rep for port mouths: planar faces with inner-loop circular edges — normal (IsParamReversed-corrected), center_mm, port_diameter_mm, all circles on the face. |
+| `inventor_list_sketch_points` | Inspect a named sketch: point references, positions in mm, circle/arc centres and line endpoints, plus `origin_ref`. Optional `document` selects an open part; `max_items` defaults to 200 (1–1000). Does not project geometry or change the document. |
 
 ### document (10) — document lifecycle (write)
 
@@ -264,7 +265,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_get_mass_properties` | Mass (g), volume (mm³), surface area (mm²), centre of mass, bounding box. |
 | `inventor_list_iproperty_sets` | List iProperty sets (name, internal_name, property names; optional values) — discovery for get/set_iproperty. |
 
-### sketch (10) — 2D sketch geometry & constraints (write)
+### sketch (11) — 2D sketch geometry & constraints (write)
 
 | Tool | Description |
 |---|---|
@@ -275,9 +276,23 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_draw_rectangle` | Draw a two-point sketch rectangle. |
 | `inventor_draw_arc` | Draw a sketch arc (centre, radius, start/end angle). |
 | `inventor_add_sketch_dimension` | Add a driving dimension constraint to a sketch entity. |
+| `inventor_add_sketch_point_dimension` | Drive the horizontal, vertical or aligned distance between two point references, using a positive number in mm or a parameter expression. Optional `document` targets an open part. |
 | `inventor_add_sketch_constraint` | Add a geometric constraint (coincident, parallel, tangent, …). |
 | `inventor_draw_text` | Add a fitted text box (position mm, optional font_size_mm; rotation_deg in multiples of 90). |
 | `inventor_close_sketch` | Finish editing a sketch (exit sketch edit mode). |
+
+To locate a hole, call `inventor_list_sketch_points` with its sketch name, select the point whose
+role is `circle_center`, then add two point dimensions from `origin_ref` to that `point_ref`:
+`orientation="horizontal", value="HoleX"` and `orientation="vertical", value="HoleY"`.
+Changing those existing parameters moves the hole centre. Expressions can reference existing
+linked Excel parameters. Optional `text_position=[x,y]` controls the annotation position in sketch mm.
+Both points must belong to the same sketch. References use native object keys and reject deleted
+objects or another file; query again after Save As. Distances must be positive; zero offsets require
+geometric constraints. Dimension creation verifies recompute and actual point distance, rolls back
+on failure, and leaves saving to the caller.
+When needed, an origin dimension projects the sketch origin or creates a fixed local origin point;
+this helper is also removed if the operation rolls back. Inside a batch or another open transaction,
+the dimension must target that transaction's document.
 
 ### feature (16) — solid & work features (write)
 

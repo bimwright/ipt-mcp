@@ -7,6 +7,35 @@ namespace Bimwright.Ipt.Tests;
 public sealed class McpProtocolSmokeTests
 {
     [Theory]
+    [InlineData("12.5")]
+    [InlineData("\"HoleX / 2\"")]
+    public async Task Point_dimension_binds_over_MCP_and_publishes_complete_contract(string value)
+    {
+        var args = new JObject { ["point1_ref"] = "first", ["point2_ref"] = "second", ["orientation"] = "horizontal", ["value"] = JToken.Parse(value), ["text_position"] = new JArray(10, 20) };
+        var responses = await RunProtocolHandshake(expressionTool: "inventor_add_sketch_point_dimension", expressionArguments: args);
+        var tool = ((JArray)responses[1]["result"]!["tools"]!).Single(t => (string?)t["name"] == "inventor_add_sketch_point_dimension");
+        Assert.Equal(new[] { "orientation", "point1_ref", "point2_ref", "value" }, tool["inputSchema"]!["required"]!.Values<string>().OrderBy(x => x).ToArray());
+        Assert.IsType<JObject>(tool["inputSchema"]!["properties"]!["value"]);
+        Assert.False(tool["annotations"]!.Value<bool>("readOnlyHint"));
+        var reply = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)reply["error"]?["code"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Point_inventory_is_callable_in_read_only_mode(bool readOnly)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly, expressionTool: "inventor_list_sketch_points", expressionArguments: new JObject { ["sketch_name"] = "Holes", ["max_items"] = 20 });
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var query = tools.Single(t => (string?)t["name"] == "inventor_list_sketch_points");
+        Assert.True(query["annotations"]!.Value<bool>("readOnlyHint"));
+        if (readOnly) Assert.DoesNotContain(tools, t => (string?)t["name"] == "inventor_add_sketch_point_dimension");
+        var reply = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)reply["error"]?["code"]);
+    }
+
+    [Theory]
     [InlineData("inventor_add_sketch_dimension", "value", "12.5")]
     [InlineData("inventor_add_sketch_dimension", "value", "\"driver / 2\"")]
     [InlineData("inventor_revolve", "angle", "-90")]

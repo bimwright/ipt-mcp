@@ -110,6 +110,15 @@ public sealed class QueryTools
         return Call("probe_brep", p, ct);
     }
 
+    [McpServerTool(Name = "inventor_list_sketch_points", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("List 2D sketch points with stable opaque point_ref values, sketch XY coordinates in mm, and roles such as circle_center, arc_center, line_start and line_end. Returns origin_ref without projecting or modifying the sketch. Use these references with inventor_add_sketch_point_dimension; refresh after Save As or stale-reference errors. sketch_name is required; document optionally selects an open part. max_items=1..1000, default 200; truncated signals more points.")]
+    public Task<string> ListSketchPoints(string sketch_name, string? document = null, int max_items = 200, CancellationToken ct = default)
+    {
+        var p = new JObject { ["sketch_name"] = sketch_name, ["max_items"] = max_items };
+        if (document is not null) p["document"] = document;
+        return Call("list_sketch_points", p, ct);
+    }
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try

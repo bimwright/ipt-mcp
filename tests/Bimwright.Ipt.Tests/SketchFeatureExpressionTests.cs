@@ -146,6 +146,37 @@ public sealed class SketchFeatureExpressionTests : IDisposable
         Assert.Equal("join", (string?)expr["operation"]);
     }
 
+    [Theory]
+    [InlineData("25")]
+    [InlineData("\"HoleX / 2\"")]
+    public async Task Point_dimension_forwards_raw_value_and_explicit_target(string raw)
+    {
+        var p = await ParamsOf("add_sketch_point_dimension", () => new SketchTools(_client).AddSketchPointDimension("first", "second", "vertical", Json(raw), "fixture.ipt", new[] { 10.0, 20.0 }));
+        Assert.Equal("first", (string?)p["point1_ref"]); Assert.Equal("second", (string?)p["point2_ref"]);
+        Assert.Equal("vertical", (string?)p["orientation"]); Assert.Equal("fixture.ipt", (string?)p["document"]);
+        Assert.True(JToken.DeepEquals(JToken.Parse(raw), p["value"])); Assert.Equal(20, (double)p["text_position"]![1]!);
+    }
+
+    [Fact]
+    public async Task Point_inventory_forwards_read_scope_and_limit()
+    {
+        var p = await ParamsOf("list_sketch_points", () => new QueryTools(_client).ListSketchPoints("Holes", "fixture.ipt", 50));
+        Assert.Equal("Holes", (string?)p["sketch_name"]); Assert.Equal("fixture.ipt", (string?)p["document"]); Assert.Equal(50, (int)p["max_items"]!);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Point_dimension_preserves_failure_recovery_receipt(bool rollbackFailed)
+    {
+        var data = new JObject { ["rolled_back"] = !rollbackFailed, ["mutation_applied"] = rollbackFailed ? new JValue("unknown") : new JValue(false), ["rollback_failed"] = rollbackFailed };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var server = new NamedPipeServerStream(_pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        var receive = ReplyWithFailureAsync(server, data, timeout.Token);
+        var result = JObject.Parse(await new SketchTools(_client).AddSketchPointDimension("a", "b", "aligned", Json("10"), ct: timeout.Token));
+        Assert.Equal("add_sketch_point_dimension", await receive); Assert.False(result.Value<bool>("ok")); Assert.True(JToken.DeepEquals(data, result["data"]));
+    }
+
     private async Task<JObject> ParamsOf(string command, Func<Task<string>> invoke)
     {
         using var server = new NamedPipeServerStream(
