@@ -155,7 +155,8 @@ namespace Bimwright.Ipt.Shared.Logging
 
         internal static McpLogSafePayload BuildLogSafePayload(string toolName, string? paramsJson, string? code)
         {
-            if (!string.Equals(toolName, "send_code", StringComparison.OrdinalIgnoreCase))
+            var sourceField = CallLogPrivacy.SourceField(toolName);
+            if (sourceField is null)
             {
                 object? safeParams = null;
                 try
@@ -177,7 +178,7 @@ namespace Bimwright.Ipt.Shared.Logging
                 };
             }
 
-            var codeBody = ExtractCodeBody(paramsJson, code);
+            var codeBody = ExtractCodeBody(paramsJson, code, sourceField);
             return new McpLogSafePayload
             {
                 Code = null,
@@ -194,7 +195,7 @@ namespace Bimwright.Ipt.Shared.Logging
             if (resultJson == null)
                 return null;
 
-            var redactResultFields = string.Equals(toolName, "send_code", StringComparison.OrdinalIgnoreCase);
+            var redactResultFields = CallLogPrivacy.SourceField(toolName) is not null;
             return RedactAndTruncate(resultJson, MaxLoggedResultLength, redactResultFields);
         }
 
@@ -213,7 +214,7 @@ namespace Bimwright.Ipt.Shared.Logging
             catch { return paramsJson; }
         }
 
-        private static string ExtractCodeBody(string? paramsJson, string? code)
+        private static string ExtractCodeBody(string? paramsJson, string? code, string sourceField)
         {
             if (!string.IsNullOrEmpty(code))
                 return code;
@@ -223,7 +224,7 @@ namespace Bimwright.Ipt.Shared.Logging
             try
             {
                 var parsed = JObject.Parse(paramsJson);
-                var token = parsed["code"];
+                var token = parsed[sourceField];
                 if (token == null || token.Type == JTokenType.Null)
                     return string.Empty;
                 if (token.Type == JTokenType.String)

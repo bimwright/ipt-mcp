@@ -398,6 +398,11 @@ namespace Bimwright.Ipt.Shared.Views
                 _warningLabel.Foreground = Brushes.Gray;
                 _warningLabel.Visibility = Visibility.Visible;
             }
+            else if (entry.SourceBodyRedacted && entry.ToolName != SendCodeCommand)
+            {
+                _warningLabel.Text = "⚠ Source body redacted from history — re-run unavailable";
+                _warningLabel.Visibility = Visibility.Visible;
+            }
             else if (entry.ToolName == SendCodeCommand && string.IsNullOrEmpty(entry.CodeSnippet))
             {
                 _warningLabel.Text = IsRerunPossible(entry)
@@ -643,6 +648,9 @@ namespace Bimwright.Ipt.Shared.Views
         private bool IsRerunPossible(McpCallEntry? entry)
         {
             if (entry == null || entry.IsHistorical || entry.ParamsTruncated)
+                return false;
+            // iLogic has no body-recovery journal; never replay its hash-only parameters.
+            if (entry.SourceBodyRedacted && entry.ToolName != SendCodeCommand)
                 return false;
             // send_code bodies are redacted to {code_hash, code_length} unless
             // CacheSendCodeBodies is on — fall back to the send-code journal.

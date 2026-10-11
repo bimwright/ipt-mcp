@@ -23,6 +23,8 @@ namespace Bimwright.Ipt.Shared.Logging
         public int? RerunOfIndex { get; set; }
         /// <summary>ParamsJson exceeded the in-memory cap and was truncated — entry cannot be re-run.</summary>
         public bool ParamsTruncated { get; set; }
+        /// <summary>Source body was removed by the cache policy; the stored params cannot be re-run.</summary>
+        public bool SourceBodyRedacted { get; set; }
         /// <summary>Loaded from mcp-calls.jsonl (a previous session) — read-only, never re-runnable.</summary>
         public bool IsHistorical { get; set; }
         /// <summary>Short session tag for historical entries (e.g. "0923-1442").</summary>
@@ -121,14 +123,14 @@ namespace Bimwright.Ipt.Shared.Logging
             if (entry == null)
                 return;
 
-            var isSendCode = string.Equals(entry.ToolName, "send_code", StringComparison.OrdinalIgnoreCase);
+            var sourceField = CallLogPrivacy.SourceField(entry.ToolName);
             entry.ErrorMessage = McpResponsePrivacy.RedactErrorForResponse(entry.ErrorMessage);
-            entry.ResultJson = BakeRedactor.RedactForBake(entry.ResultJson, redactResultFields: isSendCode);
+            entry.ResultJson = BakeRedactor.RedactForBake(entry.ResultJson, redactResultFields: sourceField is not null);
             // The grid binds Summary — it is generated from the raw error/result, so it
             // must pass the same redaction or a path like D:\secret\model.ipt leaks.
             entry.Summary = BakeRedactor.RedactForBake(entry.Summary);
 
-            if (!isSendCode)
+            if (sourceField is null)
             {
                 // Bound in-memory size for fat payloads (e.g. batch_execute); the
                 // file log caps params separately at 8KB.
@@ -153,7 +155,7 @@ namespace Bimwright.Ipt.Shared.Logging
                 return;
             }
 
-            var code = ExtractCodeBody(entry.ParamsJson, entry.CodeSnippet);
+            var code = ExtractCodeBody(entry.ParamsJson, entry.CodeSnippet, sourceField);
             var codeHash = BakeRedactor.HashBody(code);
             entry.ParamsJson = JsonConvert.SerializeObject(new
             {
@@ -161,10 +163,11 @@ namespace Bimwright.Ipt.Shared.Logging
                 code_length = code.Length
             }, Formatting.None);
             entry.CodeSnippet = null;
-            entry.Summary = $"send_code body redacted; code_hash={codeHash}; code_length={code.Length}";
+            entry.SourceBodyRedacted = true;
+            entry.Summary = $"{entry.ToolName} body redacted; code_hash={codeHash}; code_length={code.Length}";
         }
 
-        private static string ExtractCodeBody(string? paramsJson, string? codeSnippet)
+        private static string ExtractCodeBody(string? paramsJson, string? codeSnippet, string sourceField)
         {
             if (!string.IsNullOrEmpty(codeSnippet))
                 return codeSnippet;
@@ -174,7 +177,7 @@ namespace Bimwright.Ipt.Shared.Logging
             try
             {
                 var obj = JObject.Parse(paramsJson);
-                var code = obj["code"];
+                var code = obj[sourceField];
                 if (code == null || code.Type == JTokenType.Null)
                     return string.Empty;
                 if (code.Type == JTokenType.String)

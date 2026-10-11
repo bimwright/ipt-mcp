@@ -8,7 +8,7 @@ namespace Bimwright.Ipt.Shared.Logging
     /// ipt is env-driven, so the same opt-ins arrive through environment variables (same
     /// names as rvt-mcp — the family shares these flags).
     ///
-    /// <see cref="CacheSendCodeBodiesOrDefault"/>: keep send_code bodies in the in-memory
+    /// <see cref="CacheSendCodeBodiesOrDefault"/>: keep send_code and iLogic source bodies in the in-memory
     /// session log so History can show + re-run them (default off → body redacted to a hash).
     ///
     /// <see cref="IsPersistSendCodeBodiesActive"/>: persist bake-redacted send_code bodies to
