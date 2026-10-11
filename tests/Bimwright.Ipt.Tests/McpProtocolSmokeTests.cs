@@ -7,6 +7,23 @@ namespace Bimwright.Ipt.Tests;
 public sealed class McpProtocolSmokeTests
 {
     [Theory]
+    [InlineData(false, 136)]
+    [InlineData(true, 37)]
+    public async Task Combined_excel_and_point_dimension_catalog_preserves_both_surfaces(bool readOnly, int count)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly);
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        Assert.Equal(count, tools.Count);
+        foreach (var name in new[] { "inventor_list_excel_tables", "inventor_list_sketch_points" })
+            Assert.True(Assert.Single(tools, t => (string?)t["name"] == name)["annotations"]!.Value<bool>("readOnlyHint"));
+        foreach (var name in new[] { "inventor_link_excel_table", "inventor_reload_excel_table", "inventor_add_sketch_point_dimension" })
+        {
+            if (readOnly) Assert.DoesNotContain(tools, t => (string?)t["name"] == name);
+            else Assert.False(Assert.Single(tools, t => (string?)t["name"] == name)["annotations"]!.Value<bool>("readOnlyHint"));
+        }
+    }
+
+    [Theory]
     [InlineData("12.5")]
     [InlineData("\"HoleX / 2\"")]
     public async Task Point_dimension_binds_over_MCP_and_publishes_complete_contract(string value)
@@ -33,6 +50,25 @@ public sealed class McpProtocolSmokeTests
         if (readOnly) Assert.DoesNotContain(tools, t => (string?)t["name"] == "inventor_add_sketch_point_dimension");
         var reply = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
         Assert.Equal("NO_TARGET", (string?)reply["error"]?["code"]);
+    }
+
+    [Theory]
+    [InlineData("inventor_list_excel_tables", "{}", true)]
+    [InlineData("inventor_link_excel_table", "{path:'C:/fixture.xlsx',start_cell:'A6'}", false)]
+    [InlineData("inventor_reload_excel_table", "{table_id:'excel:fixture'}", false)]
+    public async Task Excel_tools_bind_over_MCP_and_obey_read_only_registration(string tool, string input, bool readOnly)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly, expressionTool: tool, expressionArguments: JObject.Parse(input));
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var published = Assert.Single(tools, item => (string?)item["name"] == tool);
+        Assert.Equal(readOnly, (bool)published["annotations"]!["readOnlyHint"]!);
+        if (readOnly)
+        {
+            Assert.DoesNotContain(tools, item => (string?)item["name"] == "inventor_link_excel_table");
+            Assert.DoesNotContain(tools, item => (string?)item["name"] == "inventor_reload_excel_table");
+        }
+        var response = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)response["error"]?["code"]);
     }
 
     [Theory]

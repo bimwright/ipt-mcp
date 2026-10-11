@@ -17,6 +17,9 @@ public static partial class InventorCommandRegistry
         add(new GetParameterHandler());
         add(new SetParameterHandler());
         add(new CreateParameterHandler());
+        add(new ListExcelTablesHandler());
+        add(new LinkExcelTableHandler());
+        add(new ReloadExcelTableHandler());
     }
 }
 #endif
