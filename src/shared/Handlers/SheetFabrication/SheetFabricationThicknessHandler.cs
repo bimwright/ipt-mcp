@@ -75,8 +75,7 @@ public sealed class SheetFabricationThicknessHandler : HandlerBase, IInventorCom
         }
         catch (Exception ex)
         {
-            var message = ex.Message;
-            try
+            return SheetFabricationThicknessRecovery.Fail(ctx, ex, !editStarted && transaction is null ? null : () =>
             {
                 if (transaction is not null) transaction.Abort();
                 else if (editStarted)
@@ -87,9 +86,7 @@ public sealed class SheetFabricationThicknessHandler : HandlerBase, IInventorCom
                     if (!part.Update2(false))
                         throw new InvalidOperationException("Inventor could not rebuild the previous thickness state");
                 }
-            }
-            catch (Exception rollback) { message += " | thickness rollback failed: " + rollback.Message; }
-            return Fail(ctx, InventorErrorCodes.API_ERROR, message);
+            });
         }
     }
 }
