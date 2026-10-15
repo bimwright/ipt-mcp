@@ -6,6 +6,8 @@ using System.IO.Pipes;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using Bimwright.Ipt.Shared.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -28,6 +30,16 @@ public sealed class PipeTransportServer : ITransportServer
     private volatile bool _running;
     private Action<string, TaskCompletionSource<string>>? _onRequest;
     private volatile bool _clientConnected;
+    private readonly object _lifecycle = new();
+    private readonly object _clientGate = new();
+    private readonly CancellationTokenSource _stop = new();
+    private readonly CancellationToken _stopping;
+    private NamedPipeServerStream? _activePipe;
+    private bool _started;
+    private bool _stopped;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CancelIoEx(SafePipeHandle handle, IntPtr overlapped);
 
     private const int MaxLineBytes = 1024 * 1024; // 1 MiB
 
@@ -40,9 +52,11 @@ public sealed class PipeTransportServer : ITransportServer
     {
         _pipeName = pipeName ?? throw new ArgumentNullException(nameof(pipeName));
         _authToken = authToken ?? throw new ArgumentNullException(nameof(authToken));
+        _stopping = _stop.Token;
     }
 
     public bool IsRunning => _running;
+    public CancellationToken Stopping => _stopping;
     public string PipeName => _pipeName;
     public bool IsClientConnected => _clientConnected;
     public DateTime? LastCommandTime { get; private set; }
@@ -50,58 +64,90 @@ public sealed class PipeTransportServer : ITransportServer
 
     public void Start(Action<string, TaskCompletionSource<string>> onRequest)
     {
-        _onRequest = onRequest ?? throw new ArgumentNullException(nameof(onRequest));
-        _running = true;
-        _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "BimwrightInventor.PipeTransportServer" };
-        _listenThread.Start();
+        if (onRequest == null) throw new ArgumentNullException(nameof(onRequest));
+        lock (_lifecycle)
+        {
+            if (_started || _stopped) throw new InvalidOperationException("Create a new transport for each listener lifetime.");
+            _started = true;
+            try
+            {
+                _activePipe = CreatePipe(); // Reserve the endpoint before returning success or publishing discovery.
+                _onRequest = onRequest;
+                _running = true;
+                _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "BimwrightInventor.PipeTransportServer" };
+                _listenThread.Start();
+            }
+            catch
+            {
+                _running = false;
+                _stopped = true;
+                _stop.Cancel();
+                ClosePipe(_activePipe);
+                _activePipe = null;
+                throw;
+            }
+        }
     }
 
     public void Stop()
     {
-        _running = false;
-        // Wake a blocked WaitForConnection by connecting briefly.
-        try
+        Thread? thread;
+        lock (_lifecycle)
         {
-            using var dummy = new NamedPipeClientStream(".", _pipeName, PipeDirection.Out);
-            dummy.Connect(100);
+            _running = false;
+            if (!_stopped) { _stopped = true; _stop.Cancel(); }
+            lock (_clientGate) ClosePipe(_activePipe);
+            thread = _listenThread;
         }
-        catch { }
+        if (thread != null && thread.IsAlive && Thread.CurrentThread != thread && !thread.Join(2000))
+            throw new TimeoutException("The Inventor pipe listener has not stopped; do not replace its lifetime.");
     }
 
-    public void Dispose() => Stop();
+    public void Dispose() { Stop(); _stop.Dispose(); }
+
+    private NamedPipeServerStream CreatePipe() => new(_pipeName, PipeDirection.InOut, 1,
+        PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+    private static void ClosePipe(NamedPipeServerStream? pipe)
+    {
+        if (pipe == null) return;
+        try { CancelIoEx(pipe.SafePipeHandle, IntPtr.Zero); } catch { }
+        try { pipe.Dispose(); } catch { }
+    }
 
     private void ListenLoop()
     {
-        while (_running)
+        try
         {
-            NamedPipeServerStream? pipe = null;
-            try
+            while (_running)
             {
-                pipe = new NamedPipeServerStream(
-                    _pipeName,
-                    PipeDirection.InOut,
-                    1, // maxNumberOfServerInstances
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.None);
-
-                pipe.WaitForConnection();
-                if (!_running) break;
-
-                HandleClient(pipe);
+                NamedPipeServerStream? pipe;
+                lock (_clientGate) pipe = _activePipe;
+                try
+                {
+                    pipe!.WaitForConnection();
+                    if (!_running) break;
+                    HandleClient(pipe);
+                }
+                catch when (!_running) { break; }
+                finally
+                {
+                    ClosePipe(pipe);
+                    lock (_clientGate) { if (ReferenceEquals(_activePipe, pipe)) _activePipe = null; }
+                }
+                lock (_clientGate)
+                {
+                    if (_running) _activePipe = CreatePipe();
+                }
             }
-            catch (IOException) when (!_running)
-            {
-                break; // clean shutdown
-            }
-            catch
-            {
-                // listen error; keep listening
-            }
-            finally
-            {
-                try { pipe?.Disconnect(); } catch { }
-                try { pipe?.Dispose(); } catch { }
-            }
+        }
+        catch { /* A failed rebind ends this lifetime instead of spinning on a busy endpoint. */ }
+        finally
+        {
+            _running = false;
+            _clientConnected = false;
+            try { _stop.Cancel(); } catch { }
+            lock (_clientGate) { ClosePipe(_activePipe); _activePipe = null; }
         }
     }
 
@@ -111,6 +157,13 @@ public sealed class PipeTransportServer : ITransportServer
         {
             var reader = new StreamReader(pipe, Encoding.UTF8);
             var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
+            long activity = Stopwatch.GetTimestamp();
+            int inFlight = 0;
+            using var idle = new Timer(_ =>
+            {
+                if (Volatile.Read(ref inFlight) == 0 && (Stopwatch.GetTimestamp() - Interlocked.Read(ref activity)) / (double)Stopwatch.Frequency >= 120)
+                    ClosePipe(pipe);
+            }, null, 15000, 15000);
 
             var requestTimestamps = new Queue<DateTime>();
             const int RateLimitMax = 20;
@@ -139,6 +192,7 @@ public sealed class PipeTransportServer : ITransportServer
                 }
 
                 if (string.IsNullOrWhiteSpace(line)) continue;
+                Interlocked.Exchange(ref activity, Stopwatch.GetTimestamp());
 
                 JObject request;
                 try { request = JObject.Parse(line); }
@@ -165,15 +219,16 @@ public sealed class PipeTransportServer : ITransportServer
 
                 LastCommandTime = DateTime.Now;
                 var tcs = new TaskCompletionSource<string>();
-                _onRequest!(line, tcs);
-
-                string response;
-                if (tcs.Task.Wait(TimeSpan.FromSeconds(60)))
-                    response = tcs.Task.Result;
-                else
-                    response = ErrorJson(id, InventorErrorCodes.TIMEOUT, "Request timed out (60s). Inventor may be in a modal dialog or busy.");
-
-                if (!TryWrite(writer, response)) break;
+                Interlocked.Exchange(ref inFlight, 1);
+                try
+                {
+                    _onRequest!(line, tcs);
+                    string response;
+                    if (tcs.Task.Wait(60000, Stopping)) response = tcs.Task.Result;
+                    else response = ErrorJson(id, InventorErrorCodes.TIMEOUT, "Request timed out (60s). Inventor may be in a modal dialog or busy.");
+                    if (!TryWrite(writer, response)) break;
+                }
+                finally { Interlocked.Exchange(ref activity, Stopwatch.GetTimestamp()); Interlocked.Exchange(ref inFlight, 0); }
             }
         }
         catch
@@ -189,8 +244,12 @@ public sealed class PipeTransportServer : ITransportServer
     private static Guid ParseId(JObject request)
         => Guid.TryParse(request.Value<string>("id"), out var g) ? g : Guid.Empty;
 
-    private static bool TryWrite(StreamWriter writer, string text)
+    private bool TryWrite(StreamWriter writer, string text)
     {
+        // A peer that stops reading must not retain the sole listener indefinitely.
+        NamedPipeServerStream? peer;
+        lock (_clientGate) peer = _activePipe;
+        using var deadline = new Timer(_ => ClosePipe(peer), null, 5000, Timeout.Infinite);
         try { writer.WriteLine(text); return true; }
         catch { return false; }
     }

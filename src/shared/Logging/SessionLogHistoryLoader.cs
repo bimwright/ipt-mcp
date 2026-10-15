@@ -26,22 +26,31 @@ namespace Bimwright.Ipt.Shared.Logging
         public static List<McpCallEntry> LoadPastSessions(
             string logDir, string currentSessionId, int liveSessionCount, int maxEntries = 1500)
         {
-            var rows = new List<Row>();
-            if (string.IsNullOrEmpty(logDir) || !Directory.Exists(logDir)) return new List<McpCallEntry>();
+            if (maxEntries <= 0 || string.IsNullOrEmpty(logDir) || !Directory.Exists(logDir)) return new List<McpCallEntry>();
+            maxEntries = Math.Min(maxEntries, 50000);
 
             // Archive names carry a timestamp (mcp-calls-yyyyMMdd-HHmmss.jsonl) so
             // ordinal sort = chronological order; the live file is always newest.
-            var files = new List<string>(Directory.GetFiles(logDir, "mcp-calls-*.jsonl"));
+            string[] owned;
+            try { owned = BoundedLogFile.Files(logDir, "mcp-calls"); }
+            catch (IOException) { return new List<McpCallEntry>(); }
+            catch (UnauthorizedAccessException) { return new List<McpCallEntry>(); }
+            var current = Path.GetFullPath(Path.Combine(logDir, "mcp-calls.jsonl"));
+            var files = new List<string>(Array.FindAll(owned, p => !string.Equals(p, current, StringComparison.OrdinalIgnoreCase)));
             files.Sort(StringComparer.OrdinalIgnoreCase);
-            var current = Path.Combine(logDir, "mcp-calls.jsonl");
-            if (File.Exists(current)) files.Add(current);
+            if (Array.Exists(owned, p => string.Equals(p, current, StringComparison.OrdinalIgnoreCase))) files.Add(current);
 
+            var retained = new Queue<Row>();
+            var capacity = (int)Math.Min(50000L, (long)maxEntries + Math.Max(0, liveSessionCount));
             foreach (var file in files)
-                foreach (var line in SafeReadAllLines(file))
+                foreach (var line in BoundedLogFile.ReadLinesSafe(file))
                 {
                     var row = ParseLine(line);
-                    if (row != null) rows.Add(row);
+                    if (row == null) continue;
+                    retained.Enqueue(row);
+                    if (retained.Count > capacity) retained.Dequeue();
                 }
+            var rows = new List<Row>(retained);
 
             // Hide exactly the live-session rows still in memory — the LAST
             // liveSessionCount of them; file order matches memory order.
@@ -64,12 +73,6 @@ namespace Bimwright.Ipt.Shared.Logging
                 entries[i].Index = i - entries.Count;
 
             return entries;
-        }
-
-        private static string[] SafeReadAllLines(string path)
-        {
-            try { return File.ReadAllLines(path); }
-            catch { return new string[0]; }
         }
 
         private sealed class Row

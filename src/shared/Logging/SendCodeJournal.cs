@@ -26,15 +26,17 @@ namespace Bimwright.Ipt.Shared.Logging
 
         public static void RunMaintenance(IptPrivacyConfig? config, DateTimeOffset? now = null)
         {
-            var utc = now ?? DateTimeOffset.UtcNow;
-            var root = RootDir;
             try
             {
-                Directory.CreateDirectory(root);
+                BoundedLogFile.WithLock(JournalPath, () =>
+                {
+                    var utc = now ?? DateTimeOffset.UtcNow;
+                    MaybePurge(RootDir, config != null && config.IsPersistSendCodeBodiesActive(utc), utc);
+                    BoundedLogFile.MaintainUnderLock(JournalPath, now: utc);
+                    return true;
+                });
             }
             catch { }
-            var isActive = config != null && config.IsPersistSendCodeBodiesActive(utc);
-            MaybePurge(root, isActive, utc);
         }
 
         public static bool TryAppend(
@@ -47,15 +49,19 @@ namespace Bimwright.Ipt.Shared.Logging
             string? resultJson,
             DateTimeOffset? now = null)
         {
-            var utc = now ?? DateTimeOffset.UtcNow;
-            var root = RootDir;
-
             try
             {
-                Directory.CreateDirectory(root);
+                return BoundedLogFile.WithLock(JournalPath, () => AppendUnderLock(
+                    config, sessionId, rawCode, success, durationMs, error, resultJson, now));
             }
-            catch { }
+            catch { return false; }
+        }
 
+        private static bool AppendUnderLock(IptPrivacyConfig? config, string sessionId, string? rawCode,
+            bool success, long durationMs, string? error, string? resultJson, DateTimeOffset? now)
+        {
+            var utc = now ?? DateTimeOffset.UtcNow;
+            var root = RootDir;
             var isActive = config != null && config.IsPersistSendCodeBodiesActive(utc);
 
             // Maintenance: purge if inactive/expired, remove marker if active
@@ -64,9 +70,9 @@ namespace Bimwright.Ipt.Shared.Logging
             if (!isActive)
                 return false;
 
-            RotateIfNeeded(root, utc);
-
             var raw = rawCode ?? string.Empty;
+            // Even before redaction/serialization, reject a body that cannot fit a record.
+            if (raw.Length >= MaxFileSize) return false;
             var entry = new
             {
                 timestamp = utc.ToString("o"),
@@ -83,7 +89,7 @@ namespace Bimwright.Ipt.Shared.Logging
             try
             {
                 var line = JsonConvert.SerializeObject(entry, Formatting.None);
-                McpLogger.AppendLineLocked(JournalPath, line);
+                BoundedLogFile.AppendUnderLock(JournalPath, line, now: utc);
                 return true;
             }
             catch
@@ -101,12 +107,19 @@ namespace Bimwright.Ipt.Shared.Logging
         public static string? TryFindCodeByHash(string? codeHash)
         {
             if (string.IsNullOrEmpty(codeHash)) return null;
-            foreach (var file in JournalFilesNewestFirst())
+            try
             {
-                var body = FindInFile(file, codeHash);
-                if (body != null) return body;
+                return BoundedLogFile.WithLock(JournalPath, () =>
+                {
+                    foreach (var file in JournalFilesNewestFirst())
+                    {
+                        var body = FindInFile(file, codeHash);
+                        if (body != null) return body;
+                    }
+                    return (string?)null;
+                });
             }
-            return null;
+            catch { return null; }
         }
 
         private static IEnumerable<string> JournalFilesNewestFirst()
@@ -114,10 +127,12 @@ namespace Bimwright.Ipt.Shared.Logging
             var dir = Path.GetDirectoryName(JournalPath);
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) yield break;
 
-            if (File.Exists(JournalPath)) yield return JournalPath;
+            var files = BoundedLogFile.FilesForPath(JournalPath);
+            var current = Path.GetFullPath(JournalPath);
+            if (Array.Exists(files, p => string.Equals(p, current, StringComparison.OrdinalIgnoreCase))) yield return current;
 
             // Archive names carry a timestamp → ordinal-desc = newest first.
-            var archives = Directory.GetFiles(dir, "send-code-journal-*.jsonl");
+            var archives = Array.FindAll(files, p => !string.Equals(p, current, StringComparison.OrdinalIgnoreCase));
             Array.Sort(archives, StringComparer.OrdinalIgnoreCase);
             for (var i = archives.Length - 1; i >= 0; i--)
                 yield return archives[i];
@@ -127,7 +142,7 @@ namespace Bimwright.Ipt.Shared.Logging
         {
             try
             {
-                foreach (var line in File.ReadLines(path))
+                foreach (var line in BoundedLogFile.ReadLinesSafe(path))
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
                     try
@@ -146,6 +161,7 @@ namespace Bimwright.Ipt.Shared.Logging
         private static void MaybePurge(string rootDir, bool isActive, DateTimeOffset now)
         {
             var disabledMarker = Path.Combine(rootDir, "send-code-journal.disabled-at");
+            BoundedLogFile.RefuseLink(disabledMarker);
             if (isActive)
             {
                 if (File.Exists(disabledMarker))
@@ -156,8 +172,8 @@ namespace Bimwright.Ipt.Shared.Logging
             }
 
             // Write marker if not present and journal files exist
-            var journal = Path.Combine(rootDir, "send-code-journal.jsonl");
-            bool hasFiles = File.Exists(journal) || (Directory.Exists(rootDir) && Directory.GetFiles(rootDir, "send-code-journal-*.jsonl").Length > 0);
+            var files = BoundedLogFile.FilesForPath(JournalPath);
+            bool hasFiles = files.Length > 0;
             if (hasFiles && !File.Exists(disabledMarker))
             {
                 try
@@ -171,14 +187,15 @@ namespace Bimwright.Ipt.Shared.Logging
             {
                 try
                 {
+                    if (new FileInfo(disabledMarker).Length > 128) return;
                     var text = File.ReadAllText(disabledMarker);
                     if (DateTimeOffset.TryParse(text, out var disabledAt))
                     {
                         if (now - disabledAt >= TimeSpan.FromDays(7))
                         {
-                            if (File.Exists(journal)) File.Delete(journal);
-                            foreach (var f in Directory.GetFiles(rootDir, "send-code-journal-*.jsonl"))
+                            foreach (var f in files)
                             {
+                                BoundedLogFile.RefuseLink(f);
                                 File.Delete(f);
                             }
                             File.Delete(disabledMarker);
@@ -189,19 +206,5 @@ namespace Bimwright.Ipt.Shared.Logging
             }
         }
 
-        private static void RotateIfNeeded(string rootDir, DateTimeOffset now)
-        {
-            var journal = Path.Combine(rootDir, "send-code-journal.jsonl");
-            if (File.Exists(journal) && new FileInfo(journal).Length > MaxFileSize)
-            {
-                try
-                {
-                    var archive = Path.Combine(rootDir,
-                        $"send-code-journal-{now.ToString("yyyyMMdd-HHmmss")}.jsonl");
-                    File.Move(journal, archive);
-                }
-                catch { }
-            }
-        }
     }
 }

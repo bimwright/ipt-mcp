@@ -27,6 +27,7 @@ else
     layout = Bimwright.Setup.RuntimeLayout.StartForCurrentUser("ipt-mcp");
 cfg.BindRuntimeLayout(layout);
 ServerLogger.Configure(cfg.EnableCallLog, cfg.LocalAppDataRoot == null ? null : layout.GatewayLogPath);
+ServerLogger.RunMaintenance();
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.ClearProviders();

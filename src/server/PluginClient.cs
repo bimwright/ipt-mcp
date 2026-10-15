@@ -69,6 +69,7 @@ public sealed class PluginClient
     private readonly InventorMcpConfig _config;
     private readonly TargetRegistry _registry;
     private TargetDescriptor? _current;
+    private readonly SemaphoreSlim _sendSlots = new(32, 32);
 
     public PluginClient(InventorMcpConfig config)
     {
@@ -215,68 +216,54 @@ public sealed class PluginClient
 
     private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct, int timeoutMs)
     {
-        Stream stream;
-        IDisposable owner;
-
-        // Connect is transport setup, not the STA budget — keep a floor so a pathological
-        // timeout_ms (clamped to 1) cannot starve the loopback handshake.
-        var connectBudgetMs = Math.Max(timeoutMs, TransportGraceMs);
-
-        if (string.Equals(target.Transport, "pipe", StringComparison.OrdinalIgnoreCase))
+        if (!await _sendSlots.WaitAsync(0, ct))
+            throw new InventorGatewayException(InventorErrorCodes.API_ERROR, "Gateway connection capacity reached; this request was not sent.");
+        IDisposable? owner = null;
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        // Setup/write has a separate finite budget. It must not consume the Inventor execution allowance.
+        budget.CancelAfter(Math.Min(10000, Math.Max(timeoutMs, TransportGraceMs)));
+        using var abort = budget.Token.Register(() => { try { owner?.Dispose(); } catch { } });
+        var stage = "connect";
+        try
         {
-            var pipe = new NamedPipeClientStream(".", target.PipeName ?? "", PipeDirection.InOut);
-            owner = pipe;
-            try
+            Stream stream;
+            if (string.Equals(target.Transport, "pipe", StringComparison.OrdinalIgnoreCase))
             {
-                var connect = pipe.ConnectAsync(ct);
-                if (await Task.WhenAny(connect, Task.Delay(connectBudgetMs, ct)) != connect)
-                    throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"connect to target {target.TargetId} timed out");
-                await connect;
+                var pipe = new NamedPipeClientStream(".", target.PipeName ?? "", PipeDirection.InOut, PipeOptions.Asynchronous);
+                owner = pipe;
+                await pipe.ConnectAsync(budget.Token);
+                stream = pipe;
             }
-            catch (InventorGatewayException) { pipe.Dispose(); throw; }
-            catch (Exception ex)
+            else
             {
-                pipe.Dispose();
-                throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE, $"cannot reach target {target.TargetId}: {ex.Message}");
+                var client = new TcpClient();
+                owner = client;
+                await client.ConnectAsync("127.0.0.1", target.Port, budget.Token);
+                stream = client.GetStream();
             }
-            stream = pipe;
-        }
-        else // default: tcp
-        {
-            var client = new TcpClient();
-            owner = client;
-            try
-            {
-                var connect = client.ConnectAsync("127.0.0.1", target.Port);
-                if (await Task.WhenAny(connect, Task.Delay(connectBudgetMs, ct)) != connect)
-                    throw new InventorGatewayException(InventorErrorCodes.TIMEOUT, $"connect to target {target.TargetId} timed out");
-                await connect;
-            }
-            catch (InventorGatewayException) { client.Dispose(); throw; }
-            catch (Exception ex)
-            {
-                client.Dispose();
-                throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE, $"cannot reach target {target.TargetId}: {ex.Message}");
-            }
-            stream = client.GetStream();
-        }
-
-        using (owner)
-        using (stream)
-        {
-            await stream.WriteAsync(Encoding.UTF8.GetBytes(line), ct);
-
+            stage = "write";
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(line), budget.Token);
+            stage = "response";
+            budget.CancelAfter(timeoutMs + TransportGraceMs);
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            // Grace: the add-in declares TIMEOUT at timeoutMs; wait a little longer so its
-            // error response (which carries the useful send_code guidance) reaches us first.
-            var readTask = NdjsonLineReader.ReadLineBoundedAsync(reader, _config.MaxResponseBytes);
-            if (await Task.WhenAny(readTask, Task.Delay(timeoutMs + TransportGraceMs, ct)) != readTask)
-                throw new InventorGatewayException(InventorErrorCodes.TIMEOUT,
-                    $"add-in did not respond within {timeoutMs + TransportGraceMs} ms (command budget {timeoutMs} ms)");
-            var read = await readTask;
+            // Cancellation closes this call's stream, which wakes the bounded NDJSON reader too.
+            var read = await NdjsonLineReader.ReadLineBoundedAsync(reader, _config.MaxResponseBytes);
             if (read.Overflow)
                 throw new InventorGatewayException(InventorErrorCodes.RESPONSE_TOO_LARGE, $"add-in response exceeded {_config.MaxResponseBytes} bytes");
             return read.Line ?? throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE, "add-in closed the connection");
         }
+        catch (Exception) when (ct.IsCancellationRequested) { ct.ThrowIfCancellationRequested(); throw; }
+        catch (Exception) when (budget.IsCancellationRequested)
+        {
+            throw new InventorGatewayException(InventorErrorCodes.TIMEOUT,
+                $"Target {target.TargetId} {stage} timed out. A transmitted operation may still complete; inspect its outcome before retrying mutations.");
+        }
+        catch (InventorGatewayException) { throw; }
+        catch (Exception ex)
+        {
+            throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE,
+                $"Cannot reach target {target.TargetId}: {ex.Message}. A transmitted operation may still complete; do not automatically resend mutations.");
+        }
+        finally { try { owner?.Dispose(); } finally { _sendSlots.Release(); } }
     }
 }

@@ -2,6 +2,7 @@ namespace Bimwright.Ipt.Shared.Plugin;
 
 using System;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows.Forms;
 using Bimwright.Ipt.Shared.Infrastructure;
 
@@ -20,43 +21,29 @@ public sealed class InventorStaDispatcher : IDisposable
 {
     private readonly Control _marshal;       // created on the STA/main thread
     private readonly StaQueueStats _stats = new();
+    private readonly StaWorkQueue _queue;
 
     public InventorStaDispatcher()
     {
         // MUST be constructed on Inventor's main STA thread (during Activate).
         _marshal = new Control();
         var _ = _marshal.Handle;             // force handle creation so BeginInvoke works
+        _queue = new StaWorkQueue(action => _marshal.BeginInvoke(action), _stats);
     }
 
     /// <summary>Live queue counters; safe to read from any thread.</summary>
     public StaQueueStats Stats => _stats;
 
     /// <summary>Posts <paramref name="work"/> onto the STA thread; the caller applies its own wait/timeout.</summary>
-    public Task<T> InvokeAsync<T>(Func<T> work)
-    {
-        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_marshal.IsHandleCreated) { tcs.TrySetException(new InvalidOperationException("STA dispatcher not ready")); return tcs.Task; }
-        _stats.OnQueued();
-        try
-        {
-            _marshal.BeginInvoke((Action)(() =>
-            {
-                _stats.OnStarted();
-                try { tcs.TrySetResult(work()); }
-                catch (Exception ex) { tcs.TrySetException(ex); }
-                finally { _stats.OnCompleted(); }
-            }));
-        }
-        catch
-        {
-            _stats.OnAbandoned();
-            throw;
-        }
-        return tcs.Task;
-    }
+    public Task<T> InvokeAsync<T>(Func<T> work, CancellationToken cancellation = default)
+        => _queue.InvokeAsync(work, cancellation);
+
+    public Task<T>? TryInvokeAsync<T>(Func<T> work, CancellationToken cancellation = default)
+        => _queue.TryInvokeAsync(work, cancellation);
 
     public void Dispose()
     {
+        _queue.Dispose(); // Refuse and release queued work before destroying its marshal handle.
         try { if (_marshal.IsHandleCreated) _marshal.Invoke((Action)(() => _marshal.Dispose())); else _marshal.Dispose(); } catch { }
     }
 }

@@ -36,6 +36,7 @@
     <Compile Include="..\shared\Security\*.cs" LinkBase="Shared\Security" />
     <Compile Include="..\shared\ToolBaker\*.cs" LinkBase="Shared\ToolBaker" />
     <Compile Include="..\shared\Setup\*.cs" LinkBase="Shared\Setup" />
+    <Compile Include="..\shared\Logging\BoundedLogFile.cs" Link="Shared\Logging\BoundedLogFile.cs" />
     <Compile Include="..\shared\Infrastructure\ResponseSpillWriter.cs" Link="Shared\Infrastructure\ResponseSpillWriter.cs" />
     <EmbeddedResource Include="..\shared\Contracts\send-code-hints.json" LogicalName="Bimwright.Ipt.SendCodeHints.json" />
   </ItemGroup>

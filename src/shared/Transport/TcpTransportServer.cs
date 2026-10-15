@@ -30,6 +30,13 @@ public sealed class TcpTransportServer : ITransportServer
     private Action<string, TaskCompletionSource<string>>? _onRequest;
     private int _port;
     private volatile bool _clientConnected;
+    private readonly object _lifecycle = new();
+    private readonly object _clientGate = new();
+    private readonly CancellationTokenSource _stop = new();
+    private readonly CancellationToken _stopping;
+    private TcpClient? _activeClient;
+    private bool _started;
+    private bool _stopped;
 
     private const int MaxLineBytes = 1024 * 1024; // 1 MiB
 
@@ -40,9 +47,11 @@ public sealed class TcpTransportServer : ITransportServer
     public TcpTransportServer(string authToken)
     {
         _authToken = authToken ?? throw new ArgumentNullException(nameof(authToken));
+        _stopping = _stop.Token;
     }
 
     public bool IsRunning => _running;
+    public CancellationToken Stopping => _stopping;
     public int Port => _port;
     public bool IsClientConnected => _clientConnected;
     public DateTime? LastCommandTime { get; private set; }
@@ -50,24 +59,48 @@ public sealed class TcpTransportServer : ITransportServer
 
     public void Start(Action<string, TaskCompletionSource<string>> onRequest)
     {
-        _onRequest = onRequest ?? throw new ArgumentNullException(nameof(onRequest));
-
-        _listener = new TcpListener(IPAddress.Loopback, 0);
-        _listener.Start();
-        _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-
-        _running = true;
-        _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "BimwrightInventor.TcpTransportServer" };
-        _listenThread.Start();
+        if (onRequest == null) throw new ArgumentNullException(nameof(onRequest));
+        lock (_lifecycle)
+        {
+            if (_started || _stopped) throw new InvalidOperationException("Create a new transport for each listener lifetime.");
+            _started = true;
+            try
+            {
+                _listener = new TcpListener(IPAddress.Loopback, 0);
+                _listener.Start(32);
+                _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+                _onRequest = onRequest;
+                _running = true;
+                _listenThread = new Thread(ListenLoop) { IsBackground = true, Name = "BimwrightInventor.TcpTransportServer" };
+                _listenThread.Start();
+            }
+            catch
+            {
+                _running = false;
+                _stopped = true;
+                _stop.Cancel();
+                _listener?.Stop();
+                throw;
+            }
+        }
     }
 
     public void Stop()
     {
-        _running = false;
-        try { _listener?.Stop(); } catch { }
+        Thread? thread;
+        lock (_lifecycle)
+        {
+            _running = false;
+            if (!_stopped) { _stopped = true; _stop.Cancel(); }
+            try { _listener?.Stop(); } catch { }
+            lock (_clientGate) { try { _activeClient?.Close(); } catch { } }
+            thread = _listenThread;
+        }
+        if (thread != null && thread.IsAlive && Thread.CurrentThread != thread && !thread.Join(2000))
+            throw new TimeoutException("The Inventor TCP listener has not stopped; do not replace its lifetime.");
     }
 
-    public void Dispose() => Stop();
+    public void Dispose() { Stop(); _stop.Dispose(); }
 
     private void ListenLoop()
     {
@@ -77,6 +110,11 @@ public sealed class TcpTransportServer : ITransportServer
             try
             {
                 client = _listener!.AcceptTcpClient();
+                lock (_clientGate)
+                {
+                    if (!_running) { client.Close(); break; }
+                    _activeClient = client;
+                }
                 HandleClient(client);
             }
             catch (SocketException) when (!_running)
@@ -85,18 +123,24 @@ public sealed class TcpTransportServer : ITransportServer
             }
             catch
             {
-                // accept error; keep listening
+                // A broken listener ends this lifetime; never retry a permanent accept error in a tight loop.
+                break;
             }
             finally
             {
                 try { client?.Close(); } catch { }
+                lock (_clientGate) { if (ReferenceEquals(_activeClient, client)) _activeClient = null; }
             }
         }
+        _running = false;
+        _clientConnected = false;
+        try { _stop.Cancel(); } catch { }
     }
 
     private void HandleClient(TcpClient client)
     {
         client.ReceiveTimeout = 120000;
+        client.SendTimeout = 5000;
         try
         {
             var stream = client.GetStream();
@@ -159,7 +203,7 @@ public sealed class TcpTransportServer : ITransportServer
                 _onRequest!(line, tcs);
 
                 string response;
-                if (tcs.Task.Wait(TimeSpan.FromSeconds(60)))
+                if (tcs.Task.Wait(60000, Stopping))
                     response = tcs.Task.Result;
                 else
                     response = ErrorJson(id, InventorErrorCodes.TIMEOUT, "Request timed out (60s). Inventor may be in a modal dialog or busy.");

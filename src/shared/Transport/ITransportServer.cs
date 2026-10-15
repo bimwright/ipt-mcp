@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace Bimwright.Ipt.Shared.Transport;
 
@@ -11,6 +12,9 @@ namespace Bimwright.Ipt.Shared.Transport;
 /// </summary>
 public interface ITransportServer : IDisposable
 {
+    bool IsRunning { get; }
+    /// <summary>Ends listener waits, never an Inventor operation which has already started.</summary>
+    CancellationToken Stopping { get; }
     /// <summary>Begins listening. The callback is invoked once per validated request line.</summary>
     void Start(Action<string, TaskCompletionSource<string>> onRequest);
 
