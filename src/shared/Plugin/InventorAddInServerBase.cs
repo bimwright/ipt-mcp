@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Threading;
 using InvApi = global::Inventor;      // Autodesk.Inventor.Interop (aliased to avoid the Bimwright.Ipt collision)
 using Newtonsoft.Json;
 using Bimwright.Ipt.Shared.Contracts;
@@ -51,6 +52,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
+        if (_server != null) throw new InvalidOperationException("The previous Inventor MCP lifetime has not been deactivated.");
+        try
+        {
         var runtimeLayout = Bimwright.Setup.RuntimeLayout.StartForCurrentUser("ipt-mcp");
         _app = site.Application;                    // stable API entry point (spec)
         _sta = new InventorStaDispatcher();         // created on the STA thread
@@ -70,6 +74,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         // Command history (rvt-mcp parity): journal file + in-memory session log on a
         // dedicated UI thread. Everything is best-effort — history must never stop the MCP path.
         // Call journals are initialized lazily only for requests with record_calls=true.
+        try { McpLogger.RunMaintenance(); } catch { }
         try { SendCodeJournal.RunMaintenance(IptPrivacyConfig.Load()); } catch { }
         try { _historyHost = new HistoryHost(); } catch { _historyHost = null; }
         _sessionLog = new McpSessionLog(_historyHost is { } hh ? hh.Post : (Action<Action>?)null);
@@ -88,23 +93,25 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
         // Start the transport and read back its bound endpoint into the descriptor.
         var setupIdentity = SetupRuntimeIdentity.Capture(runtimeLayout, GetType().Assembly, "plugin", _year);
-        _server = TransportFactory.CreateStarted(
-            _year, _descriptorDir,
-            (line, tcs) => HandleLine(line, dispatcher, options, _descriptor!, tcs),
-            out var descriptor);
+        var server = TransportFactory.Create(_year, _descriptorDir, out var descriptor);
+        _server = server;
         _descriptor = descriptor;
         _descriptor.SetupIdentity = setupIdentity;
+        server.Start((line, tcs) => HandleLine(line, dispatcher, options, descriptor, tcs, server.Stopping));
+        if (server is TcpTransportServer tcp) descriptor.Port = tcp.Port;
 
         // Fill the active-document title/path (caller holds the Inventor.Application) + persist + heartbeat.
         ReadActiveDocument(out var docTitle, out var docPath);
         _descriptorWriter = new TargetDescriptorWriter(_descriptorDir, _descriptor);
-        _descriptorWriter.Start(docTitle, docPath);
+        _descriptorWriter.Start(docTitle, docPath, lifetime: server.Stopping);
 
         StartToastUi();
 
         // Rising-edge watch (rvt-mcp IdlingUpdater parity — Inventor has no Idling event):
         // each client attach/re-attach gets one "Agent connected" toast.
         _connectionWatch = new ConnectionWatch(_server, info => _toasts?.NotifyConnection(info));
+        }
+        catch { Deactivate(); throw; }
     }
 
     /// <summary>Ribbon + Inventor events for toasts. Failures here never stop the MCP transport.</summary>
@@ -214,7 +221,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         CommandDispatcher dispatcher,
         PluginOptions o,
         TargetDescriptor descriptor,
-        TaskCompletionSource<string> tcs)
+        TaskCompletionSource<string> tcs,
+        CancellationToken stopping)
     {
         // Meta filled even on early-error paths (UNAUTHORIZED/TIMEOUT/API_ERROR) so the server
         // journal can attribute the call to this target (F1 hand-off note, spec F2).
@@ -273,18 +281,38 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
             // Marshal the actual API work onto the STA thread. task.Wait is the single owner of
             // the timeout (spec F2-b): nothing else can interrupt work running on the STA thread.
-            var task = _sta!.InvokeAsync(() =>
+            using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+            var task = _sta!.TryInvokeAsync(() =>
             {
                 var r = dispatcher.Dispatch(ctx, env);
                 RefreshToastSnapshot();   // still on the STA: cheap HWND/visibility read for toast placement
                 return r;
-            });
+            }, requestCancellation.Token);
+            if (task == null)
+            {
+                if (env.Command == "health")
+                {
+                    var busyData = BusyHealthData(o, healthIsQueued: false);
+                    if (descriptor.SetupIdentity != null) busyData["setup_plugin"] = descriptor.SetupIdentity.DeepClone();
+                    tcs.TrySetResult(JsonConvert.SerializeObject(InventorCommandResult.Success(env.Id, busyData, meta)));
+                    RecordOutcome(env, dispatcher, true, busyData, null, null, clock.ElapsedMilliseconds);
+                }
+                else
+                {
+                    const string message = "Inventor STA queue is full; this operation was not started.";
+                    tcs.TrySetResult(Err(env.Id, InventorErrorCodes.API_ERROR, message, meta));
+                    RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.API_ERROR, message, clock.ElapsedMilliseconds);
+                }
+                return;
+            }
 
             // A liveness probe must still answer when the STA thread is jammed, so `health`
             // gets a short fast-path wait and then a synthesized busy response built purely
             // from the queue counters (the dispatched item stays queued and completes unseen).
             var waitMs = env.Command == "health" ? Math.Min(env.TimeoutMs, HealthFastPathMs) : env.TimeoutMs;
-            if (task.Wait(waitMs))
+            var finished = task.Wait(waitMs, stopping);
+            if (!finished) requestCancellation.Cancel(); // Only queued work is cancellable; running COM retains its outcome.
+            if (finished)
             {
                 var result = task.Result;
                 if (env.Command == "health" && result.Data is JObject healthData && descriptor.SetupIdentity != null)
@@ -294,11 +322,18 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             }
             else if (env.Command == "health")
             {
-                var busyData = BusyHealthData(o);
+                var busyData = BusyHealthData(o, healthIsQueued: !task.IsCanceled);
                 if (descriptor.SetupIdentity != null) busyData["setup_plugin"] = descriptor.SetupIdentity.DeepClone();
                 tcs.TrySetResult(JsonConvert.SerializeObject(
                     InventorCommandResult.Success(env.Id, busyData, meta)));
                 RecordOutcome(env, dispatcher, true, busyData, null, null, clock.ElapsedMilliseconds);
+            }
+            else if (task.IsCanceled)
+            {
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
+                    $"{env.Command} expired before STA execution; the operation was not started.", meta));
+                RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
+                    "Operation was not started before its deadline", clock.ElapsedMilliseconds);
             }
             else if (env.Command == "send_code" || env.Command == "ilogic_run_snippet")
             {
@@ -317,6 +352,11 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
                     $"Inventor did not answer within {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // Release the listener before Deactivate disposes the STA marshal. Running work is not aborted.
+            tcs.TrySetCanceled();
         }
         catch (Exception ex)
         {
@@ -512,7 +552,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     /// Health payload for the fast path: the STA thread did not answer in time, so report the
     /// queue counters without touching <c>Inventor.Application</c> (spec F2-b).
     /// </summary>
-    private Newtonsoft.Json.Linq.JObject BusyHealthData(PluginOptions o)
+    private Newtonsoft.Json.Linq.JObject BusyHealthData(PluginOptions o, bool healthIsQueued = true)
         => new()
         {
             ["inventor_year"] = o.Year,
@@ -522,7 +562,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             ["sta_busy"] = true,
             // The queued health item itself still holds a slot — subtract it (same convention
             // as HealthHandler) so this reports *other* work backed up on the STA thread.
-            ["pending_commands"] = Math.Max(0, (_sta?.Stats.PendingCommands ?? 0) - 1),
+            ["pending_commands"] = Math.Max(0, (_sta?.Stats.PendingCommands ?? 0) - (healthIsQueued ? 1 : 0)),
             ["answered_without_sta"] = true,
             ["modal_dialog"] = ModalDialogProbe.Probe(),
         };
@@ -551,7 +591,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     {
         StopToastSnapshotTimer();
         try { _connectionWatch?.Dispose(); } catch { }   // 0. stop the attach watch before the transport dies
-        try { _server?.Dispose(); } catch { }            // 1. no new commands, so no new toasts
+        _server?.Dispose();                             // Refuse teardown/reuse if the listener failed to stop.
         try
         {
             if (_appEvents != null)

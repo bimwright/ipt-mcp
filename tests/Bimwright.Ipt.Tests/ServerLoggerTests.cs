@@ -21,7 +21,14 @@ namespace Bimwright.Ipt.Tests;
 [Collection("CallLog")]
 public sealed class ServerLoggerTests : IDisposable
 {
-    public ServerLoggerTests() => ServerLogger.Configure(true);
+    private readonly string _journalDirectory = Path.Combine(Path.GetTempPath(), "ipt-server-log-" + Guid.NewGuid().ToString("N"));
+    private readonly bool _previousMaskLongTokens = Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens;
+    public ServerLoggerTests()
+    {
+        ServerLogger.Configure(true, JournalPath);
+        // These tests assert the default heuristic, independently of the user's opt-out.
+        Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = true;
+    }
     private const string Session = "server-20260915T040830Z-18244";
 
     private static readonly string[] NullableFinishKeys =
@@ -292,15 +299,13 @@ public sealed class ServerLoggerTests : IDisposable
     }
 
     // ---- journal integration (F1-R1 / F1-R3) ----------------------------------------------
-    // TestJournalIsolation redirects BIMWRIGHT_INVENTOR_CALL_LOG to %TEMP%\ipt-mcp-tests\calls.jsonl
-    // before any test runs, so these assertions read the isolated journal.
+    // Each test owns its journal; historical temp files and rotation cannot skew offsets.
 
-    private static string JournalPath =>
-        ServerLogger.ResolveLogPath(Environment.GetEnvironmentVariable(ServerLogger.LogPathEnvVar));
+    private string JournalPath => Path.Combine(_journalDirectory, "calls.jsonl");
 
     // The journal is append-only but shared with parallel tests and spawned server processes;
     // read with ReadWrite share so a concurrent append never trips a sharing violation.
-    private static string[] ReadJournalLines()
+    private string[] ReadJournalLines()
     {
         using var fs = new FileStream(JournalPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = new StreamReader(fs);
@@ -309,7 +314,7 @@ public sealed class ServerLoggerTests : IDisposable
         return lines.ToArray();
     }
 
-    private static JObject[] AppendedFinishLines(int skip) =>
+    private JObject[] AppendedFinishLines(int skip) =>
         ReadJournalLines().Skip(skip)
             .Where(l => l.Contains("\"phase\":\"finish\""))
             .Select(JObject.Parse)
@@ -367,7 +372,9 @@ public sealed class ServerLoggerTests : IDisposable
 
     public void Dispose()
     {
-        ServerLogger.Configure(false);
+        ServerLogger.Configure(false, ServerLogger.ResolveLogPath(Environment.GetEnvironmentVariable(ServerLogger.LogPathEnvVar)));
+        Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = _previousMaskLongTokens;
+        try { Directory.Delete(_journalDirectory, recursive: true); } catch (IOException) { }
         foreach (var dir in _descriptorDirs)
         {
             try { dir.Delete(recursive: true); } catch (IOException) { /* best effort */ }

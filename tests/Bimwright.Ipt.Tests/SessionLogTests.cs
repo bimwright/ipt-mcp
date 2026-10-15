@@ -10,6 +10,7 @@ namespace Bimwright.Ipt.Tests;
 /// Session-log / journal / history-loader unit tests — the ipt-mcp port of rvt-mcp's
 /// MCP Command History plumbing (no Inventor, no WPF).
 /// </summary>
+[Collection("CallLog")]
 public class SessionLogTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "ipt-log-" + Guid.NewGuid().ToString("N"));

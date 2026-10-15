@@ -8,6 +8,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Bimwright.Ipt.Shared.Security;
+using Bimwright.Ipt.Shared.Logging;
 
 namespace Bimwright.Ipt.Server;
 
@@ -35,7 +36,11 @@ internal static class ServerLogger
         Enabled = enabled;
         if (path != null) LogPath = path;
     }
-    private static readonly object Gate = new object();
+    internal static void RunMaintenance()
+    {
+        try { BoundedLogFile.Maintain(LogPath); }
+        catch { } // Maintenance remains best effort even when call logging is disabled.
+    }
 
     // Journal v3: the MCP client that drives this server (from `initialize.clientInfo`), so journal
     // analysis can tell channels apart without the "<=2 calls per session" heuristic. Set once by
@@ -71,7 +76,7 @@ internal static class ServerLogger
                 phase = "start",
                 client_name = _clientName,
                 client_version = _clientVersion,
-                @params = MaskParams(parameters)
+                @params = parameters is null ? null : CapResult(parameters as JToken ?? JToken.FromObject(parameters))
             });
         }
         catch
@@ -277,10 +282,6 @@ internal static class ServerLogger
         MarkJournaled();
         if (!Enabled) return;
         var line = JsonConvert.SerializeObject(entry, Formatting.None);
-        lock (Gate)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-            File.AppendAllText(LogPath, line + "\n");
-        }
+        BoundedLogFile.Append(LogPath, line);
     }
 }

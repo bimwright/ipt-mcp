@@ -436,6 +436,10 @@ Toggle toasts from the ribbon: **Bimwright ▸ MCP → Toasts** (Status opens a 
 
 Call-log files are disabled by default. Enable them with `--enable-call-log`; the plug-in records redacted calls in `%LOCALAPPDATA%\Bimwright\ipt-mcp\mcp-calls.jsonl`. In-memory History stays available when file logging is off.
 
+New plugin, gateway and send-code journal segments rotate before the next UTF-8 record would exceed 5 MiB. Each generated group retains at most 100 MiB for 30 days, with unique archives beside the active file; recent oversized legacy segments are preserved within the group budget. Startup maintenance also runs when call logging is off, without enabling it. Append, rotation and retention share a cross-process lock; logging failure does not bypass the lock or change the CAD result. Maintenance only handles the matching generated log groups and keeps configuration, recovery state, model files and user exports.
+
+Transport startup reserves the endpoint before advertising readiness. Stop closes actual connections and cancels work that has not begun; admission retains canceled STA posts until their callbacks drain, with at most 64 posted or executing items. Work already running on Inventor's STA thread is allowed to finish. A timeout or lost connection can leave its result unknown: use health and inspect document state before retrying, and do not resend the same script automatically.
+
 `send_code`, `ilogic_run_snippet` and `ilogic_upsert_rule` source bodies are redacted to `{code_hash, code_length}` by default. `BIMWRIGHT_CACHE_SEND_CODE_BODIES=1` keeps bodies in memory for display and re-run. `BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1` (+ optional `BIMWRIGHT_PERSIST_SEND_CODE_BODIES_TTL`, e.g. `4h`/`2d`, default 4 h) writes bake-redacted `send_code` bodies to `send-code-journal.jsonl` so re-run can recover them — the window warns that a recovered body is redacted and may behave differently than the original. iLogic source has no recovery journal; its redacted History entries cannot be re-run.
 
 ---

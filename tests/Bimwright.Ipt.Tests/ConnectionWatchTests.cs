@@ -8,6 +8,8 @@ public sealed class ConnectionWatchTests
 {
     private sealed class FakeTransport : ITransportServer
     {
+        public bool IsRunning => true;
+        public System.Threading.CancellationToken Stopping => default;
         public bool Connected;
         public string Info = "Pipe:BimwrightInventor-1234";
         public bool ThrowOnRead;

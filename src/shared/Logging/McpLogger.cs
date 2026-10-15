@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Threading;
 using Bimwright.Ipt.Shared.Security;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -22,7 +21,7 @@ namespace Bimwright.Ipt.Shared.Logging
         /// <summary>Path of the active mcp-calls.jsonl, or null when logging is disabled.</summary>
         public static string? CurrentLogPath => _logPath;
         private const int LogVersion = 1;
-        private const long MaxFileSize = 5 * 1024 * 1024; // 5MB
+        private static readonly object InitializationLock = new object();
         // Field caps feed both the wire log and the History window's past-session view —
         // sized so most calls stay fully inspectable after the fact.
         private const int MaxLoggedParamsLength = 8 * 1024;
@@ -32,28 +31,12 @@ namespace Bimwright.Ipt.Shared.Logging
         public static string? LocalAppDataOverride { get; set; }
 
         /// <summary>
-        /// Append one JSONL line under a named mutex — serializes writers across threads
-        /// (listener + STA re-run) AND across processes (two Inventor instances share
-        /// mcp-calls.jsonl). Mutex failure degrades to an unlocked append rather than
-        /// dropping the line.
+        /// Append, rotation and retention use the same full-path mutex across processes.
+        /// A lock failure drops the record; it never appends without the lock.
         /// </summary>
         internal static void AppendLineLocked(string path, string line)
         {
-            Mutex? mutex = null;
-            try { mutex = new Mutex(false, @"Local\Bimwright.Ipt." + Path.GetFileName(path)); } catch { }
-            var held = false;
-            if (mutex != null)
-            {
-                try { held = mutex.WaitOne(2000); }
-                catch (AbandonedMutexException) { held = true; }  // acquired despite the previous owner dying
-                catch { }
-            }
-            try { File.AppendAllText(path, line + "\n"); }
-            finally
-            {
-                if (held) try { mutex!.ReleaseMutex(); } catch { }
-                try { mutex?.Dispose(); } catch { }
-            }
+            BoundedLogFile.Append(path, line);
         }
 
         /// <summary>The product log dir — the journal root for this add-in instance.</summary>
@@ -62,65 +45,44 @@ namespace Bimwright.Ipt.Shared.Logging
 
         public static void Initialize()
         {
-            var dir = LogDir;
-            Directory.CreateDirectory(dir);
-            _logPath = Path.Combine(dir, "mcp-calls.jsonl");
-            _sessionId = DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" +
-                          Guid.NewGuid().ToString("N").Substring(0, 4);
-
-            RotateIfNeeded(dir);
-        }
-
-        private static void RotateIfNeeded(string dir)
-        {
-            var versionFile = Path.Combine(dir, "mcp-calls.version");
-            int currentVersion = 0;
-            if (File.Exists(versionFile))
+            lock (InitializationLock)
             {
-                int.TryParse(File.ReadAllText(versionFile).Trim(), out currentVersion);
-            }
-
-            bool needsRotation = false;
-            if (currentVersion < LogVersion)
-            {
-                // Force rotate: format changed (old logs may lack result or send-code redaction)
-                needsRotation = File.Exists(_logPath) || Directory.GetFiles(dir, "mcp-calls-*.jsonl").Length > 0;
-            }
-            else if (File.Exists(_logPath))
-            {
-                needsRotation = new FileInfo(_logPath).Length > MaxFileSize;
-            }
-
-            if (needsRotation)
-            {
-                var rotationSucceeded = true;
+                _logPath = null;
+                _sessionId = DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" +
+                              Guid.NewGuid().ToString("N").Substring(0, 4);
                 try
                 {
-                    if (currentVersion < LogVersion)
-                    {
-                        File.Delete(_logPath!);
-                        foreach (var archive in Directory.GetFiles(dir, "mcp-calls-*.jsonl"))
-                            File.Delete(archive);
-                    }
-                    else
-                    {
-                        var archive = Path.Combine(dir,
-                            $"mcp-calls-{DateTime.Now:yyyyMMdd-HHmmss}.jsonl");
-                        File.Move(_logPath!, archive);
-                    }
+                    var path = Path.Combine(LogDir, "mcp-calls.jsonl");
+                    BoundedLogFile.WithLock(path, () => { EnsureCurrentVersion(path); return true; });
+                    BoundedLogFile.Maintain(path);
+                    _logPath = path;
                 }
-                catch
-                {
-                    rotationSucceeded = false;
-                }
-
-                if (!rotationSucceeded && currentVersion < LogVersion)
-                {
-                    _logPath = null;
-                    return;
-                }
+                catch { } // Logging cannot prevent add-in startup or bypass a failed lock.
             }
+        }
 
+        public static void RunMaintenance()
+        {
+            try { BoundedLogFile.Maintain(Path.Combine(LogDir, "mcp-calls.jsonl")); }
+            catch { }
+        }
+
+        private static void EnsureCurrentVersion(string path)
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(path))!;
+            Directory.CreateDirectory(dir);
+            var versionFile = Path.Combine(dir, "mcp-calls.version");
+            BoundedLogFile.RefuseLink(versionFile);
+            var currentVersion = 0;
+            if (File.Exists(versionFile) && new FileInfo(versionFile).Length <= 32)
+                int.TryParse(File.ReadAllText(versionFile).Trim(), out currentVersion);
+            // Preserve the privacy migration: legacy logs may contain source bodies.
+            if (currentVersion < LogVersion)
+                foreach (var file in BoundedLogFile.FilesForPath(path))
+                {
+                    BoundedLogFile.RefuseLink(file);
+                    File.Delete(file);
+                }
             File.WriteAllText(versionFile, LogVersion.ToString());
         }
 

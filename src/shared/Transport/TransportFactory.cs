@@ -95,7 +95,8 @@ public static class TransportFactory
         if (onRequest is null) throw new ArgumentNullException(nameof(onRequest));
 
         var server = Create(year, descriptorDir, out descriptor);
-        server.Start(onRequest);
+        try { server.Start(onRequest); }
+        catch { server.Dispose(); throw; }
 
         if (server is TcpTransportServer tcp)
             descriptor.Port = tcp.Port;
