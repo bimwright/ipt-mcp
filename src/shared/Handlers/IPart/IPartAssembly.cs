@@ -22,7 +22,7 @@ internal sealed class IPartAssembly : HandlerBase
     };
     internal static InventorCommandResult Execute(InventorCommandContext ctx, string command, JObject p)
     {
-        Transaction? tx = null; string? beforeMember = null; ComponentOccurrence? occurrence = null;
+        Transaction? tx = null; var committed = false; string? beforeMember = null; ComponentOccurrence? occurrence = null;
         try
         {
             if (!ActiveDocumentSupport.TryGetAssembly(ctx, p, command, out var app, out var assembly, out var failure)) return failure!;
@@ -84,8 +84,9 @@ internal sealed class IPartAssembly : HandlerBase
                 ["member_path"] = path, ["factory_path"] = factory.FullFileName, ["geometry"] = IPartSupport.Geometry(actual),
                 ["matching_occurrences"] = cd.Occurrences.Cast<ComponentOccurrence>().Count(o => !o.Suppressed && string.Equals(o.ReferencedDocumentDescriptor.FullDocumentName, path, StringComparison.OrdinalIgnoreCase)),
                 ["assembly_saved"] = false, ["constraints_verified"] = cd.Constraints.Count };
-            tx.End(); tx = null;
-            VerifiedLoaded.Remove(actual); VerifiedLoaded.Add(actual, Signature(actual, fileHash));
+            tx.End(); committed = true; tx = null;
+            // Reuse the verified signature; do not read COM again after committing the assembly.
+            VerifiedLoaded.Remove(actual); VerifiedLoaded.Add(actual, after);
             return Ok(ctx, data);
         }
         catch (Exception ex)
@@ -94,7 +95,7 @@ internal sealed class IPartAssembly : HandlerBase
             if (tx != null) { try { tx.Abort(); aborted = true; } catch (Exception abort) { abortError = abort.Message; } }
             var result = HandlerBase.FailForSupport(ctx, ex is ArgumentException && abortError == null ? InventorErrorCodes.INVALID_ARGUMENT : InventorErrorCodes.API_ERROR, ex.Message + (abortError == null ? "" : "; abort failed: " + abortError));
             result.Data = new JObject { ["assembly_transaction_aborted"] = aborted, ["previous_member"] = beforeMember,
-                ["file_rollback_claimed"] = false, ["mutation_applied"] = tx == null ? new JValue(false) : new JValue("unknown") };
+                ["file_rollback_claimed"] = false, ["mutation_applied"] = committed ? new JValue(true) : tx == null ? new JValue(false) : new JValue("unknown") };
             return result;
         }
     }

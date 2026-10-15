@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- iPart assembly failures preserve the committed mutation state in their recovery receipt and reuse the verified member signature without extra COM reads after commit.
+- Call journals rotate and retain files under bounded storage policies; transport shutdown closes active I/O, descriptor publication follows listener readiness, and queued STA work has bounded admission and cancellation before execution.
 - Positional dimensions distinguish an actual parent transaction from Inventor's unidentified idle transaction, allowing existing parts to be edited while preserving cross-document transaction checks and rollback receipts.
 
 ### Added

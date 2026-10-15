@@ -44,7 +44,7 @@ public sealed class IPartTools
     public Task<string> PlaceMember(string factory_document,string member,double[]? position_mm=null,bool grounded=false,string? document=null,CancellationToken ct=default)
         => Call("place_ipart_member",new JObject { ["document"]=document,["factory_document"]=factory_document,["member"]=member,["position_mm"]=position_mm is null?null:new JArray(position_mm),["grounded"]=grounded },ct);
     [McpServerTool(Name="inventor_change_ipart_member",ReadOnly=false,Destructive=false,Idempotent=true,OpenWorld=false),
-     Description("Change one exact top-level assembly occurrence to an already generated verified row of its same managed Standard iPart factory. Rejects ambiguous/suppressed/custom occurrences and unhealthy constraints. Verifies row, reference and assembly constraint health; rolls back assembly changes on failure. Does not save assembly or regenerate members. Not allowed in batch_execute.")]
+     Description("Change one exact top-level assembly occurrence to an already generated verified row of its same managed Standard iPart factory. Rejects ambiguous/suppressed/custom occurrences and unhealthy constraints. Verifies row, reference and assembly constraint health; rolls back pre-commit failures and reports mutation_applied=true for a failure after commit. Does not save assembly or regenerate members. Not allowed in batch_execute.")]
     public Task<string> ChangeMember(string occurrence,string member,string? document=null,CancellationToken ct=default)
         => Call("change_ipart_member",new JObject { ["document"]=document,["occurrence"]=occurrence,["member"]=member },ct);
     private async Task<string> Call(string command,JObject p,CancellationToken ct)

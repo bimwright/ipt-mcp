@@ -224,6 +224,33 @@ public sealed class SketchFeatureExpressionTests : IDisposable
         Assert.True(JToken.DeepEquals(data, result["data"]), result.ToString());
     }
 
+    [Theory]
+    [InlineData("place_ipart_member")]
+    [InlineData("change_ipart_member")]
+    public async Task IPart_committed_failures_preserve_applied_mutation_receipts(string command)
+    {
+        var data = new JObject
+        {
+            ["mutation_applied"] = true,
+            ["assembly_transaction_aborted"] = false,
+            ["file_rollback_claimed"] = false,
+            ["previous_member"] = command == "change_ipart_member" ? new JValue("SizeA") : JValue.CreateNull(),
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var server = new NamedPipeServerStream(
+            _pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        var receive = ReplyWithFailureAsync(server, data, timeout.Token);
+        var tools = new IPartTools(_client);
+        var invoke = command == "place_ipart_member"
+            ? tools.PlaceMember("Factory.ipt", "SizeB", ct: timeout.Token)
+            : tools.ChangeMember("Member:1", "SizeB", ct: timeout.Token);
+        var result = JObject.Parse(await invoke);
+        Assert.Equal(command, await receive);
+        Assert.False(result.Value<bool>("ok"));
+        Assert.Equal("API_ERROR", (string?)result["error"]?["code"]);
+        Assert.True(JToken.DeepEquals(data, result["data"]), result.ToString());
+    }
+
     private static async Task<string> ReplyWithFailureAsync(NamedPipeServerStream server, JObject data, CancellationToken ct)
     {
         await server.WaitForConnectionAsync(ct);
