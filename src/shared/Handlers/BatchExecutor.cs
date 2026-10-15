@@ -26,6 +26,8 @@ public static class BatchExecutor
         // Rules and UI commands can change documents, undo transactions or perform external I/O.
         "ilogic_run_rule", "ilogic_run_external_rule", "ilogic_upsert_rule", "ilogic_run_snippet",
         "run_command", "undo",
+        "link_excel_table", "reload_excel_table", // External snapshots and table membership have their own recovery contract.
+        "create_ipart_factory", "update_ipart_table", "set_ipart_row", "generate_ipart_members", "sync_ipart_excel", "place_ipart_member", "change_ipart_member",
         "run_baked_tool",  // ToolBaker runtime — its own dispatch authorizer
         "apply_bake",      // ToolBaker registration — mutates the tool cache, not the model
         // Document lifecycle: every sub-handler resolves app.ActiveDocument fresh, so these

@@ -6,9 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Positional dimensions distinguish an actual parent transaction from Inventor's unidentified idle transaction, allowing existing parts to be edited while preserving cross-document transaction checks and rollback receipts.
+
 ### Added
 
-- `inventor_add_sketch_dimension` and `inventor_revolve` accept parameter expressions as well as numeric inputs, based on a contribution by `gavinmcutler`. Line dimensions drive length; circles/arcs drive radius. Expression parameters remain linked when source parameters change. Bare numeric strings use mm/degrees; unitless compound expressions use document units. Dimension values must be positive; expression revolve angles must evaluate to more than 0 and at most 360 degrees. Numeric revolve angles retain their existing full/reverse behavior. This does not add Excel link/reload tools.
+- Eight `ipart` MCP tools support managed Standard iPart factory copies, typed table rows, row selection, verified member generation, one-way saved Excel catalogs and assembly occurrence placement/switching. Parameter, material, Part Number, Description and feature-suppression columns are supported. Preview-first table/catalog/generation operations, persistent checkpoints, stale-member detection and explicit partial-file recovery keep library sources separate from generated copies. Custom iParts, sheet metal, existing-factory adoption and iAssemblies remain outside this scope.
+- `inventor_list_sketch_points` discovers document-scoped sketch point references, centres, endpoints and the origin without changing geometry. `inventor_add_sketch_point_dimension` creates horizontal, vertical or aligned driving distances between these references, with numeric mm or parameter expressions, explicit document targeting, recompute/geometry verification and transactional rollback.
+- Native Excel parameter link/list/reload tools for local `.xlsx` workbooks: saved-value preflight, stable table IDs, recompute/readback checks, persisted change checkpoints and explicit recovery receipts for spreadsheet-cache changes that survive transaction abort. Excel mutations are excluded from `batch_execute`.
+- `inventor_add_sketch_dimension` and `inventor_revolve` accept parameter expressions as well as numeric inputs, based on a contribution by `gavinmcutler`. Line dimensions drive length; circles/arcs drive radius. Expression parameters remain linked when source parameters change. Bare numeric strings use mm/degrees; unitless compound expressions use document units. Dimension values must be positive; expression revolve angles must evaluate to more than 0 and at most 360 degrees. Numeric revolve angles retain their existing full/reverse behavior.
 - Dimension and revolve creation validate expressions, verify recompute/readback, and abort their own transaction on failure. Inside `batch_execute`, failed operations roll back without discarding successful steps when `continue_on_error=true`; an uncertain rollback stops further batch writes and forces rollback. Responses do not claim restoration if transaction abort itself fails.
 
 ### Changed

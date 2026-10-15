@@ -7,6 +7,89 @@ namespace Bimwright.Ipt.Tests;
 public sealed class McpProtocolSmokeTests
 {
     [Theory]
+    [InlineData("inventor_get_ipart_info", "{max_rows:10,row_offset:0}", true)]
+    [InlineData("inventor_create_ipart_factory", "{output_path:'C:/copy.ipt',base_member:'A',columns:[{name:'L',kind:'parameter',target:'Length'}]}", false)]
+    [InlineData("inventor_update_ipart_table", "{rows:[{member:'A',values:{L:20}}]}", false)]
+    [InlineData("inventor_set_ipart_row", "{member:'A'}", false)]
+    [InlineData("inventor_generate_ipart_members", "{members:['A'],dry_run:true}", false)]
+    [InlineData("inventor_sync_ipart_excel", "{path:'C:/catalog.xlsx',sheet:'Shafts',mapping:{member:'Code',part_number:'PN',L:'Length'}}", false)]
+    [InlineData("inventor_place_ipart_member", "{factory_document:'copy.ipt',member:'A',position_mm:[10,20,30]}", false)]
+    [InlineData("inventor_change_ipart_member", "{occurrence:'A:1',member:'B'}", false)]
+    public async Task Standard_ipart_tools_bind_over_MCP_and_filter_writes(string name,string input,bool readOnly)
+    {
+        var responses=await RunProtocolHandshake(readOnly:readOnly,expressionTool:name,expressionArguments:JObject.Parse(input));
+        var catalog=(JArray)responses[1]["result"]!["tools"]!;
+        Assert.Equal(readOnly,Assert.Single(catalog,t=>(string?)t["name"]==name)["annotations"]!.Value<bool>("readOnlyHint"));
+        if(readOnly)Assert.Single(catalog.Where(t=>((string?)t["name"])?.Contains("ipart")==true));
+        var result=JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);Assert.Equal("NO_TARGET",(string?)result["error"]?["code"]);
+    }
+
+    [Theory]
+    [InlineData(false, 144)]
+    [InlineData(true, 38)]
+    public async Task Combined_excel_and_point_dimension_catalog_preserves_both_surfaces(bool readOnly, int count)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly);
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        Assert.Equal(count, tools.Count);
+        foreach (var name in new[] { "inventor_list_excel_tables", "inventor_list_sketch_points" })
+            Assert.True(Assert.Single(tools, t => (string?)t["name"] == name)["annotations"]!.Value<bool>("readOnlyHint"));
+        foreach (var name in new[] { "inventor_link_excel_table", "inventor_reload_excel_table", "inventor_add_sketch_point_dimension" })
+        {
+            if (readOnly) Assert.DoesNotContain(tools, t => (string?)t["name"] == name);
+            else Assert.False(Assert.Single(tools, t => (string?)t["name"] == name)["annotations"]!.Value<bool>("readOnlyHint"));
+        }
+    }
+
+    [Theory]
+    [InlineData("12.5")]
+    [InlineData("\"HoleX / 2\"")]
+    public async Task Point_dimension_binds_over_MCP_and_publishes_complete_contract(string value)
+    {
+        var args = new JObject { ["point1_ref"] = "first", ["point2_ref"] = "second", ["orientation"] = "horizontal", ["value"] = JToken.Parse(value), ["text_position"] = new JArray(10, 20) };
+        var responses = await RunProtocolHandshake(expressionTool: "inventor_add_sketch_point_dimension", expressionArguments: args);
+        var tool = ((JArray)responses[1]["result"]!["tools"]!).Single(t => (string?)t["name"] == "inventor_add_sketch_point_dimension");
+        Assert.Equal(new[] { "orientation", "point1_ref", "point2_ref", "value" }, tool["inputSchema"]!["required"]!.Values<string>().OrderBy(x => x).ToArray());
+        Assert.IsType<JObject>(tool["inputSchema"]!["properties"]!["value"]);
+        Assert.False(tool["annotations"]!.Value<bool>("readOnlyHint"));
+        var reply = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)reply["error"]?["code"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Point_inventory_is_callable_in_read_only_mode(bool readOnly)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly, expressionTool: "inventor_list_sketch_points", expressionArguments: new JObject { ["sketch_name"] = "Holes", ["max_items"] = 20 });
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var query = tools.Single(t => (string?)t["name"] == "inventor_list_sketch_points");
+        Assert.True(query["annotations"]!.Value<bool>("readOnlyHint"));
+        if (readOnly) Assert.DoesNotContain(tools, t => (string?)t["name"] == "inventor_add_sketch_point_dimension");
+        var reply = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)reply["error"]?["code"]);
+    }
+
+    [Theory]
+    [InlineData("inventor_list_excel_tables", "{}", true)]
+    [InlineData("inventor_link_excel_table", "{path:'C:/fixture.xlsx',start_cell:'A6'}", false)]
+    [InlineData("inventor_reload_excel_table", "{table_id:'excel:fixture'}", false)]
+    public async Task Excel_tools_bind_over_MCP_and_obey_read_only_registration(string tool, string input, bool readOnly)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly, expressionTool: tool, expressionArguments: JObject.Parse(input));
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        var published = Assert.Single(tools, item => (string?)item["name"] == tool);
+        Assert.Equal(readOnly, (bool)published["annotations"]!["readOnlyHint"]!);
+        if (readOnly)
+        {
+            Assert.DoesNotContain(tools, item => (string?)item["name"] == "inventor_link_excel_table");
+            Assert.DoesNotContain(tools, item => (string?)item["name"] == "inventor_reload_excel_table");
+        }
+        var response = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.Equal("NO_TARGET", (string?)response["error"]?["code"]);
+    }
+
+    [Theory]
     [InlineData("inventor_add_sketch_dimension", "value", "12.5")]
     [InlineData("inventor_add_sketch_dimension", "value", "\"driver / 2\"")]
     [InlineData("inventor_revolve", "angle", "-90")]

@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 10 sketch
+/// WS3-B golden snapshot: asserts <see cref="SketchTools"/> exposes exactly the 11 sketch
 /// <c>inventor_*</c> tools and <see cref="FeatureTools"/> exactly the 16 feature tools, that every one
 /// is a write tool (so all are dropped under <c>--read-only</c>), and that they register under the
 /// <c>sketch</c>/<c>feature</c> toolsets. Handler bodies are type-checked by the inv25 build, not here.
@@ -24,6 +24,7 @@ public sealed class SketchFeatureToolsTests
         "inventor_draw_rectangle",
         "inventor_draw_arc",
         "inventor_add_sketch_dimension",
+        "inventor_add_sketch_point_dimension",
         "inventor_add_sketch_constraint",
         "inventor_draw_text",
         "inventor_close_sketch",
@@ -63,10 +64,10 @@ public sealed class SketchFeatureToolsTests
             .ToArray();
 
     [Fact]
-    public void SketchTools_exposes_exactly_the_ten_expected_tools()
+    public void SketchTools_exposes_exactly_the_eleven_expected_tools()
     {
         var names = ToolNamesOf(typeof(SketchTools));
-        Assert.Equal(10, names.Length);
+        Assert.Equal(11, names.Length);
         Assert.Equal(ExpectedSketchTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 

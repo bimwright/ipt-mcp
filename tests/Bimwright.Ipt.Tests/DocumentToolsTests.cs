@@ -15,6 +15,7 @@ public sealed class DocumentToolsTests
 {
     private static readonly string[] ExpectedQueryTools =
     {
+        "inventor_list_sketch_points",
         "inventor_health",
         "inventor_report_task_result",
         "inventor_list_open_documents",

@@ -54,6 +54,17 @@ public sealed class SketchTools
     public Task<string> AddSketchDimension(string entityId, System.Text.Json.JsonElement value, CancellationToken ct = default)
         => Call("add_sketch_dimension", new JObject { ["entity_id"] = entityId, ["value_mm"] = JToken.Parse(value.GetRawText()) }, ct);
 
+    [McpServerTool(Name = "inventor_add_sketch_point_dimension", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
+     Description("Add a driving distance between two point_ref values from inventor_list_sketch_points, including origin_ref. Points must belong to the same document and sketch. orientation=horizontal|vertical|aligned. value is a positive number in mm or an Inventor length expression. Zero offsets use geometric constraints. text_position is optional [x,y] in sketch mm. References fail if stale or from another file; refresh them after Save As. Recompute/geometry failures roll back the operation. Does not save the document.")]
+    public Task<string> AddSketchPointDimension(string point1_ref, string point2_ref, string orientation,
+        System.Text.Json.JsonElement value, string? document = null, double[]? text_position = null, CancellationToken ct = default)
+    {
+        var p = new JObject { ["point1_ref"] = point1_ref, ["point2_ref"] = point2_ref, ["orientation"] = orientation, ["value"] = JToken.Parse(value.GetRawText()) };
+        if (document is not null) p["document"] = document;
+        if (text_position is not null) p["text_position"] = new JArray(text_position);
+        return Call("add_sketch_point_dimension", p, ct);
+    }
+
     [McpServerTool(Name = "inventor_add_sketch_constraint", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Add a geometric sketch constraint over entity_ids. type=coincident|parallel|perpendicular|horizontal|vertical|tangent|concentric|equal|collinear|symmetric. Returns the constraint name.")]
     public Task<string> AddSketchConstraint(string type, string[] entityIds, CancellationToken ct = default)

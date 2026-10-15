@@ -128,9 +128,9 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **131 tools** by default (`--toolsets all`); `--disable-send-code` exposes **125 tools**, and `--read-only` exposes **35 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **144 tools** by default (`--toolsets all`); `--disable-send-code` exposes **138 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
-All 18 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
+All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
 All length inputs are in **mm**, angles in **degrees**; the add-in converts to Inventor's internal centimetres/radians.
 
@@ -201,7 +201,7 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
 | `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, Inventor year, or pipe name; a selector matching several sessions is refused. Server-side only. |
 
-### query (7) — read-only document/health/model probes and agent outcome reports
+### query (10) — read-only document/health/model probes and agent outcome reports
 
 Start each Inventor session with one `inventor_health(check_updates=true)` call after selecting the intended target if needed, so the agent discovers newer stable releases. If network access is unavailable or disallowed, use the offline default and leave the update check not checked/unknown. Later routine probes stay offline. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `server_informational_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use loaded assembly informational-version metadata, falling back to the component's module id. Runtime identity is captured at server startup or add-in activation. `artifact_sha256` is a disk observation at that capture time (`artifact_hash_basis=on_disk_at_identity_capture`), not a digest of loaded memory or proof that a later file replacement has taken effect.
 
@@ -230,6 +230,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_list_bodies` | List the part's solid bodies: id (`body:N`), name, volume_mm3, bbox_mm, face_count, created_by feature, visible. |
 | `inventor_list_features` | List the part's features in tree order: name, type, health, suppressed, body_names. |
 | `inventor_probe_brep` | Survey the part's B-rep for port mouths: planar faces with inner-loop circular edges — normal (IsParamReversed-corrected), center_mm, port_diameter_mm, all circles on the face. |
+| `inventor_list_sketch_points` | Inspect a named sketch: point references, positions in mm, circle/arc centres and line endpoints, plus `origin_ref`. Optional `document` selects an open part; `max_items` defaults to 200 (1–1000). Does not project geometry or change the document. |
 
 ### document (10) — document lifecycle (write)
 
@@ -246,7 +247,30 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_open_documents` | Open several documents in one call (default without windows, for `document`-targeted edits). |
 | `inventor_close_documents` | Close documents by path/name, or all visible ones (`keep_active`); optional save. |
 
-### parameters (4) — model & user parameters (write)
+### ipart (8) — Standard iPart families and Excel catalogs
+
+| Tool | Purpose |
+|---|---|
+| `inventor_get_ipart_info` | Inspect an open ordinary part, factory or member, table rows, Excel binding and generation state. Read-only. |
+| `inventor_create_ipart_factory` | Copy a clean saved ordinary part to a new factory path and configure parameter, material, description and feature-suppression columns. |
+| `inventor_update_ipart_table` | Preview/apply complete row upserts before an Excel catalog owns the table. |
+| `inventor_set_ipart_row` | Select and verify one factory row without changing assembly occurrences. |
+| `inventor_generate_ipart_members` | Preview/generate selected rows, verify their bodies and properties, and reuse verified unchanged members. |
+| `inventor_sync_ipart_excel` | Preview/apply a saved `.xlsx` catalog to the factory in one direction. |
+| `inventor_place_ipart_member` | Place a previously generated member in an open assembly. |
+| `inventor_change_ipart_member` | Switch one exact top-level occurrence to another verified row of the same factory. |
+
+Start with a parametrically modeled part. Configure columns such as `{name:"Length",kind:"parameter",target:"Length"}` and `{name:"Hole",kind:"suppression",target:"MountHole"}`. The factory includes Member and Part Number automatically. Row input is `{member:"BUSH-020",part_number:"BUSH-020",values:{Length:40,Hole:false}}`, with every configured column present. Numeric parameters use the original parameter's units; strings accept Inventor expressions. Boolean suppression means `true = suppress`, `false = compute`. Materials must already be available in the factory document.
+
+For Excel, use one header row with `member`, `part_number` and the configured column names, followed by complete contiguous rows. Configured cells must be nonempty, including Description if that optional column is configured; clearing native property cells is not supported. Supply `path`, `sheet` and `header_cell` on the first sync; optional `mapping` maps these names to other Excel headers. Later calls can reuse the binding. Table update, Excel sync and generation default to `dry_run=true`; applying requires `dry_run=false`. Save/recalculate the workbook before syncing: these tools read saved values, including cached formula results, and never write back to Excel. After binding, edit rows in Excel and sync instead of writing the table through JSON. Reordering Excel rows preserves member identity; omitted existing members are rejected instead of deleted.
+
+The workflow is **edit Excel → sync table → generate selected members → place or switch occurrences**. Sync rebuilds and verifies changed factory rows; it does not generate files or refresh assemblies automatically. Native member `.ipt` files remain necessary for assembly references. Manage the factory, its adjacent `.ipart-mcp.json` checkpoint file, the workbook and the generated member folder together.
+
+Write tools currently support managed Standard iPart factories created by `inventor_create_ipart_factory`. Sources must be clean, saved ordinary solid parts with independent parameters; custom iParts, sheet metal, native Excel parameter links, existing-factory adoption and iAssemblies are outside this scope. Output paths must be new local-drive `.ipt` paths; shared/proxy caches are refused. Catalog limits are 16 MiB, 1,000 rows and 48 configured columns; generation accepts 1–50 named members per call. No macros or external workbook links are accepted.
+
+Factory operations explicitly save their managed copy and checkpoint. Assembly operations leave saving to the user. All writes reject `batch_execute`, nested transactions, dirty factories and conflicting operations. A failed multi-file operation may leave files on disk: inspect `file_effects` and the pending operation, restore a clean factory if necessary, then resume that same operation. Transaction abort does not imply file rollback. Member generation compares native bodies and reads back properties before marking a file current.
+
+### parameters (7) — model, user & Excel parameters
 
 | Tool | Description |
 |---|---|
@@ -254,6 +278,15 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_get_parameter` | Get one parameter by name: expression, value, unit. |
 | `inventor_set_parameter` | Set an existing parameter's expression/value, then update the document. |
 | `inventor_create_parameter` | Create a new user parameter (name, expression, unit). |
+| `inventor_list_excel_tables` | List native spreadsheet tables, stable linked-table IDs, parameter values and health. |
+| `inventor_link_excel_table` | Link a local `.xlsx` parameter block and verify native readback after recompute. |
+| `inventor_reload_excel_table` | Reload a linked table by ID, verify saved values and geometry health, and report changes since its last verified link/reload. |
+
+Excel blocks use the **first worksheet**, with vertical columns `name`, `value`, `units`, and optional `comment`. `start_cell` points to the first parameter row, not its header. Names must be unique ASCII identifiers; values must be finite saved numbers or formula results; specify `mm`, `deg`, `ul` (unitless), or another Inventor unit. Recalculate and save the workbook before linking/reloading. The tools do not calculate Excel formulas, edit the workbook, or save the part. Limits: local-drive `.xlsx`, 16 MiB, 1,000 contiguous rows; no macros, external workbook links, UNC paths, or changed parameter membership during reload.
+
+For example, link with `inventor_link_excel_table(path="C:/parts/flange.xlsx", start_cell="A6", document="flange.ipt")`, then reuse its `table_id` with `inventor_reload_excel_table`. Sketch dimensions, thickness and pattern counts must reference the linked parameter names for the geometry to change. Native links already present in a part establish their change baseline on the first successful reload; that call reports `changed_parameters=null` rather than inventing a previous value.
+
+Excel writes run outside `batch_execute` and own their document transaction. Inventor may retain refreshed spreadsheet parameters after aborting a failed geometry update. Reload therefore compares the post-failure state with its persisted verified checkpoint and reports `rollback_failed` / `recovery_required` when restoration cannot be verified. In that case restore the last verified Excel values, reload successfully, and inspect the part before saving. `transaction_aborted` alone is not proof that linked values were restored.
 
 ### properties (4) — iProperties & mass properties (write)
 
@@ -264,7 +297,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_get_mass_properties` | Mass (g), volume (mm³), surface area (mm²), centre of mass, bounding box. |
 | `inventor_list_iproperty_sets` | List iProperty sets (name, internal_name, property names; optional values) — discovery for get/set_iproperty. |
 
-### sketch (10) — 2D sketch geometry & constraints (write)
+### sketch (11) — 2D sketch geometry & constraints (write)
 
 | Tool | Description |
 |---|---|
@@ -275,9 +308,23 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_draw_rectangle` | Draw a two-point sketch rectangle. |
 | `inventor_draw_arc` | Draw a sketch arc (centre, radius, start/end angle). |
 | `inventor_add_sketch_dimension` | Add a driving dimension constraint to a sketch entity. |
+| `inventor_add_sketch_point_dimension` | Drive the horizontal, vertical or aligned distance between two point references, using a positive number in mm or a parameter expression. Optional `document` targets an open part. |
 | `inventor_add_sketch_constraint` | Add a geometric constraint (coincident, parallel, tangent, …). |
 | `inventor_draw_text` | Add a fitted text box (position mm, optional font_size_mm; rotation_deg in multiples of 90). |
 | `inventor_close_sketch` | Finish editing a sketch (exit sketch edit mode). |
+
+To locate a hole, call `inventor_list_sketch_points` with its sketch name, select the point whose
+role is `circle_center`, then add two point dimensions from `origin_ref` to that `point_ref`:
+`orientation="horizontal", value="HoleX"` and `orientation="vertical", value="HoleY"`.
+Changing those existing parameters moves the hole centre. Expressions can reference existing
+linked Excel parameters. Optional `text_position=[x,y]` controls the annotation position in sketch mm.
+Both points must belong to the same sketch. References use native object keys and reject deleted
+objects or another file; query again after Save As. Distances must be positive; zero offsets require
+geometric constraints. Dimension creation verifies recompute and actual point distance, rolls back
+on failure, and leaves saving to the caller.
+When needed, an origin dimension projects the sketch origin or creates a fixed local origin point;
+this helper is also removed if the operation rolls back. Inside a batch or another open transaction,
+the dimension must target that transaction's document.
 
 ### feature (16) — solid & work features (write)
 
