@@ -8,6 +8,10 @@ public static class InventorErrorCodes
 {
     public const string NO_TARGET = "NO_TARGET";
     public const string TARGET_UNAVAILABLE = "TARGET_UNAVAILABLE";
+    /// <summary>Several live Inventor sessions match and none is selected; the gateway will not guess.</summary>
+    public const string AMBIGUOUS_TARGET = "AMBIGUOUS_TARGET";
+    /// <summary>The selected Inventor session exited or its pid was reused; it is never replaced implicitly.</summary>
+    public const string TARGET_LOST = "TARGET_LOST";
     public const string NO_DOCUMENT = "NO_DOCUMENT";
     public const string WRONG_DOCUMENT_TYPE = "WRONG_DOCUMENT_TYPE";
     public const string INVALID_ARGUMENT = "INVALID_ARGUMENT";

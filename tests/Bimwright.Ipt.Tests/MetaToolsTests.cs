@@ -63,16 +63,16 @@ public sealed class MetaToolsTests : IDisposable
 
         var client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = _dir });
 
-        Assert.True(client.SwitchTarget("inventor-2025-" + pid));
-        Assert.Equal(2025, client.CurrentTarget!.InventorYear);
+        Assert.Equal(2025, client.SwitchTarget("inventor-2025-" + pid).InventorYear);
+        Assert.Equal(2025, client.ResolveTarget().InventorYear);
 
-        Assert.True(client.SwitchTarget("2024"));
-        Assert.Equal(2024, client.CurrentTarget!.InventorYear);
+        Assert.Equal(2024, client.SwitchTarget("2024").InventorYear);
+        Assert.Equal(2024, client.ResolveTarget().InventorYear);
 
-        Assert.True(client.SwitchTarget(pid.ToString()));
-        Assert.Equal(pid, client.CurrentTarget!.ProcessId);
+        Assert.Equal(2025, client.SwitchTarget("id:inventor-2025-" + pid).InventorYear);
 
-        Assert.True(client.SwitchTarget("BimwrightInventor-" + pid));
-        Assert.Equal("pipe", client.CurrentTarget!.Transport);
+        // Both descriptors share this test's pid, so a bare pid is ambiguous and refused.
+        Assert.Equal("AMBIGUOUS_TARGET", Assert.Throws<InventorGatewayException>(() => client.SwitchTarget(pid.ToString())).Code);
+        Assert.Equal(2025, client.ResolveTarget().InventorYear);
     }
 }

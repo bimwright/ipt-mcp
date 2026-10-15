@@ -22,29 +22,43 @@ public sealed class MetaTools
     public MetaTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_list_available_targets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("List detected live Inventor add-in targets (year, pid, transport, active document). Use 4-digit calendar years (2022..2027), never legacy version codes.")]
+     Description("List detected live Inventor add-in targets (year, pid, transport, active document); `selected` marks this gateway's target. Use 4-digit calendar years (2022..2027), never legacy version codes.")]
     public string ListAvailableTargets() =>
-        LoggedMeta("inventor_list_available_targets", null,
-            () => ToolResponse.Serialize(_client.ListTargets().Select(PublicTarget)));
+        LoggedMeta("inventor_list_available_targets", null, () =>
+        {
+            var selected = _client.SelectedTargetId;
+            return ToolResponse.Serialize(_client.ListTargets().Select(t => PublicTarget(t, t.TargetId == selected)));
+        });
 
     [McpServerTool(Name = "inventor_get_current_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Report the server's currently selected Inventor target, or NO_TARGET if none is live.")]
+     Description("Report the Inventor target this gateway uses. Binds automatically only when exactly one target is live; otherwise returns AMBIGUOUS_TARGET, TARGET_LOST or NO_TARGET with candidates.")]
     public string GetCurrentTarget()
     {
         return LoggedMeta("inventor_get_current_target", null, () =>
         {
-            var t = _client.CurrentTarget;
-            return t is null
-                ? ToolResponse.Error("NO_TARGET", "no live target")
-                : ToolResponse.Serialize(PublicTarget(t));
+            try
+            {
+                var t = _client.ResolveTarget();
+                var json = JObject.FromObject(PublicTarget(t, true));
+                json["selected_by"] = _client.SelectedBy;
+                return ToolResponse.Serialize(json);
+            }
+            catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
         });
     }
 
     [McpServerTool(Name = "inventor_switch_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Select the active target by descriptor id, year, or session. Server-side only; does not change the Inventor document. Use 4-digit years (2022..2027).")]
+     Description("Select the Inventor session this gateway uses: pid:<n> or id:<target_id> (preferred), a 4-digit year (2022..2027), or a pipe name. A selector matching several sessions is refused. The selection is kept until switched again and is never replaced automatically. Server-side only; does not change the Inventor document.")]
     public string SwitchTarget(string target) =>
-        LoggedMeta("inventor_switch_target", new { target },
-            () => ToolResponse.Serialize(new { ok = _client.SwitchTarget(target), target }));
+        LoggedMeta("inventor_switch_target", new { target }, () =>
+        {
+            try
+            {
+                var t = _client.SwitchTarget(target);
+                return ToolResponse.Serialize(new { ok = true, selector = target, target = PublicTarget(t, true) });
+            }
+            catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
+        });
 
     private static string LoggedMeta(string tool, object? parameters, Func<string> run)
     {
@@ -69,9 +83,10 @@ public sealed class MetaTools
         }
     }
 
-    private static object PublicTarget(TargetDescriptor t) => new
+    private static object PublicTarget(TargetDescriptor t, bool selected) => new
     {
         target_id = t.TargetId,
+        selected,
         inventor_year = t.InventorYear,
         process_id = t.ProcessId,
         host_app = t.HostApp,

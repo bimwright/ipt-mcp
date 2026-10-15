@@ -41,7 +41,7 @@ public sealed class PluginClient
     internal async Task ReportServerActivityAsync(string name, object? arguments,
         ModelContextProtocol.Protocol.CallToolResult? result, string? error, long durationMs)
     {
-        var target = CurrentTarget;
+        var target = _binding.Peek(_registry.List());
         if (target == null) return;
         try
         {
@@ -68,12 +68,15 @@ public sealed class PluginClient
     private readonly JObject _setupIdentity;
     private readonly InventorMcpConfig _config;
     private readonly TargetRegistry _registry;
-    private TargetDescriptor? _current;
+    private readonly TargetBinding _binding;
 
-    public PluginClient(InventorMcpConfig config)
+    public PluginClient(InventorMcpConfig config) : this(config, null) { }
+
+    internal PluginClient(InventorMcpConfig config, Func<int, TargetBinding.ProcessProbe>? processProbe)
     {
         _config = config;
         _registry = new TargetRegistry(config.DescriptorDirectory);
+        _binding = new TargetBinding(config.TargetId, processProbe);
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
         _setupIdentity = SetupRuntimeIdentity.Capture(config.LocalAppDataRoot is { } root
             ? Bimwright.Setup.RuntimeLayout.Resolve(root, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp")
@@ -85,38 +88,16 @@ public sealed class PluginClient
 
     public IReadOnlyList<TargetDescriptor> ListTargets() => _registry.List();
 
-    public TargetDescriptor? CurrentTarget
-    {
-        get
-        {
-            var live = _registry.List();
-            if (_current is not null && live.Any(t => t.TargetId == _current.TargetId)) return _current;
-            _current = (_config.TargetId is { } id ? live.FirstOrDefault(t => t.TargetId == id) : null) ?? live.FirstOrDefault();
-            return _current;
-        }
-    }
+    /// <summary>The selected target, binding it on first use only when exactly one live target matches.
+    /// Throws NO_TARGET, AMBIGUOUS_TARGET, TARGET_LOST or TARGET_UNAVAILABLE instead of falling back.</summary>
+    public TargetDescriptor ResolveTarget() => _binding.Resolve(_registry.List());
 
-    public bool SwitchTarget(string targetId)
-    {
-        var key = (targetId ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(key)) return false;
+    /// <summary>Selects one live target by pid:&lt;n&gt;, id:&lt;target_id&gt;, year, pid or pipe name; ambiguity is refused.</summary>
+    public TargetDescriptor SwitchTarget(string selector) => _binding.Switch(selector, _registry.List());
 
-        var live = _registry.List();
-        TargetDescriptor? match = live.FirstOrDefault(t =>
-            string.Equals(t.TargetId, key, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(t.PipeName, key, StringComparison.OrdinalIgnoreCase));
+    internal string? SelectedTargetId => _binding.SelectedTargetId;
 
-        if (match is null && int.TryParse(key, out var numeric))
-        {
-            match = numeric is >= 2022 and <= 2027
-                ? live.FirstOrDefault(t => t.InventorYear == numeric)
-                : live.FirstOrDefault(t => t.ProcessId == numeric);
-        }
-
-        if (match is null) return false;
-        _current = match;
-        return true;
-    }
+    internal string? SelectedBy => _binding.SelectedBy;
 
     /// <summary>
     /// Per-call STA budget (spec F2-b): the envelope carries <paramref name="timeoutMs"/> and the
@@ -152,9 +133,7 @@ public sealed class PluginClient
         JToken? data = null;
         try
         {
-            var target = CurrentTarget ?? throw new InventorGatewayException(
-                InventorErrorCodes.NO_TARGET,
-                "No live Inventor target. Start Inventor with the bimwright add-in loaded.");
+            var target = ResolveTarget();
             targetId = target.TargetId;
 
             var effectiveTimeoutMs = ResolveEffectiveTimeout(_config.TimeoutMs, timeoutMs);

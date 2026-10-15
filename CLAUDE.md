@@ -36,6 +36,8 @@ Discovery / target descriptor (`TargetDescriptor`):
 
 The server scans these files (`TargetRegistry.List()`), dropping any whose `process_id` is dead, whose `last_heartbeat_utc` is older than the max age (~120 s), whose `host_app != "Inventor"`, or whose year is outside 2022-2027. Use 4-digit calendar years (2022..2027), never legacy version codes. Agents should call `inventor_list_available_targets` to enumerate live instances and `inventor_get_current_target` to inspect the pinned one rather than guessing.
 
+Target binding (`src/server/TargetBinding.cs`, rvt-mcp #19 parity): with no selection, a call binds only when exactly one live target matches `--target` (or any target); several matches return `AMBIGUOUS_TARGET` with candidates. A selection is kept by pid + process start time and is never replaced implicitly: an exited or pid-reused process returns `TARGET_LOST` until `inventor_switch_target`; a running process whose descriptor is missing returns `TARGET_UNAVAILABLE` and keeps the selection. A failed switch leaves the current selection unchanged.
+
 ## Project Structure
 
 ```
@@ -46,7 +48,8 @@ src/
 │   ├── Program.cs                  # boot + ResolveToolTypesForRegistration → WithTools(...)
 │   ├── InventorMcpConfig.cs        # CLI/env/JSON config (toolsets, read-only, send-code, …)
 │   ├── ToolsetFilter.cs            # KnownToolsets / DefaultOn / WriteCapable + Resolve()
-│   ├── PluginClient.cs             # transport client (tcp+pipe), target selection
+│   ├── PluginClient.cs             # transport client (tcp+pipe)
+│   ├── TargetBinding.cs            # target selection: no fallback, AMBIGUOUS_TARGET / TARGET_LOST
 │   └── Tools/                      # [McpServerToolType] classes, one per domain
 │       ├── MetaTools.cs            # 3 server-side target tools (list/get/switch)
 │       ├── QueryTools.cs  DocumentTools.cs
@@ -155,7 +158,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; default `%LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
 
 ## Error Codes (`InventorErrorCodes`)
-`NO_TARGET, TARGET_UNAVAILABLE, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
+`NO_TARGET, TARGET_UNAVAILABLE, AMBIGUOUS_TARGET, TARGET_LOST, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
 
 ## Decision Log
 - **C# server over TypeScript** — single language, direct API access patterns shared with rvt-mcp / nwd-mcp.

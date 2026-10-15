@@ -94,7 +94,7 @@ Do **not** `dotnet tool install -g Bimwright.Ipt.Server` — that is not the sup
 
 **Developer:** `pwsh scripts/package-bundle.ps1` on a box with Inventor interop (skip years without SDK). Close Inventor before rebuilds.
 
-Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. With more than one Inventor open, call `inventor_list_available_targets` then `inventor_switch_target`.
+Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The gateway binds automatically only when exactly one Inventor is live. With several open, calls return `AMBIGUOUS_TARGET` until you pick one: call `inventor_list_available_targets`, then `inventor_switch_target` with `pid:<n>` or `id:<target_id>`. A selected session is never swapped for another: if it exits, calls return `TARGET_LOST` until you switch explicitly.
 
 `inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it.
 
@@ -197,9 +197,9 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 
 | Tool | Description |
 |---|---|
-| `inventor_list_available_targets` | List detected live Inventor add-in targets (year, pid, transport, active document). |
+| `inventor_list_available_targets` | List detected live Inventor add-in targets (year, pid, transport, active document); `selected` marks the gateway's target. |
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
-| `inventor_switch_target` | Select the active target by descriptor id, Inventor year, process id, or pipe/session name. Server-side only. |
+| `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, Inventor year, or pipe name; a selector matching several sessions is refused. Server-side only. |
 
 ### query (7) — read-only document/health/model probes and agent outcome reports
 

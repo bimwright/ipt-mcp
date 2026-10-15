@@ -37,9 +37,11 @@ public static class ServerInstructions
         "compute mass properties (mass, volume, surface area, center of gravity, bounding box) and material; " +
         "export the model to STEP (step), STL (stl), and DXF (dxf, sketch or sheet fabrication flat pattern). " +
         "Lengths are in millimeters (the Inventor API internal length unit is centimeters; the server converts). " +
-        "Multi-instance: if more than one Inventor may be open, call inventor_list_available_targets " +
-        "then inventor_switch_target to select the target session by year, pid, or descriptor id; " +
-        "inventor_get_current_target reports the selected target. Versions are 4-digit years (2022..2027). " +
+        "Multi-instance: the gateway binds automatically only when exactly one Inventor is live. With several, calls return " +
+        "AMBIGUOUS_TARGET with candidates; call inventor_list_available_targets, ask the user which model if unclear, then " +
+        "inventor_switch_target with pid:<n> or id:<target_id>. The selection is never replaced automatically: TARGET_LOST " +
+        "means it exited, so confirm the model and switch explicitly. inventor_get_current_target reports the selected target. " +
+        "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
         "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +
         "Activity toasts group tool calls; they do not indicate that a whole job is finished. " +
