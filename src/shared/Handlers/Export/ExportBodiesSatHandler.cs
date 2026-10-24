@@ -48,6 +48,7 @@ public sealed class ExportBodiesSatHandler : HandlerBase, IInventorCommand
             return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "out_dir must be an absolute directory path");
         var verify = p["verify"]?.Type != JTokenType.Boolean || (bool)p["verify"]!;
         var overwrite = p["overwrite"]?.Type == JTokenType.Boolean && (bool)p["overwrite"]!;
+        var detail = p["detail"]?.Type == JTokenType.Boolean && (bool)p["detail"]!;
 
         // ---- preflight: resolve everything before writing anything ----
         var targets = new List<Target>();
@@ -103,10 +104,13 @@ public sealed class ExportBodiesSatHandler : HandlerBase, IInventorCommand
 
         // ---- write (and verify) each body; one failure does not stop the rest ----
         var rows = new JArray();
+        var failures = new JArray();
         int exported = 0, verified = 0, failed = 0;
+        double maxVolumeError = 0, maxBBoxError = 0;
         foreach (var t in targets)
         {
             var row = new JObject { ["document"] = t.Document, ["key"] = t.Key, ["id"] = $"body:{t.Index}", ["file"] = t.File };
+            var rowFailed = false;
             try
             {
                 row["name"] = t.Body.Name;
@@ -120,28 +124,40 @@ public sealed class ExportBodiesSatHandler : HandlerBase, IInventorCommand
                 {
                     var check = Verify(app, t.File, source);
                     row["verify"] = check;
-                    if ((bool)check["ok"]!) verified++; else failed++;
+                    maxVolumeError = Math.Max(maxVolumeError, (double?)check["volume_rel_error"] ?? 0);
+                    maxBBoxError = Math.Max(maxBBoxError, (double?)check["bbox_error_mm"] ?? 0);
+                    if ((bool)check["ok"]!) verified++; else { failed++; rowFailed = true; }
                 }
             }
             catch (Exception ex)
             {
                 row["error"] = ex.GetBaseException().Message;
                 failed++;
+                rowFailed = true;
             }
-            rows.Add(row);
+            if (detail) rows.Add(row);
+            if (rowFailed) failures.Add(row);
         }
 
-        return Ok(ctx, new JObject
+        var result = new JObject
         {
             ["ok"] = failed == 0,
             ["out_dir"] = outDir,
+            ["file_pattern"] = "<key>-bNNN.sat",
             ["requested"] = targets.Count,
             ["exported"] = exported,
             ["verified"] = verify ? verified : JValue.CreateNull(),
             ["failed"] = failed,
-            ["tolerances"] = verify ? new JObject { ["volume_rel"] = VolumeRelTolerance, ["bbox_mm"] = BBoxToleranceMm } : null,
-            ["bodies"] = rows,
-        });
+            ["failures"] = failures,
+        };
+        if (verify)
+        {
+            result["tolerances"] = new JObject { ["volume_rel"] = VolumeRelTolerance, ["bbox_mm"] = BBoxToleranceMm };
+            result["max_volume_rel_error"] = maxVolumeError;
+            result["max_bbox_error_mm"] = maxBBoxError;
+        }
+        if (detail) result["bodies"] = rows;
+        return Ok(ctx, result);
     }
 
     private sealed record Sig(double Volume, double[] Box, int Faces);

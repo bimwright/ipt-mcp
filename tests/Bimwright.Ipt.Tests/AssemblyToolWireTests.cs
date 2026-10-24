@@ -44,7 +44,8 @@ public sealed class AssemblyToolWireTests : IDisposable
         var items = JsonDocument.Parse("[{\"document\":\"TK02-VESSEL-R23.ipt\",\"bodies\":[\"body:1\",\"SHELL\"],\"key\":\"p0001\"}]").RootElement;
         var outDir = Path.Combine(Path.GetTempPath(), "ipt-sat-out");
         var sent = await CaptureAsync(() => exports.ExportBodiesSat(items, outDir, overwrite: true));
-        AssertEnvelope(sent, "export_bodies_sat", "items", "out_dir", "verify", "overwrite");
+        AssertEnvelope(sent, "export_bodies_sat", "items", "out_dir", "verify", "overwrite", "detail");
+        Assert.False(sent["params"]!.Value<bool>("detail"));
         Assert.True(sent["params"]!.Value<bool>("verify"));
         Assert.Equal("p0001", (string?)sent["params"]?["items"]?[0]?["key"]);
 

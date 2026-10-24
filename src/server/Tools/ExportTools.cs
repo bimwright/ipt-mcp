@@ -112,10 +112,10 @@ public sealed class ExportTools
     }
 
     [McpServerTool(Name = "inventor_export_bodies_sat", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
-     Description("Can overwrite files when overwrite=true; documents are not modified. Export solid bodies one file per body to ACIS SAT for Revit interop, across many part documents in one call: items=[{document, bodies?, key?}] (max 200 items / 2000 bodies). document: full path or name of a part already open or loaded in Inventor (e.g. referenced by the open assembly; never opened); omit for the active part. bodies: 1-based index, 'body:N' or names (default all solids). key: file-name prefix (default the part file name). Files are <out_dir>\\<key>-bNNN.sat (NNN = body index); out_dir must be under an allowed output root (user profile, temp or BIMWRIGHT_INVENTOR_EXPORT_ROOT). All documents, bodies and paths are checked before the first write; existing files are refused unless overwrite=true. verify=true (default) reads each file back and compares body count, face count, volume and bbox (tolerances returned). A body that fails is reported and the rest continue — retry only the failed bodies. Returns requested/exported/verified/failed and bodies[{document, key, id, name, file, volume_mm3, bbox_mm, face_count, verify?, error?}]. Use instead of send_code loops over DataIO.WriteDataToFile.")]
+     Description("Can overwrite files when overwrite=true; documents are not modified. Export solid bodies one file per body to ACIS SAT for Revit interop, across many part documents in one call: items=[{document, bodies?, key?}] (max 200 items / 2000 bodies). document: full path or name of a part already open or loaded in Inventor (e.g. referenced by the open assembly; never opened); omit for the active part. bodies: 1-based index, 'body:N' or names (default all solids). key: file-name prefix (default the part file name). Files are <out_dir>\\<key>-bNNN.sat (NNN = body index); out_dir must be under an allowed output root (user profile, temp or BIMWRIGHT_INVENTOR_EXPORT_ROOT). All documents, bodies and paths are checked before the first write; existing files are refused unless overwrite=true. verify=true (default) reads each file back and compares body count, face count, volume and bbox (tolerances returned). A body that fails is reported and the rest continue — retry only the failed bodies. Returns a compact summary: requested/exported/verified/failed, max_volume_rel_error, max_bbox_error_mm and failures[{document, key, id, name, file, volume_mm3, bbox_mm, face_count, verify?, error?}]; detail=true also returns that row for every body. Use instead of send_code loops over DataIO.WriteDataToFile.")]
     public Task<string> ExportBodiesSat(
         [Description("JSON array of {document?, bodies?, key?} objects.")] System.Text.Json.JsonElement items,
-        string out_dir, bool verify = true, bool overwrite = false, CancellationToken ct = default)
+        string out_dir, bool verify = true, bool overwrite = false, bool detail = false, CancellationToken ct = default)
     {
         if (JsonArg.From(items) is not JArray list || list.Count == 0)
             return Task.FromResult(Error("INVALID_ARGUMENT", "items must be a non-empty array of {document, bodies?, key?}"));
@@ -129,6 +129,7 @@ public sealed class ExportTools
             ["out_dir"] = out_dir,
             ["verify"] = verify,
             ["overwrite"] = overwrite,
+            ["detail"] = detail,
         }, ct, timeoutMs: 300_000);
     }
 
