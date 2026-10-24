@@ -104,12 +104,15 @@ function Get-UserBundleRoot {
 }
 
 # Roots scanned for stray manifests carrying an ipt-mcp ClientId: sibling
-# *.bundle folders beside our bundle, plus the legacy per-user add-in folder.
+# *.bundle folders beside our bundle, plus the legacy per-user add-in folders,
+# including the per-year ones Inventor also reads (Inventor <year>\Addins).
 function Get-UserScanRoots {
     $parent = Split-Path -Parent (Get-UserBundleRoot)
     $roots = @()
     if ($parent) { $roots += $parent }
     $roots += (Join-Path $env:APPDATA 'Autodesk\Inventor\Addins')
+    $roots += (Join-Path $env:APPDATA 'Autodesk\Inventor Addins')
+    foreach ($year in 2022..2027) { $roots += (Join-Path $env:APPDATA "Autodesk\Inventor $year\Addins") }
     return @($roots | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) })
 }
 
