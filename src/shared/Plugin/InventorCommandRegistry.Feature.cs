@@ -17,6 +17,7 @@ public static partial class InventorCommandRegistry
     {
         add(new ExtrudeHandler());
         add(new CreatePartHandler());
+        add(new BuildSolidsHandler());
         add(new CombineHandler());
         add(new RevolveHandler());
         add(new FilletHandler());

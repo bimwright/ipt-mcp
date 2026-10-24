@@ -214,7 +214,7 @@ Sau reconnect/restart, client phải đối chiếu `initialize.serverInfo` và 
 | `inventor_draw_text` | Thêm text box fitted (position mm, tùy chọn font_size_mm; rotation_deg theo bội số 90). |
 | `inventor_close_sketch` | Kết thúc chỉnh sketch (thoát chế độ edit sketch). |
 
-### feature (16) — solid & work feature (write)
+### feature (17) — solid & work feature (write)
 
 | Tool | Mô tả |
 |---|---|
@@ -234,6 +234,7 @@ Sau reconnect/restart, client phải đối chiếu `initialize.serverInfo` và 
 | `inventor_sweep` | Sweep một sketch profile dọc theo một sketch path (các đoạn liền kề tự nối chuỗi); orientation normal_to_path\|parallel. |
 | `inventor_create_bim_connector` | Author một BIM pipe connector trên một circular port edge (ref từ `circles[].edge` của inventor_probe_brep); kind=pipe, tùy chọn metadata system/flow/connection. |
 | `inventor_create_part` | Dựng cả part từ recipe JSON trong một call: sketch (rect / circle / polyline có cung bulge, vòng rỗng, trên plane gốc hoặc plane cố định) → extrude / hole / fillet / chamfer → material + iProperty → Save-As silent. Lỗi chỉ đúng đường dẫn trong recipe; hỏng thì part bị đóng không lưu; có `dry_run`. |
+| `inventor_build_solids` | Dựng nhiều khối trong một part có sẵn từ dữ liệu, trong một call: item `{name, op: new/join/cut, target?}` với một hình — `box` (min/max), `tube` (a, b, od, wall?), `prism` (axis, from, to, profile) hoặc `extrude` (pose mặt phẳng, depth, profile). Mọi item được kiểm tra trước và trả về tất cả lỗi một lần; mỗi item được kiểm lại sau khi dựng (feature khỏe, đúng một body mới, cut phải bớt và join phải thêm thể tích). Item lỗi bị gỡ, item đã dựng được giữ và `next_index` cho biết chỗ chạy tiếp. Có `dry_run`. Một bước undo. |
 
 ### export (11) — capture view & export geometry (write)
 

@@ -348,6 +348,38 @@ public sealed class FeatureTools
     public Task<string> CreatePart([Description("JSON object: the part recipe {features:[...], save_as?, material?, iproperties?, parameters?, template?, overwrite?, close_after?}.")] System.Text.Json.JsonElement recipe, bool dry_run = false, int? timeout_ms = null, CancellationToken ct = default)
         => Call("create_part", new JObject { ["recipe"] = JsonArg.From(recipe), ["dry_run"] = dry_run }, ct, timeout_ms);
 
+    [McpServerTool(Name = "inventor_build_solids", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
+     Description("Build many extruded solids in an EXISTING part in one call, from data instead of a C# script (frames, plates, beams, pipes, stair stringers, cut-outs). document: part path or name already open (default: active part). " +
+                 "items = [{name (unique; names the new body), op?: new|join|cut (default new), target? (body name, required for join/cut: an existing body or one created by an earlier item), and exactly one shape}]. Shapes (mm, model coordinates): " +
+                 "box: {min:[x,y,z], max:[x,y,z]}; tube: {a:[x,y,z], b:[x,y,z], od, wall?} (wall omitted = solid rod); " +
+                 "prism: {axis: x|y|z, from, to, profile} (profile in the other two axes in order: x->(y,z), y->(x,z), z->(x,y)); " +
+                 "extrude: {plane: {origin_mm, x_axis, y_axis}, depth (along x_axis cross y_axis, may be negative), profile}. " +
+                 "profile = shape | [shape...] with shape = {rect: {w, h, center?} | {from, to} | [w,h]} | {circle: {d | r, center?}} | {polyline: [[x,y] | [x,y,bulge]...]}, each with optional inner: [shape...] for holes. " +
+                 "Everything is validated first and all problems are returned at once (nothing built). Each item is checked after building: healthy feature, one new body for new, a join must add and a cut must remove volume. " +
+                 "On a failing item its objects are removed and the build stops (stop_on_error=false continues); built items are kept and the error carries next_index - resend only items from there. dry_run=true validates against the part without building. One undo step. Returns completed/failed counts, features_added, bodies_total; detail=true adds per-item rows.")]
+    public Task<string> BuildSolids(
+        [Description("JSON array of solid items {name, op?, target?, box|tube|prism|extrude}.")] System.Text.Json.JsonElement items,
+        string? document = null, bool stop_on_error = true, bool dry_run = false, bool detail = false, CancellationToken ct = default)
+    {
+        var list = JsonArg.From(items);
+        if (!SolidSpec.TryParse(list, out _, out var errors))
+            return Task.FromResult(ToolResponse.Serialize(new JObject
+            {
+                ["ok"] = false,
+                ["error"] = new JObject
+                {
+                    ["code"] = "INVALID_ARGUMENT",
+                    ["message"] = errors.Count == 1
+                        ? $"{errors[0]["path"]}: {errors[0]["message"]}"
+                        : $"{errors.Count} problem(s); first: {errors[0]["path"]}: {errors[0]["message"]} — nothing was built",
+                },
+                ["data"] = new JObject { ["errors"] = errors },
+            }));
+        var p = new JObject { ["items"] = list, ["stop_on_error"] = stop_on_error, ["dry_run"] = dry_run, ["detail"] = detail };
+        if (!string.IsNullOrWhiteSpace(document)) p["document"] = document;
+        return Call("build_solids", p, ct, 600_000);
+    }
+
     private static string Err(string message)
         => ToolResponse.Error("INVALID_ARGUMENT", message);
 

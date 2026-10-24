@@ -216,7 +216,7 @@ component version 与 release 相同时，`release_mismatch` 要求两侧都有�
 | `inventor_draw_text` | 添加一个 fitted 文本框（position mm，可选 font_size_mm；rotation_deg 仅支持 90 的倍数）。 |
 | `inventor_close_sketch` | 结束草图编辑（退出 sketch edit 模式）。 |
 
-### feature (16) —— 实体与工作特征（write）
+### feature (17) —— 实体与工作特征（write）
 
 | Tool | 描述 |
 |---|---|
@@ -236,6 +236,7 @@ component version 与 release 相同时，`release_mismatch` 要求两侧都有�
 | `inventor_sweep` | 把 sketch profile 沿 sketch path 扫掠（相连段自动串链）；orientation normal_to_path\|parallel。 |
 | `inventor_create_bim_connector` | 在圆形 port edge 上创建 BIM pipe connector（ref 来自 inventor_probe_brep 的 `circles[].edge`）；kind=pipe，可选 system/flow/connection 元数据。 |
 | `inventor_create_part` | 用 JSON recipe 一次调用建完整零件：草图（矩形 / 圆 / 带 bulge 圆弧的多段线、内部孔洞）→ 拉伸 / 孔 / 圆角 / 倒角 → 材料 + iProperties → 静默另存为。错误指出 recipe 路径，失败时零件不保存直接关闭；支持 `dry_run`。 |
+| `inventor_build_solids` | 在已有零件中用数据一次调用建多个实体：item `{name, op: new/join/cut, target?}` 加一个形状 —— `box`（min/max）、`tube`（a, b, od, wall?）、`prism`（axis, from, to, profile）或 `extrude`（平面位姿, depth, profile）。所有 item 先校验，所有问题一次返回；每个 item 建完后检查（特征健康、恰好一个新实体、切除须减少且合并须增加体积）。失败的 item 被移除，已建的保留，`next_index` 指出从哪里继续。支持 `dry_run`。一次撤销。 |
 
 ### export (11) —— 视图捕获与几何导出（write）
 

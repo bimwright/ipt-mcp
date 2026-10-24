@@ -10,6 +10,14 @@
       "reason": "For per-body SAT export, consider this tool: many parts and bodies in one call, preflighted paths, per-body read-back verification and per-body errors. It writes part coordinates; transforms or other formats still need a script."
     },
     {
+      "id": "extrude-solids",
+      "all_patterns": ["\\.\\s*ExtrudeFeatures\\b"],
+      "any_patterns": ["\\.\\s*WorkPlanes\\s*\\.\\s*AddFixed\\s*\\(", "\\.\\s*SketchLines\\b", "\\.\\s*SketchCircles\\b"],
+      "tool": "inventor_build_solids",
+      "args_sketch": {"items": [{"name": "<body name>", "box": {"min": [0, 0, 0], "max": [100, 50, 10]}}, {"name": "<hole>", "op": "cut", "target": "<body name>", "tube": {"a": [50, 25, -1], "b": [50, 25, 11], "od": 8}}]},
+      "reason": "For building many boxes, tubes and extruded profiles (new, join or cut) in one part, consider this tool: all items preflighted together, each checked after building, built items kept and next_index reported on failure. Revolve, loft, sweep, fillets and patterns still need their tools or a script."
+    },
+    {
       "id": "design-view",
       "all_patterns": ["\\.\\s*DesignViewRepresentations\\s*\\.\\s*Add\\s*\\("],
       "tool": "inventor_create_design_view",

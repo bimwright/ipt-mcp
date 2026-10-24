@@ -9,7 +9,7 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Declares the Phase 3 surface: 145 all-enabled, 139 code-off and 38 read-only.
+/// Declares the Phase 3 surface: 146 all-enabled, 140 code-off and 38 read-only.
 /// These expectations do not claim that the current source has been built or tested.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -44,7 +44,7 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(145, names.Length);
+        Assert.Equal(146, names.Length);
     }
 
     [Fact]
@@ -79,12 +79,12 @@ public sealed class RegistrationCountTests
             "inventor_create_sketch", "inventor_project_geometry", "inventor_draw_line", "inventor_draw_circle",
             "inventor_draw_rectangle", "inventor_draw_arc", "inventor_add_sketch_dimension",
             "inventor_add_sketch_constraint", "inventor_draw_text", "inventor_close_sketch",
-            // feature (15)
+            // feature (17)
             "inventor_extrude", "inventor_revolve", "inventor_fillet", "inventor_chamfer",
             "inventor_create_work_plane", "inventor_create_work_axis",
             "inventor_hole", "inventor_circular_pattern", "inventor_rectangular_pattern", "inventor_combine", "inventor_batch_execute",
             "inventor_loft", "inventor_sweep", "inventor_create_work_point", "inventor_create_bim_connector",
-            "inventor_create_part",
+            "inventor_create_part", "inventor_build_solids",
             // export (11)
             "inventor_capture_view", "inventor_export_step", "inventor_export_stl", "inventor_export_dxf",
             "inventor_view_fit", "inventor_set_view_orientation", "inventor_set_camera", "inventor_export_sat",
@@ -113,7 +113,7 @@ public sealed class RegistrationCountTests
             "inventor_list_commands", "inventor_run_command", "inventor_undo",
         };
 
-        Assert.Equal(145, expected.Length);
+        Assert.Equal(146, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
         // and nothing extra beyond the expected surface
@@ -136,7 +136,7 @@ public sealed class RegistrationCountTests
     public void Disabling_source_execution_hides_upsert_but_keeps_existing_rule_execution()
     {
         var names = ToolNames(new InventorMcpConfig { Toolsets = { "all" }, EnableSendCode = false });
-        Assert.Equal(139, names.Length);
+        Assert.Equal(140, names.Length);
         Assert.DoesNotContain("inventor_ilogic_upsert_rule", names);
         Assert.DoesNotContain("inventor_ilogic_run_snippet", names);
         Assert.Contains("inventor_ilogic_run_rule", names);
@@ -211,6 +211,6 @@ public sealed class RegistrationCountTests
         var names = ToolNames(new InventorMcpConfig());
         Assert.Contains("inventor_send_code", names);
         Assert.Contains("inventor_ilogic_run_snippet", names);
-        Assert.Equal(145, names.Length);
+        Assert.Equal(146, names.Length);
     }
 }

@@ -57,6 +57,21 @@ public sealed class AssemblyToolWireTests : IDisposable
     }
 
     [Fact]
+    public async Task Build_solids_emits_wire_keys_and_returns_every_local_validation_error()
+    {
+        var features = new FeatureTools(_client);
+        var items = JsonDocument.Parse("[{\"name\":\"plate\",\"box\":{\"min\":[0,0,0],\"max\":[100,50,10]}}]").RootElement;
+        var sent = await CaptureAsync(() => features.BuildSolids(items, document: "P1.ipt"));
+        AssertEnvelope(sent, "build_solids", "items", "document", "stop_on_error", "dry_run", "detail");
+        Assert.True(sent["params"]!.Value<bool>("stop_on_error"));
+
+        var bad = JObject.Parse(await features.BuildSolids(JsonDocument.Parse(
+            "[{\"name\":\"a\",\"box\":{\"min\":[0,0,0],\"max\":[0,5,5]}},{\"name\":\"b\",\"op\":\"cut\",\"tube\":{\"a\":[0,0,0],\"b\":[0,0,10],\"od\":5}}]").RootElement));
+        Assert.Equal("INVALID_ARGUMENT", (string?)bad["error"]?["code"]);
+        Assert.Equal(2, ((JArray)bad["data"]!["errors"]!).Count);
+    }
+
+    [Fact]
     public async Task Assembly_write_tools_emit_expected_wire_commands_and_keys()
     {
         var tools = new AssemblyTools(_client);

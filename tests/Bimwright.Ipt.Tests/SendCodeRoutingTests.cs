@@ -19,6 +19,7 @@ public sealed class SendCodeRoutingTests : IDisposable
     [Theory]
     [InlineData(Survey, "inventor_list_occurrences")]
     [InlineData("pd.ComponentDefinition.SurfaceBodies[1].DataIO.WriteDataToFile(\"ACIS SAT\", path);", "inventor_export_bodies_sat")]
+    [InlineData("var wp = def.WorkPlanes.AddFixed(o, x, y); var sk = def.Sketches.Add(wp); sk.SketchLines.AddAsTwoPointRectangle(a, b); def.Features.ExtrudeFeatures.AddByDistanceExtent(p, 1, d, op);", "inventor_build_solids")]
     [InlineData("return doc.ComponentDefinition.Occurrences[1].Appearance.DisplayName;", "inventor_list_occurrences")]
     [InlineData("return doc.ComponentDefinition.AnalyzeInterference(items);", "inventor_check_interference")]
     [InlineData("ComponentOccurrence a = occs[1]; return app.MeasureTools.GetMinimumDistance(a, b);", "inventor_measure_min_distance")]
@@ -93,7 +94,7 @@ public sealed class SendCodeRoutingTests : IDisposable
         using var stream = typeof(CodeTools).Assembly.GetManifestResourceStream("Bimwright.Ipt.SendCodeRouting.json")!;
         using var reader = new StreamReader(stream);
         var rules = (JArray)JObject.Parse(reader.ReadToEnd())["rules"]!;
-        Assert.Equal(14, rules.Count);
+        Assert.Equal(15, rules.Count);
         Assert.Equal(rules.Count, rules.Select(r => (string?)r["id"]).Distinct().Count());
         var methods = Program.ResolveToolTypesForRegistration(new InventorMcpConfig()).SelectMany(t => t.GetMethods());
         foreach (var rule in rules)

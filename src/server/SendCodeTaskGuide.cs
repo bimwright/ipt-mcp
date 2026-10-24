@@ -15,6 +15,7 @@ internal static class SendCodeTaskGuide
         "Save document / dirty references -> inventor_save_document / inventor_save_all(dry_run=true)\n" +
         "Open silently -> inventor_open_document(silent=true)\n" +
         "Per-body SAT export + read-back check -> inventor_export_bodies_sat(items, out_dir, verify=true)\n" +
+        "Many boxes / tubes / extruded profiles in a part (new, join, cut) -> inventor_build_solids(items)\n" +
         "Script inputs (coordinates, paths, member lists) -> send_code data, not inlined source\n" +
         "A response may include one advisory routing_hint{tool,args_sketch,reason}, also on errors; " +
         "it never executes a tool or changes result. Fill argument templates and verify scope; " +

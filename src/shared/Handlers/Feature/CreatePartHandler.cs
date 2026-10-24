@@ -207,10 +207,15 @@ public sealed class CreatePartHandler : HandlerBase, IInventorCommand
         return null;
     }
 
-    private static void Draw(Application app, PlanarSketch sketch, PartRecipe.Shape shape)
+    /// <summary>
+    /// Draws a recipe shape. <paramref name="map"/> places profile mm coordinates in sketch space
+    /// (default: sketch x/y as given); <paramref name="flip"/> when that mapping mirrors, so arc
+    /// sweeps keep their profile-space direction. Also used by <c>build_solids</c>.
+    /// </summary>
+    internal static void Draw(Application app, PlanarSketch sketch, PartRecipe.Shape shape, Func<double, double, Point2d>? map = null, bool flip = false)
     {
         var tg = app.TransientGeometry;
-        Point2d P(double xMm, double yMm) => tg.CreatePoint2d(UnitConvert.MmToCm(xMm), UnitConvert.MmToCm(yMm));
+        Point2d P(double xMm, double yMm) => map?.Invoke(xMm, yMm) ?? tg.CreatePoint2d(UnitConvert.MmToCm(xMm), UnitConvert.MmToCm(yMm));
         switch (shape)
         {
             case PartRecipe.Rect r:
@@ -235,13 +240,13 @@ public sealed class CreatePartHandler : HandlerBase, IInventorCommand
                     else
                     {
                         var (cx, cy) = BulgeCenter(a.X, a.Y, b.X, b.Y, a.Bulge);
-                        sketch.SketchArcs.AddByCenterStartEndPoint(P(cx, cy), sa, sb, a.Bulge > 0);
+                        sketch.SketchArcs.AddByCenterStartEndPoint(P(cx, cy), sa, sb, (a.Bulge > 0) != flip);
                     }
                 }
                 break;
             }
         }
-        foreach (var inner in shape.Inner) Draw(app, sketch, inner);
+        foreach (var inner in shape.Inner) Draw(app, sketch, inner, map, flip);
     }
 
     /// <summary>Arc center for a DXF-style bulge (tan(sweep/4); positive = counter-clockwise a→b).</summary>

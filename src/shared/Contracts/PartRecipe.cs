@@ -103,6 +103,27 @@ public sealed class PartRecipe
         public RecipeException(string path, string message) : base(path + ": " + message) { }
     }
 
+    /// <summary>A sketch profile (one shape or an array) in this recipe's shape syntax; shared with <c>build_solids</c>.</summary>
+    internal static bool TryParseProfile(JToken? token, string path, out List<Shape> shapes, out string? error)
+    {
+        shapes = new List<Shape>();
+        error = null;
+        try
+        {
+            if (token is null || token.Type == JTokenType.Null) throw new RecipeException(path, "is required");
+            var items = token is JArray a ? a.ToList() : new List<JToken> { token };
+            if (items.Count == 0) throw new RecipeException(path, "must contain at least one shape");
+            for (var i = 0; i < items.Count; i++)
+                shapes.Add(ParseShape(items[i], token is JArray ? $"{path}[{i}]" : path));
+            return true;
+        }
+        catch (RecipeException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
     private void Parse(JToken? token)
     {
         if (token is not JObject r) throw new RecipeException("recipe", "must be an object with features[]");

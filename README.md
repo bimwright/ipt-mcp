@@ -128,7 +128,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **145 tools** by default (`--toolsets all`); `--disable-send-code` exposes **139 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **146 tools** by default (`--toolsets all`); `--disable-send-code` exposes **140 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -326,11 +326,12 @@ When needed, an origin dimension projects the sketch origin or creates a fixed l
 this helper is also removed if the operation rolls back. Inside a batch or another open transaction,
 the dimension must target that transaction's document.
 
-### feature (16) — solid & work features (write)
+### feature (17) — solid & work features (write)
 
 | Tool | Description |
 |---|---|
 | `inventor_create_part` | Build a whole part from a JSON recipe in one call: sketches (rect / circle / polyline with arc bulges, inner voids, on origin or fixed planes) → extrude / hole / fillet / chamfer → material + iProperties → silent Save-As. Errors name the recipe path (`features[2].extrude.distance`); a failing build closes the part unsaved; `dry_run` validates only. |
+| `inventor_build_solids` | Build many solids in an existing part from data in one call: items `{name, op: new/join/cut, target?}` with one shape — `box` (min/max), `tube` (a, b, od, wall?), `prism` (axis, from, to, profile) or `extrude` (plane pose, depth, profile). All items are validated first and every problem is returned at once; each item is checked after building (healthy feature, one new body, a cut must remove and a join must add volume). A failing item is removed, built items stay and `next_index` says where to resume. `dry_run` validates against the part. One undo step. |
 | `inventor_extrude` | Extrude a named sketch (distance, join/cut/intersect, direction). |
 | `inventor_revolve` | Revolve a named sketch about an axis (angle, operation). |
 | `inventor_combine` | Boolean solid bodies (base + tool bodies, join/cut/intersect, keep_tool_bodies). |

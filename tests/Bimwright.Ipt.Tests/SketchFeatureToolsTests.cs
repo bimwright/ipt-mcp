@@ -48,6 +48,7 @@ public sealed class SketchFeatureToolsTests
         "inventor_circular_pattern",
         "inventor_rectangular_pattern",
         "inventor_create_part",
+        "inventor_build_solids",
     };
 
     private static string[] ToolNamesOf(Type toolType)
@@ -72,10 +73,10 @@ public sealed class SketchFeatureToolsTests
     }
 
     [Fact]
-    public void FeatureTools_exposes_exactly_the_fifteen_expected_tools()
+    public void FeatureTools_exposes_exactly_the_expected_tools()
     {
         var names = ToolNamesOf(typeof(FeatureTools));
-        Assert.Equal(16, names.Length);
+        Assert.Equal(17, names.Length);
         Assert.Equal(ExpectedFeatureTools.OrderBy(x => x), names.OrderBy(x => x));
     }
 
