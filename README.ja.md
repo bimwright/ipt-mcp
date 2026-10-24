@@ -232,7 +232,7 @@ component の version が release と同じ場合、`release_mismatch` は両側
 | `inventor_sweep` | スケッチプロファイルをスケッチパスに沿ってスイープ（接続セグメントは自動チェーン）。orientation normal_to_path\|parallel。 |
 | `inventor_create_bim_connector` | 円形ポートエッジ上に BIM パイプコネクタを作成（ref は inventor_probe_brep の `circles[].edge`）。kind=pipe、任意で system/flow/connection メタデータ。 |
 | `inventor_create_part` | JSON レシピから部品を 1 回の呼び出しで作成：スケッチ（矩形 / 円 / バルジ付きポリライン、内側の穴）→ 押し出し / 穴 / フィレット / 面取り → 材料 + iProperty → サイレント Save-As。エラーはレシピのパスを示し、失敗時は部品を保存せず閉じる。`dry_run` 対応。 |
-| `inventor_build_solids` | 既存の部品にデータから多数のソリッドを 1 回の呼び出しで作成：item `{name, op: new/join/cut, target?}` と 1 つの形状 — `box`（min/max）、`tube`（a, b, od, wall?）、`prism`（axis, from, to, profile）、`extrude`（平面ポーズ, depth, profile）。全 item を先に検証し、問題をまとめて返す。各 item は作成後に検査（正常なフィーチャ、新規ボディ 1 つ、カットは体積を減らし結合は増やす）。失敗した item は削除され、作成済みは残り、`next_index` で再開位置を示す。`dry_run` 対応。1 回の元に戻す操作。 |
+| `inventor_build_solids` | 既存の部品にデータから多数のソリッドを 1 回の呼び出しで作成：item `{name, op: new/join/cut, target?}` と 1 つの形状（join/cut は `name` 省略可、`defaults` で繰り返す値を一度だけ指定）— `box`（min/max）、`tube`（a, b, od, wall?）、`prism`（axis, from, to, profile）、`extrude`（平面ポーズ, depth, profile）。全 item を先に検証し、問題をまとめて返す。各 item は作成後に検査（正常なフィーチャ、新規ボディ 1 つ、カットは体積を減らし結合は増やす）。失敗した item は削除され、作成済みは残り、`next_index` で再開位置を示す。`dry_run` 対応。1 回の元に戻す操作。 |
 
 ### export (11) — ビューキャプチャと形状エクスポート（書き込み）
 

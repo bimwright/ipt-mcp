@@ -30,7 +30,7 @@ public sealed class BuildSolidsHandler : HandlerBase, IInventorCommand
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
-        if (!SolidSpec.TryParse(p["items"], out var spec, out var errors))
+        if (!SolidSpec.TryParse(p["items"], out var spec, out var errors, p["defaults"]))
             return Invalid(ctx, errors);
         if (!ActiveDocumentSupport.TryGetPart(ctx, p, "build_solids", out var app, out var part, out var failure))
             return failure!;

@@ -350,7 +350,8 @@ public sealed class FeatureTools
 
     [McpServerTool(Name = "inventor_build_solids", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
      Description("Build many extruded solids in an EXISTING part in one call, from data instead of a C# script (frames, plates, beams, pipes, stair stringers, cut-outs). document: part path or name already open (default: active part). " +
-                 "items = [{name (unique; names the new body), op?: new|join|cut (default new), target? (body name, required for join/cut: an existing body or one created by an earlier item), and exactly one shape}]. Shapes (mm, model coordinates): " +
+                 "items = [{name (unique; names the new body; optional for join/cut), op?: new|join|cut (default new), target? (body name, required for join/cut: an existing body or one created by an earlier item), and exactly one shape}]. " +
+                 "defaults = {box|tube|prism|extrude: {key: value}} fills keys an item's shape leaves out, so repeated values are written once (e.g. {tube: {od: 48.3}}; an item still overrides, e.g. wall: 0). Shapes (mm, model coordinates): " +
                  "box: {min:[x,y,z], max:[x,y,z]}; tube: {a:[x,y,z], b:[x,y,z], od, wall?} (wall omitted = solid rod); " +
                  "prism: {axis: x|y|z, from, to, profile} (profile in the other two axes in order: x->(y,z), y->(x,z), z->(x,y)); " +
                  "extrude: {plane: {origin_mm, x_axis, y_axis}, depth (along x_axis cross y_axis, may be negative), profile}. " +
@@ -359,10 +360,13 @@ public sealed class FeatureTools
                  "On a failing item its objects are removed and the build stops (stop_on_error=false continues); built items are kept and the error carries next_index - resend only items from there. dry_run=true validates against the part without building. One undo step. Returns completed/failed counts, features_added, bodies_total; detail=true adds per-item rows.")]
     public Task<string> BuildSolids(
         [Description("JSON array of solid items {name, op?, target?, box|tube|prism|extrude}.")] System.Text.Json.JsonElement items,
-        string? document = null, bool stop_on_error = true, bool dry_run = false, bool detail = false, CancellationToken ct = default)
+        string? document = null,
+        [Description("Optional JSON object {box|tube|prism|extrude: {key: value}} of default shape keys.")] System.Text.Json.JsonElement? defaults = null,
+        bool stop_on_error = true, bool dry_run = false, bool detail = false, CancellationToken ct = default)
     {
         var list = JsonArg.From(items);
-        if (!SolidSpec.TryParse(list, out _, out var errors))
+        var fallback = JsonArg.From(defaults);
+        if (!SolidSpec.TryParse(list, out _, out var errors, fallback))
             return Task.FromResult(ToolResponse.Serialize(new JObject
             {
                 ["ok"] = false,
@@ -377,6 +381,7 @@ public sealed class FeatureTools
             }));
         var p = new JObject { ["items"] = list, ["stop_on_error"] = stop_on_error, ["dry_run"] = dry_run, ["detail"] = detail };
         if (!string.IsNullOrWhiteSpace(document)) p["document"] = document;
+        if (fallback is { Type: not JTokenType.Null }) p["defaults"] = fallback;
         return Call("build_solids", p, ct, 600_000);
     }
 

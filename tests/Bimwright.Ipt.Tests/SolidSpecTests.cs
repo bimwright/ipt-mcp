@@ -120,6 +120,45 @@ public sealed class SolidSpecTests
     }
 
     [Fact]
+    public void Defaults_fill_missing_shape_keys_and_items_override_them()
+    {
+        var ok = SolidSpec.TryParse(JToken.Parse("""
+        [{"name":"post","tube":{"a":[0,0,0],"b":[0,0,1000]}},
+         {"op":"cut","target":"post","tube":{"a":[-50,0,1000],"b":[50,0,1000],"wall":0}}]
+        """), out var spec, out var errors, JToken.Parse("{\"tube\":{\"od\":48.3,\"wall\":5.08}}"));
+        Assert.True(ok, errors.ToString());
+        var post = Assert.IsType<PartRecipe.Circle>(spec.Items[0].Profile[0]);
+        Assert.Equal(24.15, post.R, 9);
+        Assert.Single(post.Inner);
+        var saddle = Assert.IsType<PartRecipe.Circle>(spec.Items[1].Profile[0]);
+        Assert.Equal(24.15, saddle.R, 9);
+        Assert.Empty(saddle.Inner);
+    }
+
+    [Fact]
+    public void Join_and_cut_names_are_optional_but_new_bodies_need_one()
+    {
+        var (ok, spec, _) = Parse("""
+        [{"name":"plate","box":{"min":[0,0,0],"max":[10,10,10]}},
+         {"op":"cut","target":"plate","box":{"min":[2,2,-1],"max":[4,4,11]}}]
+        """);
+        Assert.True(ok);
+        Assert.Equal("cut_1", spec.Items[1].Name);
+
+        var (bad, _, errors) = Parse("[{\"box\":{\"min\":[0,0,0],\"max\":[1,1,1]}}]");
+        Assert.False(bad);
+        Assert.Equal("items[0].name", (string?)errors[0]["path"]);
+    }
+
+    [Fact]
+    public void Defaults_must_be_keyed_by_shape_kind()
+    {
+        Assert.False(SolidSpec.TryParse(JToken.Parse("[{\"name\":\"a\",\"box\":{\"min\":[0,0,0],\"max\":[1,1,1]}}]"),
+            out _, out var errors, JToken.Parse("{\"pipe\":{\"od\":5}}")));
+        Assert.Equal("defaults.pipe", (string?)errors[0]["path"]);
+    }
+
+    [Fact]
     public void Item_count_is_capped()
     {
         var many = new JArray(Enumerable.Range(0, SolidSpec.MaxItems + 1)

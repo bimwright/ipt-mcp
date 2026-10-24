@@ -8,6 +8,7 @@ namespace Bimwright.Ipt.Shared.Contracts;
 /// <summary>
 /// <c>build_solids</c> items, parsed and validated host-free (lengths mm). Every item is one extrude
 /// feature in a part: <c>{name, op?: new|join|cut, target?, &lt;shape&gt;}</c> with exactly one shape
+/// (name is optional for join/cut: <c>&lt;op&gt;_&lt;index&gt;</c>; shape keys may come from <c>defaults</c>)
 /// <code>
 /// box:     { min:[x,y,z], max:[x,y,z] }
 /// tube:    { a:[x,y,z], b:[x,y,z], od, wall? }            (wall omitted/0 = solid rod)
@@ -43,7 +44,11 @@ public sealed class SolidSpec
 
     public List<Item> Items { get; } = new();
 
-    public static bool TryParse(JToken? token, out SolidSpec spec, out JArray errors)
+    private static readonly string[] Kinds = { "box", "tube", "prism", "extrude" };
+
+    /// <param name="defaults">Optional <c>{box|tube|prism|extrude: {key: value}}</c>: keys an item's
+    /// shape leaves out are taken from the entry for its kind (e.g. <c>{tube: {od: 48.3}}</c>).</param>
+    public static bool TryParse(JToken? token, out SolidSpec spec, out JArray errors, JToken? defaults = null)
     {
         spec = new SolidSpec();
         errors = new JArray();
@@ -57,6 +62,16 @@ public sealed class SolidSpec
             errors.Add(Error(-1, null, "items", $"at most {MaxItems} items per call; split the build and continue in the next call"));
             return false;
         }
+        if (defaults is { Type: not JTokenType.Null })
+        {
+            if (defaults is not JObject d)
+                errors.Add(Error(-1, null, "defaults", "must be an object {box|tube|prism|extrude: {key: value}}"));
+            else
+                foreach (var p in d.Properties())
+                    if (!Kinds.Contains(p.Name) || p.Value is not JObject)
+                        errors.Add(Error(-1, null, "defaults." + p.Name, "must be a shape kind (box, tube, prism, extrude) holding an object of default keys"));
+            if (errors.Count > 0) return false;
+        }
 
         var names = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var newBodies = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -64,14 +79,16 @@ public sealed class SolidSpec
         {
             var path = $"items[{i}]";
             if (items[i] is not JObject o) { Add(errors, Error(i, null, path, "must be an object")); continue; }
+            var op = o["op"]?.Type == JTokenType.String ? ((string)o["op"]!).Trim().ToLowerInvariant() : "new";
             var name = (o["name"]?.Type == JTokenType.String ? ((string)o["name"]!).Trim() : "");
+            // join/cut items create no body, so their name (which only names the feature) is optional
+            if (name.Length == 0 && op is "join" or "cut") name = $"{op}_{i}";
             var before = errors.Count;
-            if (name.Length == 0) Add(errors, Error(i, null, path + ".name", "is required (it names the feature and, for op=new, the body)"));
+            if (name.Length == 0) Add(errors, Error(i, null, path + ".name", "is required for op=new (it names the body)"));
             else if (names.TryGetValue(name, out var dup)) Add(errors, Error(i, name, path + ".name", $"duplicates items[{dup}]"));
             else names[name] = i;
 
-            var item = new Item { Index = i, Name = name };
-            item.Op = o["op"]?.Type == JTokenType.String ? ((string)o["op"]!).Trim().ToLowerInvariant() : "new";
+            var item = new Item { Index = i, Name = name, Op = op };
             if (item.Op is not ("new" or "join" or "cut")) Add(errors, Error(i, name, path + ".op", "must be new, join or cut"));
             item.Target = o["target"]?.Type == JTokenType.String ? ((string)o["target"]!).Trim() : null;
             if (item.Op == "new" && item.Target != null) Add(errors, Error(i, name, path + ".target", "only join and cut take a target"));
@@ -84,7 +101,7 @@ public sealed class SolidSpec
                     Add(errors, Error(i, name, path + ".target", $"body '{item.Target}' is created later by items[{later}]; order the items so the body exists first"));
             }
 
-            var kinds = new[] { "box", "tube", "prism", "extrude" }.Where(k => o[k] is { Type: not JTokenType.Null }).ToArray();
+            var kinds = Kinds.Where(k => o[k] is { Type: not JTokenType.Null }).ToArray();
             foreach (var p in o.Properties())
                 if (p.Name is not ("name" or "op" or "target" or "box" or "tube" or "prism" or "extrude"))
                     Add(errors, Error(i, name, $"{path}.{p.Name}", "unknown key (allowed: name, op, target, box, tube, prism, extrude)"));
@@ -94,12 +111,20 @@ public sealed class SolidSpec
             {
                 item.Kind = kinds[0];
                 var shapePath = $"{path}.{item.Kind}";
+                var shape = o[item.Kind];
+                if (shape is JObject own && defaults?[item.Kind] is JObject fallback)
+                {
+                    var merged = (JObject)own.DeepClone();
+                    foreach (var p in fallback.Properties())
+                        if (merged[p.Name] is null) merged[p.Name] = p.Value.DeepClone();
+                    shape = merged;
+                }
                 var message = item.Kind switch
                 {
-                    "box" => ParseBox(o["box"], item, shapePath),
-                    "tube" => ParseTube(o["tube"], item, shapePath),
-                    "prism" => ParsePrism(o["prism"], item, shapePath),
-                    _ => ParseExtrude(o["extrude"], item, shapePath),
+                    "box" => ParseBox(shape, item, shapePath),
+                    "tube" => ParseTube(shape, item, shapePath),
+                    "prism" => ParsePrism(shape, item, shapePath),
+                    _ => ParseExtrude(shape, item, shapePath),
                 };
                 if (message != null) Add(errors, Error(i, name, message.Value.path, message.Value.text));
                 else foreach (var (p, text) in ProfileErrors(item.Profile, shapePath + ".profile")) Add(errors, Error(i, name, p, text));
