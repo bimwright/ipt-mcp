@@ -164,7 +164,10 @@ public sealed class ExportBodiesSatHandler : HandlerBase, IInventorCommand
 
     private static Sig Signature(SurfaceBody body)
     {
-        var rb = body.RangeBox;
+        // RangeBox is a loose box on B-spline faces and differs between a part body and the same
+        // body read back from SAT (3.4 mm on a PORS coil); PreciseRangeBox matches exactly.
+        Box rb;
+        try { rb = body.PreciseRangeBox; } catch { rb = body.RangeBox; }
         return new Sig(UnitConvert.Cm3ToMm3(body.get_Volume(VolumeAccuracy)), new[]
         {
             UnitConvert.CmToMm(rb.MinPoint.X), UnitConvert.CmToMm(rb.MinPoint.Y), UnitConvert.CmToMm(rb.MinPoint.Z),
