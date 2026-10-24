@@ -30,8 +30,9 @@ namespace Bimwright.Ipt.Shared.Handlers.Code;
 /// compiled in front of the script as one submission; <see cref="SendCodeSource"/> tags every part with
 /// a <c>#line</c> directive so diagnostics and runtime failures name <c>module:&lt;name&gt;</c> or
 /// <c>script</c> plus the line. <c>compile_only</c> compiles without running (module dry-compile) and
-/// returns the modules' declared signatures. Optional <c>data</c> (any JSON) reaches the script as the
-/// <c>data</c> global (<c>JToken</c>), so inputs travel as data instead of being inlined into source.
+/// returns the modules' declared signatures. Optional <c>data</c> (any JSON) reaches the script as a
+/// <c>data</c> variable (<c>JToken</c>) declared by a prelude part (source <c>data</c>), so inputs travel
+/// as data instead of being inlined into source; without <c>data</c> no prelude is added.
 /// <c>silent</c> wraps the run in
 /// <c>Application.SilentOperation</c> (opt-in: dialogs are auto-answered with their defaults).
 /// Mirrors nwd-mcp's SendCodeHandler.
@@ -47,9 +48,16 @@ public sealed class SendCodeHandler : IInventorCommand
     {
         public InvApi.Application app = null!;
         public InvApi.Document? doc;
-        /// <summary>Caller-supplied JSON input (<c>data</c> param); null when omitted.</summary>
-        public JToken? data;
+        /// <summary>
+        /// Caller-supplied <c>data</c> as JSON text. A string, not a JToken: Inventor loads its own
+        /// Newtonsoft.Json, and a JToken field binds to whichever copy the script resolves at run time
+        /// (MissingFieldException). <see cref="DataPrelude"/> parses it with the script's own copy.
+        /// </summary>
+        public string? __data_json;
     }
+
+    private const string DataSource = "data";
+    private const string DataPrelude = "Newtonsoft.Json.Linq.JToken data = Newtonsoft.Json.Linq.JToken.Parse(__data_json);";
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
@@ -84,9 +92,17 @@ public sealed class SendCodeHandler : IInventorCommand
         if (!policy.Ok)
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, policy.Error ?? "send_code source rejected by policy", meta);
 
+        var dataJson = p["data"] is { Type: not JTokenType.Null } d ? d.ToString(Newtonsoft.Json.Formatting.None) : null;
         var parts = new Dictionary<string, string>(StringComparer.Ordinal) { [SendCodeSource.ScriptSource] = code };
         foreach (var m in modules) parts[m.Source] = m.Code;
-        var source = SendCodeSource.Build(modules, code);
+        var sourceParts = modules;
+        if (dataJson != null)
+        {
+            parts[DataSource] = DataPrelude;
+            sourceParts = new List<SendCodeSource.Part> { new(DataSource, DataPrelude) };
+            sourceParts.AddRange(modules);
+        }
+        var source = SendCodeSource.Build(sourceParts, code);
 
         var originalOut = Console.Out;
         var captured = new StringWriter();
@@ -101,14 +117,8 @@ public sealed class SendCodeHandler : IInventorCommand
 
         try
         {
-            // Inventor may load its own copy of an assembly the add-in also ships (Newtonsoft.Json
-            // from Inventor\Bin, same identity, different load context). The script must bind the
-            // Globals field types to the add-in's copy, or running it fails with MissingFieldException.
-            var pinned = typeof(Globals).GetFields().Select(f => f.FieldType.Assembly)
-                .Append(typeof(Globals).Assembly).Distinct().ToArray();
             var refs = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
-                .Where(a => pinned.Contains(a) || !pinned.Any(k => string.Equals(k.GetName().Name, a.GetName().Name, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
             // The add-in loads into a private AssemblyLoadContext (EnableDynamicLoading), so the
@@ -169,8 +179,7 @@ public sealed class SendCodeHandler : IInventorCommand
             messages = app.ErrorManager.StartMessageSection();
             var document = app.ActiveDocument;
             if (document != null) transaction = app.TransactionManager.StartTransaction(document, "MCP: send_code");
-            var input = p["data"] is { Type: not JTokenType.Null } d ? d : null;
-            var state = script.RunAsync(globals: new Globals { app = app, doc = document, data = input }).GetAwaiter().GetResult();
+            var state = script.RunAsync(globals: new Globals { app = app, doc = document, __data_json = dataJson }).GetAwaiter().GetResult();
             hostWarnings = messages.HasWarnings;
             if (hostWarnings || messages.HasErrors) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages);
             if (messages.HasErrors)
