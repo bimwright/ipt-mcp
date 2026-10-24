@@ -185,7 +185,13 @@ public sealed class BuildSolidsHandler : HandlerBase, IInventorCommand
 
             stage = "check";
             if (feature.HealthStatus != HealthStatusEnum.kUpToDateHealth)
-                throw new InvalidOperationException("feature is " + EnumText.Friendly(feature.HealthStatus.ToString(), "Health"));
+            {
+                var health = EnumText.Friendly(feature.HealthStatus.ToString(), "Health");
+                // A join/cut whose solid misses its target is not built at all: Inventor marks it DriverLost.
+                throw new InvalidOperationException(it.Op == "new"
+                    ? "feature is " + health
+                    : $"the {it.Op} does not reach body '{it.Target}' (Inventor marks the feature {health})");
+            }
             var bodiesAfter = def.SurfaceBodies.Count;
             if (it.Op == "new")
             {
