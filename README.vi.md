@@ -235,7 +235,7 @@ Sau reconnect/restart, client phải đối chiếu `initialize.serverInfo` và 
 | `inventor_create_bim_connector` | Author một BIM pipe connector trên một circular port edge (ref từ `circles[].edge` của inventor_probe_brep); kind=pipe, tùy chọn metadata system/flow/connection. |
 | `inventor_create_part` | Dựng cả part từ recipe JSON trong một call: sketch (rect / circle / polyline có cung bulge, vòng rỗng, trên plane gốc hoặc plane cố định) → extrude / hole / fillet / chamfer → material + iProperty → Save-As silent. Lỗi chỉ đúng đường dẫn trong recipe; hỏng thì part bị đóng không lưu; có `dry_run`. |
 
-### export (10) — capture view & export geometry (write)
+### export (11) — capture view & export geometry (write)
 
 > `output_path` phải nằm dưới root được phép: user profile, `%TEMP%`, hoặc root bạn thêm — ví dụ đặt `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` trên máy chạy Inventor (rồi khởi động lại Inventor và cả MCP client/server session).
 
@@ -245,6 +245,7 @@ Sau reconnect/restart, client phải đối chiếu `initialize.serverInfo` và 
 | `inventor_export_step` | Export part/assembly active sang STEP (.stp/.step). |
 | `inventor_export_stl` | Export part/assembly active sang STL (.stl). |
 | `inventor_export_sat` | Export part/assembly sang ACIS SAT (.sat) — định dạng interop cho Revit; acis_version mặc định 7 (giá trị duy nhất được hỗ trợ). |
+| `inventor_export_bodies_sat` | Export từng solid body ra một file SAT riêng, cho nhiều part đang mở trong một lần gọi (`items=[{document, bodies?, key?}]`, `out_dir`); kiểm tra trước đường dẫn và file đã tồn tại, `verify=true` đọc lại từng file (thể tích/bbox/số mặt) và báo lỗi theo từng body. |
 | `inventor_export_dxf` | Export DXF 2D; phải khai báo source (`sketch` hoặc `flat_pattern`). |
 | `inventor_derive_envelope` | Tạo derived part từ part/assembly nguồn — đường envelope/interop: `derive_style`, chọn solid với `include_bodies`, chế độ gọn `bounding_box`; lưu .ipt dưới root được phép. |
 | `inventor_view_fit` | Zoom-fit view active vào model extents (chạy trước khi capture). |

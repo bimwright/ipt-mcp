@@ -237,7 +237,7 @@ component version 与 release 相同时，`release_mismatch` 要求两侧都有�
 | `inventor_create_bim_connector` | 在圆形 port edge 上创建 BIM pipe connector（ref 来自 inventor_probe_brep 的 `circles[].edge`）；kind=pipe，可选 system/flow/connection 元数据。 |
 | `inventor_create_part` | 用 JSON recipe 一次调用建完整零件：草图（矩形 / 圆 / 带 bulge 圆弧的多段线、内部孔洞）→ 拉伸 / 孔 / 圆角 / 倒角 → 材料 + iProperties → 静默另存为。错误指出 recipe 路径，失败时零件不保存直接关闭；支持 `dry_run`。 |
 
-### export (10) —— 视图捕获与几何导出（write）
+### export (11) —— 视图捕获与几何导出（write）
 
 > `output_path` 必须位于允许的根目录下：user profile、`%TEMP%`，或自行添加的根目录 —— 例如在运行 Inventor 的机器上设置 `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports`（设置后需重启 Inventor 和 MCP 客户端/服务器会话）。
 
@@ -247,6 +247,7 @@ component version 与 release 相同时，`release_mismatch` 要求两侧都有�
 | `inventor_export_step` | 把 active part/assembly 导出为 STEP（.stp/.step）。 |
 | `inventor_export_stl` | 把 active part/assembly 导出为 STL（.stl）。 |
 | `inventor_export_sat` | 把 active part/assembly 导出为 ACIS SAT（.sat）—— 用于 Revit interop 的格式；acis_version 默认 7（唯一支持的值）。 |
+| `inventor_export_bodies_sat` | 一次调用把多个已打开零件的实体逐个导出为独立 SAT 文件（`items=[{document, bodies?, key?}]`、`out_dir`）；预先检查路径与已存在文件，`verify=true` 回读每个文件并比对体积/bbox/面数，按实体报告错误。 |
 | `inventor_export_dxf` | 导出 2D DXF；必须声明 source（`sketch` 或 `flat_pattern`）。 |
 | `inventor_derive_envelope` | 从源 part/assembly 创建 derived part —— envelope/interop 路径：`derive_style`、`include_bodies` 选择 solid、轻量 `bounding_box` 模式；.ipt 保存到允许的 root 下。 |
 | `inventor_view_fit` | 把 active view 缩放适配到 model extents（捕获前运行）。 |

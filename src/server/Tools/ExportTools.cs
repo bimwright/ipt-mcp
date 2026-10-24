@@ -111,6 +111,27 @@ public sealed class ExportTools
         }, ct);
     }
 
+    [McpServerTool(Name = "inventor_export_bodies_sat", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
+     Description("Can overwrite files when overwrite=true; documents are not modified. Export solid bodies one file per body to ACIS SAT for Revit interop, across many part documents in one call: items=[{document, bodies?, key?}] (max 200 items / 2000 bodies). document: full path or name of a part already open or loaded in Inventor (e.g. referenced by the open assembly; never opened); omit for the active part. bodies: 1-based index, 'body:N' or names (default all solids). key: file-name prefix (default the part file name). Files are <out_dir>\\<key>-bNNN.sat (NNN = body index); out_dir must be under an allowed output root (user profile, temp or BIMWRIGHT_INVENTOR_EXPORT_ROOT). All documents, bodies and paths are checked before the first write; existing files are refused unless overwrite=true. verify=true (default) reads each file back and compares body count, face count, volume and bbox (tolerances returned). A body that fails is reported and the rest continue — retry only the failed bodies. Returns requested/exported/verified/failed and bodies[{document, key, id, name, file, volume_mm3, bbox_mm, face_count, verify?, error?}]. Use instead of send_code loops over DataIO.WriteDataToFile.")]
+    public Task<string> ExportBodiesSat(
+        [Description("JSON array of {document?, bodies?, key?} objects.")] System.Text.Json.JsonElement items,
+        string out_dir, bool verify = true, bool overwrite = false, CancellationToken ct = default)
+    {
+        if (JsonArg.From(items) is not JArray list || list.Count == 0)
+            return Task.FromResult(Error("INVALID_ARGUMENT", "items must be a non-empty array of {document, bodies?, key?}"));
+        if (string.IsNullOrWhiteSpace(out_dir))
+            return Task.FromResult(Error("INVALID_ARGUMENT", "out_dir is required"));
+        if (ExportPathPolicy.TryRejectPath(System.IO.Path.Combine(out_dir, "probe.sat"), out var rejection))
+            return Task.FromResult(Error("INVALID_ARGUMENT", rejection.Replace("output_path", "out_dir")));
+        return Call("export_bodies_sat", new JObject
+        {
+            ["items"] = list,
+            ["out_dir"] = out_dir,
+            ["verify"] = verify,
+            ["overwrite"] = overwrite,
+        }, ct, timeoutMs: 300_000);
+    }
+
     [McpServerTool(Name = "inventor_derive_envelope", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
      Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Create a new part document containing a derived-component feature from a source part/assembly — the envelope path for interop (SAT→Revit) and simplified reference geometry. output_path: absolute .ipt under an allowed output root (the derived document is saved there). source_path defaults to the active document (must have been saved); .ipt sources derive per-solid, .iam sources derive per-occurrence. derive_style=multiple|single_seams|single_no_seams. include_bodies: source solid names or 'body:N' indices to keep (part sources only — incompatible with bounding_box and rejected for .iam). bounding_box=true derives every solid/occurrence as its bounding box — the lightweight-envelope mode. include_parameters carries source parameters. activate=false creates the document hidden. Returns document/path/style/solids-or-occurrences counts.")]
     public Task<string> DeriveEnvelope(
@@ -210,11 +231,11 @@ public sealed class ExportTools
     private static string Error(string code, string message)
         => ToolResponse.Error(code, message);
 
-    private async Task<string> Call(string command, JObject p, CancellationToken ct)
+    private async Task<string> Call(string command, JObject p, CancellationToken ct, int? timeoutMs = null)
     {
         try
         {
-            var data = await _client.SendAsync(command, p, ct);
+            var data = await _client.SendAsync(command, p, ct, timeoutMs);
             return ToolResponse.Serialize(data);
         }
         catch (InventorGatewayException ex)

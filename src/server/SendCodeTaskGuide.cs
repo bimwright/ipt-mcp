@@ -14,6 +14,8 @@ internal static class SendCodeTaskGuide
         "Named review view -> inventor_create_design_view (Inventor 2027)\n" +
         "Save document / dirty references -> inventor_save_document / inventor_save_all(dry_run=true)\n" +
         "Open silently -> inventor_open_document(silent=true)\n" +
+        "Per-body SAT export + read-back check -> inventor_export_bodies_sat(items, out_dir, verify=true)\n" +
+        "Script inputs (coordinates, paths, member lists) -> send_code data, not inlined source\n" +
         "A response may include one advisory routing_hint{tool,args_sketch,reason}, also on errors; " +
         "it never executes a tool or changes result. Fill argument templates and verify scope; " +
         "a hint can cover only one step. Scripts using modules receive no routing hint. ";

@@ -9,7 +9,7 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Declares the Phase 3 surface: 144 all-enabled, 138 code-off and 38 read-only.
+/// Declares the Phase 3 surface: 145 all-enabled, 139 code-off and 38 read-only.
 /// These expectations do not claim that the current source has been built or tested.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -36,7 +36,7 @@ public sealed class RegistrationCountTests
     };
 
     [Fact]
-    public void All_toolsets_with_send_code_register_exactly_144_tools()
+    public void All_toolsets_with_send_code_register_exactly_145_tools()
     {
         var names = ToolNames(AllEnabled());
 
@@ -44,11 +44,11 @@ public sealed class RegistrationCountTests
         var distinct = names.Distinct(StringComparer.Ordinal).ToArray();
         Assert.Equal(distinct.Length, names.Length);
 
-        Assert.Equal(144, names.Length);
+        Assert.Equal(145, names.Length);
     }
 
     [Fact]
-    public void The_144_tools_match_the_frozen_surface()
+    public void The_145_tools_match_the_frozen_surface()
     {
         var names = new HashSet<string>(ToolNames(AllEnabled()), StringComparer.Ordinal);
 
@@ -85,10 +85,10 @@ public sealed class RegistrationCountTests
             "inventor_hole", "inventor_circular_pattern", "inventor_rectangular_pattern", "inventor_combine", "inventor_batch_execute",
             "inventor_loft", "inventor_sweep", "inventor_create_work_point", "inventor_create_bim_connector",
             "inventor_create_part",
-            // export (9)
+            // export (11)
             "inventor_capture_view", "inventor_export_step", "inventor_export_stl", "inventor_export_dxf",
             "inventor_view_fit", "inventor_set_view_orientation", "inventor_set_camera", "inventor_export_sat",
-            "inventor_derive_envelope", "inventor_set_view_state",
+            "inventor_derive_envelope", "inventor_set_view_state", "inventor_export_bodies_sat",
             // code (6: send_code + modules + iLogic source authoring)
             "inventor_send_code", "inventor_save_code_module", "inventor_list_code_modules", "inventor_delete_code_module",
             "inventor_ilogic_run_snippet",
@@ -113,7 +113,7 @@ public sealed class RegistrationCountTests
             "inventor_list_commands", "inventor_run_command", "inventor_undo",
         };
 
-        Assert.Equal(144, expected.Length);
+        Assert.Equal(145, expected.Length);
         foreach (var e in expected)
             Assert.True(names.Contains(e), $"missing expected tool: {e}");
         // and nothing extra beyond the expected surface
@@ -136,7 +136,7 @@ public sealed class RegistrationCountTests
     public void Disabling_source_execution_hides_upsert_but_keeps_existing_rule_execution()
     {
         var names = ToolNames(new InventorMcpConfig { Toolsets = { "all" }, EnableSendCode = false });
-        Assert.Equal(138, names.Length);
+        Assert.Equal(139, names.Length);
         Assert.DoesNotContain("inventor_ilogic_upsert_rule", names);
         Assert.DoesNotContain("inventor_ilogic_run_snippet", names);
         Assert.Contains("inventor_ilogic_run_rule", names);
@@ -206,11 +206,11 @@ public sealed class RegistrationCountTests
     }
 
     [Fact]
-    public void Default_config_registers_144_tools_with_send_code()
+    public void Default_config_registers_145_tools_with_send_code()
     {
         var names = ToolNames(new InventorMcpConfig());
         Assert.Contains("inventor_send_code", names);
         Assert.Contains("inventor_ilogic_run_snippet", names);
-        Assert.Equal(144, names.Length);
+        Assert.Equal(145, names.Length);
     }
 }

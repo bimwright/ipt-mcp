@@ -128,7 +128,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **144 tools** by default (`--toolsets all`); `--disable-send-code` exposes **138 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **145 tools** by default (`--toolsets all`); `--disable-send-code` exposes **139 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -347,7 +347,7 @@ the dimension must target that transaction's document.
 | `inventor_sweep` | Sweep a sketch profile along a sketch path (connected segments chain); orientation normal_to_path\|parallel. |
 | `inventor_create_bim_connector` | Author a BIM pipe connector on a circular port edge (ref from inventor_probe_brep `circles[].edge`); kind=pipe, optional system/flow/connection metadata. |
 
-### export (10) — view capture & geometry export (write)
+### export (11) — view capture & geometry export (write)
 
 > `output_path` must sit under an allowed root: the user profile, `%TEMP%`, or a root you add — e.g. set `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` on the Inventor machine (restart Inventor and your MCP client/server session afterwards).
 
@@ -358,6 +358,7 @@ the dimension must target that transaction's document.
 | `inventor_export_step` | Export the active part/assembly to STEP (.stp/.step). |
 | `inventor_export_stl` | Export the active part/assembly to STL (.stl). |
 | `inventor_export_sat` | Export the active part/assembly to ACIS SAT (.sat) — the Revit interop format; acis_version defaults to 7 (the only supported value). |
+| `inventor_export_bodies_sat` | Export solid bodies one SAT file per body across many open parts in one call (`items=[{document, bodies?, key?}]`, `out_dir`); preflights paths and existing files, `verify=true` reads each file back (volume/bbox/face count) and reports per-body errors. |
 | `inventor_export_dxf` | Export a 2D DXF; must declare source (`sketch` or `flat_pattern`). |
 | `inventor_derive_envelope` | Create a derived part from a source part/assembly — the envelope/interop path: `derive_style`, `include_bodies` per-solid selection, `bounding_box` lightweight mode; saves an .ipt under an allowed root. |
 | `inventor_view_fit` | Zoom-fit the active view to the model extents (run before capture). |

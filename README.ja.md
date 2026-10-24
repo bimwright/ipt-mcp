@@ -233,7 +233,7 @@ component の version が release と同じ場合、`release_mismatch` は両側
 | `inventor_create_bim_connector` | 円形ポートエッジ上に BIM パイプコネクタを作成（ref は inventor_probe_brep の `circles[].edge`）。kind=pipe、任意で system/flow/connection メタデータ。 |
 | `inventor_create_part` | JSON レシピから部品を 1 回の呼び出しで作成：スケッチ（矩形 / 円 / バルジ付きポリライン、内側の穴）→ 押し出し / 穴 / フィレット / 面取り → 材料 + iProperty → サイレント Save-As。エラーはレシピのパスを示し、失敗時は部品を保存せず閉じる。`dry_run` 対応。 |
 
-### export (10) — ビューキャプチャと形状エクスポート（書き込み）
+### export (11) — ビューキャプチャと形状エクスポート（書き込み）
 
 > `output_path` は許可されたルート配下に置く必要があります：ユーザープロファイル、`%TEMP%`、または追加したルート — 例: Inventor マシンで `BIMWRIGHT_INVENTOR_EXPORT_ROOT=D:\Inventor-Exports` を設定（設定後に Inventor と MCP クライアント/サーバーセッションを再起動）。
 
@@ -243,6 +243,7 @@ component の version が release と同じ場合、`release_mismatch` は両側
 | `inventor_export_step` | アクティブパーツ/アセンブリを STEP（.stp/.step）にエクスポート。 |
 | `inventor_export_stl` | アクティブパーツ/アセンブリを STL（.stl）にエクスポート。 |
 | `inventor_export_sat` | アクティブパーツ/アセンブリを ACIS SAT（.sat）にエクスポート — Revit との interop フォーマット。acis_version は 7 がデフォルト（唯一のサポート値）。 |
+| `inventor_export_bodies_sat` | 開いている複数パーツのソリッドボディを 1 ボディ 1 SAT ファイルで一括エクスポート（`items=[{document, bodies?, key?}]`、`out_dir`）。パスと既存ファイルを事前チェックし、`verify=true` で各ファイルを読み戻して体積/bbox/面数を照合、ボディ単位でエラーを報告。 |
 | `inventor_export_dxf` | 2D DXF をエクスポート。ソース（`sketch` または `flat_pattern`）を指定する必要あり。 |
 | `inventor_derive_envelope` | ソースのパーツ/アセンブリから derived part を作成 — envelope/interop パス：`derive_style`、`include_bodies` によるソリッド選択、軽量 `bounding_box` モード。許可ルート下に .ipt を保存。 |
 | `inventor_view_fit` | アクティブビューをモデル範囲にズームフィット（キャプチャ前に実行）。 |

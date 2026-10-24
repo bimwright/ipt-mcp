@@ -38,6 +38,24 @@ public sealed class AssemblyToolWireTests : IDisposable
     }
 
     [Fact]
+    public async Task Export_bodies_sat_emits_wire_keys_and_rejects_bad_arguments_locally()
+    {
+        var exports = new ExportTools(_client);
+        var items = JsonDocument.Parse("[{\"document\":\"TK02-VESSEL-R23.ipt\",\"bodies\":[\"body:1\",\"SHELL\"],\"key\":\"p0001\"}]").RootElement;
+        var outDir = Path.Combine(Path.GetTempPath(), "ipt-sat-out");
+        var sent = await CaptureAsync(() => exports.ExportBodiesSat(items, outDir, overwrite: true));
+        AssertEnvelope(sent, "export_bodies_sat", "items", "out_dir", "verify", "overwrite");
+        Assert.True(sent["params"]!.Value<bool>("verify"));
+        Assert.Equal("p0001", (string?)sent["params"]?["items"]?[0]?["key"]);
+
+        var empty = JObject.Parse(await exports.ExportBodiesSat(JsonDocument.Parse("[]").RootElement, outDir));
+        Assert.Equal("INVALID_ARGUMENT", (string?)empty["error"]?["code"]);
+        var outside = JObject.Parse(await exports.ExportBodiesSat(items, @"Q:\not-allowed\sat"));
+        Assert.Equal("INVALID_ARGUMENT", (string?)outside["error"]?["code"]);
+        Assert.Contains("out_dir", (string?)outside["error"]?["message"]);
+    }
+
+    [Fact]
     public async Task Assembly_write_tools_emit_expected_wire_commands_and_keys()
     {
         var tools = new AssemblyTools(_client);

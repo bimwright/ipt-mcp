@@ -3,6 +3,13 @@
   "note": "First matching available tool wins. Argument sketches are templates, never executed. Query-only rules conservatively skip member writes and common mutators; hints may replace only a step of a larger script.",
   "rules": [
     {
+      "id": "per-body-sat",
+      "all_patterns": ["\\.\\s*DataIO\\s*\\.\\s*WriteDataToFile\\s*\\("],
+      "tool": "inventor_export_bodies_sat",
+      "args_sketch": {"items": [{"document": "<open part path or name>", "bodies": ["body:1"], "key": "<file prefix>"}], "out_dir": "<allowed output dir>", "verify": true},
+      "reason": "For per-body SAT export, consider this tool: many parts and bodies in one call, preflighted paths, per-body read-back verification and per-body errors. It writes part coordinates; transforms or other formats still need a script."
+    },
+    {
       "id": "design-view",
       "all_patterns": ["\\.\\s*DesignViewRepresentations\\s*\\.\\s*Add\\s*\\("],
       "tool": "inventor_create_design_view",
