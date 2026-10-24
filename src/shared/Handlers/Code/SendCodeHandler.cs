@@ -101,8 +101,14 @@ public sealed class SendCodeHandler : IInventorCommand
 
         try
         {
+            // Inventor may load its own copy of an assembly the add-in also ships (Newtonsoft.Json
+            // from Inventor\Bin, same identity, different load context). The script must bind the
+            // Globals field types to the add-in's copy, or running it fails with MissingFieldException.
+            var pinned = typeof(Globals).GetFields().Select(f => f.FieldType.Assembly)
+                .Append(typeof(Globals).Assembly).Distinct().ToArray();
             var refs = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+                .Where(a => pinned.Contains(a) || !pinned.Any(k => string.Equals(k.GetName().Name, a.GetName().Name, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
             // The add-in loads into a private AssemblyLoadContext (EnableDynamicLoading), so the
