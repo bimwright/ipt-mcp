@@ -39,6 +39,7 @@
     <Compile Include="..\shared\Logging\BoundedLogFile.cs" Link="Shared\Logging\BoundedLogFile.cs" />
     <Compile Include="..\shared\Infrastructure\ResponseSpillWriter.cs" Link="Shared\Infrastructure\ResponseSpillWriter.cs" />
     <EmbeddedResource Include="..\shared\Contracts\send-code-hints.json" LogicalName="Bimwright.Ipt.SendCodeHints.json" />
+    <EmbeddedResource Include="..\shared\Contracts\send-code-routing.json" LogicalName="Bimwright.Ipt.SendCodeRouting.json" />
   </ItemGroup>
 
   <ItemGroup>

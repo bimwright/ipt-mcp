@@ -46,7 +46,7 @@ internal static class AgentOutputGuard
                 var structured = JToken.Parse(System.Text.Json.JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions));
                 var serialized = ((JToken)ServerLogger.MaskParams(structured)!).ToString(Formatting.None);
                 var path = writer.Write(command + "-response", ".json", serialized);
-                return Payload(new JObject {
+                var spilled = new JObject {
                     ["ok"] = result.IsError != true,
                     ["mutation_applied"] = JValue.CreateNull(),
                     ["response_file"] = path,
@@ -54,7 +54,12 @@ internal static class AgentOutputGuard
                     ["spill_schema"] = new JObject { ["version"] = 1, ["format"] = "application/json", ["type"] = "CallToolResult" },
                     ["readback_required"] = true,
                     ["size_warning"] = "Read response_file for details. Do not re-run this operation to recover output."
-                }, result.IsError == true);
+                };
+                if (command == "send_code" && data?["routing_hint"] is JObject routing)
+                    spilled["routing_hint"] = routing.DeepClone();
+                if (command == "send_code" && data?["size_hint"] is JValue size)
+                    spilled["size_hint"] = size.DeepClone();
+                return Payload(spilled, result.IsError == true);
             }
             catch (System.IO.IOException) { }
             catch (System.UnauthorizedAccessException) { }
@@ -67,6 +72,10 @@ internal static class AgentOutputGuard
 
         // A completed write must never be presented as a rejected, replayable operation.
         var compact = Bimwright.Ipt.Shared.Contracts.ResponseEffectSummary.Compact(data, originalBytes);
+        if (command == "send_code" && data?["routing_hint"] is JObject routingHint)
+            compact["routing_hint"] = routingHint.DeepClone();
+        if (command == "send_code" && data?["size_hint"] is JValue sizeHint)
+            compact["size_hint"] = sizeHint.DeepClone();
         if (command == "send_code" || command == "run_baked_tool") compact["mutation_applied"] = JValue.CreateNull();
         var summary = Payload(compact, result.IsError == true || data?.Value<bool?>("ok") == false);
         if (Measure(summary) <= limit) return summary;

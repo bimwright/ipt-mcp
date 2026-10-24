@@ -6,6 +6,20 @@ namespace Bimwright.Ipt.Tests;
 
 public sealed class McpProtocolSmokeTests
 {
+    [Fact]
+    public async Task Send_code_publishes_task_guide_and_returns_routing_on_failure_over_MCP()
+    {
+        var responses = await RunProtocolHandshake(expressionTool: "inventor_send_code",
+            expressionArguments: new JObject { ["code"] = "return doc.ComponentDefinition.Occurrences[1].RangeBox;" });
+        var tool = Assert.Single((JArray)responses[1]["result"]!["tools"]!, t => (string?)t["name"] == "inventor_send_code");
+        Assert.Contains(SendCodeTaskGuide.Text, (string?)tool["description"]);
+        Assert.Contains(SendCodeTaskGuide.Text, (string?)responses[0]["result"]?["instructions"]);
+        var body = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
+        Assert.False(body.Value<bool>("ok"));
+        Assert.Equal("NO_TARGET", (string?)body["error"]?["code"]);
+        Assert.Equal("inventor_list_occurrences", (string?)body["routing_hint"]?["tool"]);
+    }
+
     [Theory]
     [InlineData("inventor_get_ipart_info", "{max_rows:10,row_offset:0}", true)]
     [InlineData("inventor_create_ipart_factory", "{output_path:'C:/copy.ipt',base_member:'A',columns:[{name:'L',kind:'parameter',target:'Length'}]}", false)]

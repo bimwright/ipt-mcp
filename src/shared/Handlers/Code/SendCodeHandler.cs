@@ -30,7 +30,9 @@ namespace Bimwright.Ipt.Shared.Handlers.Code;
 /// compiled in front of the script as one submission; <see cref="SendCodeSource"/> tags every part with
 /// a <c>#line</c> directive so diagnostics and runtime failures name <c>module:&lt;name&gt;</c> or
 /// <c>script</c> plus the line. <c>compile_only</c> compiles without running (module dry-compile) and
-/// returns the modules' declared signatures. <c>silent</c> wraps the run in
+/// returns the modules' declared signatures. Optional <c>data</c> (any JSON) reaches the script as the
+/// <c>data</c> global (<c>JToken</c>), so inputs travel as data instead of being inlined into source.
+/// <c>silent</c> wraps the run in
 /// <c>Application.SilentOperation</c> (opt-in: dialogs are auto-answered with their defaults).
 /// Mirrors nwd-mcp's SendCodeHandler.
 /// </summary>
@@ -45,6 +47,8 @@ public sealed class SendCodeHandler : IInventorCommand
     {
         public InvApi.Application app = null!;
         public InvApi.Document? doc;
+        /// <summary>Caller-supplied JSON input (<c>data</c> param); null when omitted.</summary>
+        public JToken? data;
     }
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
@@ -119,6 +123,7 @@ public sealed class SendCodeHandler : IInventorCommand
                     "System",
                     "System.Collections.Generic",
                     "System.Linq",
+                    "Newtonsoft.Json.Linq",
                     "Inventor")
                 .WithEmitDebugInformation(true)
                 .WithFileEncoding(Encoding.UTF8);
@@ -158,7 +163,8 @@ public sealed class SendCodeHandler : IInventorCommand
             messages = app.ErrorManager.StartMessageSection();
             var document = app.ActiveDocument;
             if (document != null) transaction = app.TransactionManager.StartTransaction(document, "MCP: send_code");
-            var state = script.RunAsync(globals: new Globals { app = app, doc = document }).GetAwaiter().GetResult();
+            var input = p["data"] is { Type: not JTokenType.Null } d ? d : null;
+            var state = script.RunAsync(globals: new Globals { app = app, doc = document, data = input }).GetAwaiter().GetResult();
             hostWarnings = messages.HasWarnings;
             if (hostWarnings || messages.HasErrors) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages);
             if (messages.HasErrors)

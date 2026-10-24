@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "note": "First matching available tool wins. Argument sketches are templates, never executed. Query-only rules conservatively skip member writes and common mutators; hints may replace only a step of a larger script.",
+  "rules": [
+    {
+      "id": "design-view",
+      "all_patterns": ["\\.\\s*DesignViewRepresentations\\s*\\.\\s*Add\\s*\\("],
+      "tool": "inventor_create_design_view",
+      "args_sketch": {"name": "<view name>", "activate": false},
+      "reason": "For the assembly design-view creation step, consider this tool (Inventor 2027); choose exact occurrence paths and existing assets if needed. Other script steps may still be required."
+    },
+    {
+      "id": "occurrence-appearance",
+      "all_patterns": ["\\b(?:Occurrences|SubOccurrences|ComponentOccurrence)\\b", "\\.\\s*Appearance\\s*=(?!=|>)"],
+      "tool": "inventor_set_appearance",
+      "args_sketch": {"occurrences": "<occurrence selector>", "asset": "<existing appearance name>"},
+      "reason": "For occurrence appearance overrides, consider this tool with a selector and asset or RGB. It does not replace material edits or appearance-library editing."
+    },
+    {
+      "id": "occurrence-state",
+      "all_patterns": ["\\b(?:Occurrences|SubOccurrences|ComponentOccurrence)\\b"],
+      "any_patterns": ["\\.\\s*(?:Visible|Grounded|Suppressed|Transformation)\\s*=(?!=|>)"],
+      "tool": "inventor_set_occurrence_state",
+      "args_sketch": {"selector": "<occurrence selector>", "dry_run": true},
+      "reason": "For the occurrence-state step, consider this tool; supply visible, grounded, suppressed or pose explicitly. Only visibility supports nested matches; other changes require top-level occurrences."
+    },
+    {
+      "id": "save-referenced-dirty",
+      "all_patterns": ["\\.\\s*Dirty\\b", "\\.\\s*Save2?\\s*\\(", "\\b(?:AllReferencedDocuments|ReferencedDocuments)\\b"],
+      "tool": "inventor_save_all",
+      "args_sketch": {"root": "<open root document>", "update": false, "dry_run": true},
+      "reason": "For saving a root and its dirty references, consider this tool; inspect dry_run before saving. It does not save unrelated open documents or replace revision/rename logic."
+    },
+    {
+      "id": "save-document",
+      "any_patterns": ["\\.\\s*Save2?\\s*\\(", "\\.\\s*SaveAs\\s*\\([^;]*,\\s*false\\s*\\)"],
+      "tool": "inventor_save_document",
+      "args_sketch": {"document": "<open document>"},
+      "reason": "For the document save step, consider this tool; add path for Save As. It does not perform Save Copy As, reference rewriting, replacement or an entire revision workflow."
+    },
+    {
+      "id": "open-document",
+      "all_patterns": ["\\.\\s*Documents\\s*\\.\\s*Open\\s*\\("],
+      "tool": "inventor_open_document",
+      "args_sketch": {"path": "<full document path>", "visible": false},
+      "reason": "For the document-open step, consider this tool; set visible as needed. This does not replace subsequent edits or representation selection."
+    },
+    {
+      "id": "occurrence-bbox",
+      "query_only": true,
+      "all_patterns": ["\\b(?:Occurrences|SubOccurrences)\\b", "\\.\\s*RangeBox\\b"],
+      "tool": "inventor_list_occurrences",
+      "args_sketch": {"fields": ["name", "path", "bbox_mm", "transform"]},
+      "reason": "For occurrence inventory, range boxes and transforms, consider this read-only tool (millimeters). Keep custom calculations separately; choose a selector/document to match the script scope."
+    },
+    {
+      "id": "occurrence-appearance-read",
+      "query_only": true,
+      "all_patterns": ["\\b(?:Occurrences|SubOccurrences)\\b", "\\.\\s*Appearance\\b"],
+      "tool": "inventor_list_occurrences",
+      "args_sketch": {"fields": ["name", "path", "appearance", "material"]},
+      "reason": "For reading occurrence appearance/material names, consider this read-only inventory tool; it does not expose or edit library asset internals."
+    },
+    {
+      "id": "interference",
+      "query_only": true,
+      "all_patterns": ["\\.\\s*AnalyzeInterference\\s*\\("],
+      "tool": "inventor_check_interference",
+      "args_sketch": {"set_a": "<occurrence selector>"},
+      "reason": "For assembly interference analysis, consider this read-only tool; scope occurrence sets explicitly. It reports intersecting pairs and volumes in mm3."
+    },
+    {
+      "id": "occurrence-clearance",
+      "query_only": true,
+      "all_patterns": ["\\.\\s*GetMinimumDistance\\s*\\(", "\\b(?:Occurrences|SubOccurrences|ComponentOccurrence)\\b"],
+      "tool": "inventor_measure_min_distance",
+      "args_sketch": {"pairs": [{"a": "<occurrence A>", "b": "<occurrence B>"}]},
+      "reason": "For occurrence clearance checks, consider this read-only tool with explicit occurrence pairs/selectors and supported references; arbitrary geometric operands may still need a script."
+    },
+    {
+      "id": "document-references",
+      "query_only": true,
+      "any_patterns": ["\\.\\s*ReferencedFileDescriptors\\b", "\\.\\s*ReferenceMissing\\b"],
+      "tool": "inventor_get_document_info",
+      "args_sketch": {"references": true},
+      "reason": "For the direct-file-reference/missing-reference check, consider this read-only tool; select document if needed. It does not perform a full model-health audit."
+    },
+    {
+      "id": "constraint-health",
+      "query_only": true,
+      "all_patterns": ["\\.\\s*Constraints\\b", "\\.\\s*HealthStatus\\b"],
+      "tool": "inventor_list_constraints",
+      "args_sketch": {},
+      "reason": "For the active assembly constraint-health check, consider this read-only tool. Other model-health checks and non-active document scopes may still need separate calls."
+    },
+    {
+      "id": "dirty-documents",
+      "query_only": true,
+      "all_patterns": ["\\.\\s*Documents\\b", "\\.\\s*Dirty\\b"],
+      "tool": "inventor_list_open_documents",
+      "args_sketch": {"dirty_only": true},
+      "reason": "For listing dirty open/loaded documents, consider this read-only tool. It does not save them or perform a full health audit."
+    }
+  ]
+}
