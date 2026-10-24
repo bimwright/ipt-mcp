@@ -9,4 +9,5 @@ public sealed class UsageEvent
     public string? ParamsHash { get; set; }
     public bool Success { get; set; }
     public long DurationMs { get; set; }
+    public string? DataHash { get; set; }
 }

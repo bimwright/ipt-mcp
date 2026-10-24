@@ -58,9 +58,10 @@ database state, not the Inventor model.
 
 ### Bake lifecycle
 
-1. **Suggest** — suggestions in the bake database (adaptive clustering is not wired yet, see above)
-   (`inventor_list_bake_suggestions`). Each suggestion carries an id, title, source, score, and
-   a JSON payload.
+1. **Suggest** — suggestions in the bake database (`inventor_list_bake_suggestions`). Each
+   suggestion carries an id, title, source, score, and a JSON payload. With adaptive bake on,
+   script suggestions open automatically (see [Script tools](#script-tools)); preset and macro
+   clustering is not wired yet.
 2. **Accept** — `inventor_accept_bake_suggestion(suggestionId, desiredName)`:
    - the desired name is validated for collisions against the existing registry,
    - the source passes the `BakeCompilerPolicy` banned-API gate,
@@ -112,6 +113,31 @@ privilege escalation and recursion.
 A command is allowed only if it is **not** in the denied set **and** is in the allowed set, so any
 write/geometry command (e.g. `extrude`, `new_part`) is rejected by default.
 
+### Script tools
+
+A `send_code` script that takes its inputs as `data` is already a parameterised tool (code =
+template, data = params), so it can be baked without rewriting it. This is the only baked-tool kind
+that executes code, and it is held to the `send_code` gates rather than the dispatch allow-list.
+
+- **Recording (adaptive bake only, off by default; `--enable-adaptive-bake` /
+  `BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE=1`).** Each `inventor_send_code` call with `data`
+  (not `compile_only`) records a usage event with two hashes: the script key (code + module names)
+  and the data hash. The code itself is never stored at this stage.
+- **Suggestion.** When one script key has succeeded with 3 different data hashes within 10 days,
+  a `source=script` suggestion opens and that `send_code` response carries a `bake_hint` pointing at
+  `inventor_accept_bake_suggestion`.
+- **Accept.** `inventor_accept_bake_suggestion(suggestionId, desiredName, code, modules)` requires
+  the same code and module names (the server recomputes the key and refuses `code_mismatch`). The
+  code must pass `BakeCompilerPolicy` and the code-module persistence check (no credential-like
+  values); only then is it stored, as a script descriptor in the registry. Its params schema is the
+  JSON type of the recorded data.
+- **Run.** `inventor_run_baked_tool(name, paramsJson)` runs the script as `send_code` with
+  `paramsJson` (any JSON) as its `data`. The server refuses it with `SEND_CODE_DISABLED` when
+  send_code is disabled or the connection is read-only, and the add-in applies its own `send_code`
+  kill switch. The add-in's `run_baked_tool` dispatch never executes a script record.
+- **Afterwards.** A `send_code` call whose code matches an accepted script tool gets a `bake_hint`
+  pointing at `inventor_run_baked_tool`, whether or not adaptive bake is on.
+
 ### Persistence
 
 All ToolBaker state lives under:
@@ -134,7 +160,7 @@ per-instance `inventor-<year>-<pid>.json` discovery files.
 | Mode | `inventor_send_code` | `toolbaker` (read) | `toolbaker_write` |
 |---|---|---|---|
 | Default (all toolsets) | exposed | exposed | exposed |
-| `--disable-send-code` | hidden | exposed | exposed |
+| `--disable-send-code` | hidden | exposed | exposed (script tools refused) |
 | `--read-only` | hidden | exposed | hidden |
 | `--disable-toolbaker` | per send-code gate | hidden | hidden |
 

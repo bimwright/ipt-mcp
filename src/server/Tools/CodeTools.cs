@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Bimwright.Ipt.Server.Bake;
 using Bimwright.Ipt.Shared.Contracts;
 using Bimwright.Ipt.Shared.ToolBaker;
 using ModelContextProtocol.Server;
@@ -28,11 +29,13 @@ public sealed class CodeTools
     private readonly PluginClient _client;
     private readonly CodeModuleStore _modules;
     private readonly ISet<string>? _routingTools;
+    private readonly InventorMcpConfig? _config;
 
     public CodeTools(PluginClient client, CodeModuleStore modules, ServerState? state = null)
     {
         _client = client;
         _modules = modules;
+        _config = state?.Config;
         if (state is not null)
             _routingTools = Program.ResolveToolTypesForRegistration(state.Config).SelectMany(t => t.GetMethods())
                 .Select(m => m.GetCustomAttribute<McpServerToolAttribute>())
@@ -43,13 +46,18 @@ public sealed class CodeTools
     [McpServerTool(Name = "inventor_send_code"),
      Description("Execute a C# script in-process within the Inventor add-in against Inventor.Application (global `app`) for workflows not covered by typed tools — prefer typed tools first. Enabled by default; --disable-send-code or the add-in kill switch disables it. Globals: app (Inventor.Application), doc (active Document, null when none is open). Pass a C# script body with statements and return, with optional class/helper declarations. Imports: System, System.Collections.Generic, System.Linq, Inventor. The active document is wrapped in one undoable transaction; runtime/host errors abort that transaction and host warnings are returned. Keep mutations within doc; document creation/closing, other documents and external file writes are outside that transaction and cannot be rolled back by it. Do not manage the wrapper transaction yourself.  Banned APIs (file/process/network/environment/dynamic-invocation) are rejected; typeof/GetType and fully-qualified System.IO.Path.{GetFileName,GetFileNameWithoutExtension,GetExtension,GetDirectoryName,Combine,ChangeExtension}(…) are allowed. File writes made through the Inventor API (SaveAs, SaveCopyAs, translators) are NOT restricted by the export-root policy. " +
                  "Returns result (the script's last expression / return value; >64 KiB spills to result_file) + captured stdout. modules: names of saved code modules (inventor_save_code_module) compiled in front of the script — call their functions instead of re-sending helper code; the response echoes {name, hash}. " +
-                 "data: any JSON (max 512 KiB); when given, the script sees it as the variable `data` (Newtonsoft JToken; Newtonsoft.Json.Linq is imported) — do not declare your own `data` then. Pass coordinates, paths, member lists, specs and expected values here instead of inlining them into code, e.g. foreach (JObject m in data[\"members\"]) Tube((string)m[\"name\"], ...). compile_only=true compiles script + modules (+ data) without running or touching the document and returns diagnostics — use it before a long run and after fixing a compile error. Scripts over 4000 characters that inline data or helpers get an advisory size_hint. silent=true runs under Application.SilentOperation (Inventor answers prompts with defaults — use it for scripts that Save/Open/Close). timeout_ms (max 600000) overrides the per-call STA timeout. " +
+                 "data: any JSON (max 512 KiB); when given, the script sees it as the variable `data` (Newtonsoft JToken; Newtonsoft.Json.Linq is imported) — do not declare your own `data` then. Pass coordinates, paths, member lists, specs and expected values here instead of inlining them into code, e.g. foreach (JObject m in data[\"members\"]) Tube((string)m[\"name\"], ...). compile_only=true compiles script + modules (+ data) without running or touching the document and returns diagnostics — use it before a long run and after fixing a compile error. Scripts over 4000 characters that inline data or helpers get an advisory size_hint. A script run with data may get a bake_hint: accept the suggestion to call it later with only the data, or use the baked tool it names.silent=true runs under Application.SilentOperation (Inventor answers prompts with defaults — use it for scripts that Save/Open/Close). timeout_ms (max 600000) overrides the per-call STA timeout. " +
                  "Errors carry diagnostics[{source: script|module:<name>, line, code, message, hint}] or, at runtime, location{source, line, text} + hint. " +
                  SendCodeTaskGuide.Text +
                  "COM interop tips: lengths are cm internally (mm/10); collections are 1-based and COM items come back as object — type the loop variable (foreach (Document d in app.Documents)) or cast; look up by name with the indexed property occs.ItemByName[\"Part:1\"] (brackets); indexed properties take brackets or get_X(): body.Volume[0.0001]; UnitVector↔Vector via AsVector()/AsUnitVector(); PartDocument→Document via (Document)(object)part; Matrix has no operators (PostMultiplyBy).")]
-    public async Task<string> SendCode(string code, string[]? modules = null, int? timeout_ms = null, bool silent = false,
+    public Task<string> SendCode(string code, string[]? modules = null, int? timeout_ms = null, bool silent = false,
         [Description("JSON input; the script sees it as the variable `data` (JToken).")] System.Text.Json.JsonElement? data = null,
         bool compile_only = false, CancellationToken ct = default)
+        => SendCodeCore(code, modules, timeout_ms, silent, JsonArg.From(data), compile_only, observeBake: true, ct);
+
+    /// <summary>send_code with a Newtonsoft data token; <paramref name="observeBake"/> is off when a baked script tool runs.</summary>
+    internal async Task<string> SendCodeCore(string code, string[]? modules, int? timeout_ms, bool silent, JToken? input,
+        bool compile_only, bool observeBake, CancellationToken ct)
     {
         var p = new JObject { ["code"] = code };
         var log = new JObject { ["code"] = code };
@@ -64,7 +72,6 @@ public sealed class CodeTools
             p["compile_only"] = true;
             log["compile_only"] = true;
         }
-        var input = JsonArg.From(data);
         if (input is not null)
         {
             var text = input.ToString(Newtonsoft.Json.Formatting.None);
@@ -88,13 +95,19 @@ public sealed class CodeTools
                 ["name"] = m.Name, ["hash"] = SendCodeSource.Hash(m.Code),
             }));
         }
+        var started = System.Diagnostics.Stopwatch.StartNew();
         var response = await Call("send_code", p, ct, timeout_ms, log);
         var hint = SendCodeRouting.Match(code, modules is { Length: > 0 }, _routingTools);
         var sizeHint = SizeHint(code, input is not null, modules is { Length: > 0 });
-        if (hint is null && sizeHint is null) return response;
-        if (JToken.Parse(response) is not JObject payload) return response;
+        JObject? payload = null;
+        try { payload = JToken.Parse(response) as JObject; } catch (Newtonsoft.Json.JsonException) { }
+        var bakeHint = observeBake && input is not null && !compile_only && _config is not null
+            ? ScriptBake.Observe(_config, code, modules, input, payload?["ok"]?.Type == JTokenType.Boolean && (bool)payload["ok"]!, started.ElapsedMilliseconds)
+            : null;
+        if ((hint is null && sizeHint is null && bakeHint is null) || payload is null) return response;
         if (hint is not null) payload["routing_hint"] = hint;
         if (sizeHint is not null) payload["size_hint"] = sizeHint;
+        if (bakeHint is not null) payload["bake_hint"] = bakeHint;
         return ToolResponse.Serialize(payload);
     }
 

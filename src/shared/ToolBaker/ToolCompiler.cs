@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 namespace Bimwright.Ipt.Shared.ToolBaker;
 
 /// <summary>
-/// Validates and smoke-tests baked-tool records: snake_case name, preset/macro source kind,
+/// Validates and smoke-tests baked-tool records: snake_case name, preset/macro/script source kind,
 /// banned-API source policy, JSON params schema, and that every dispatched command is in the
 /// allowed read-only set. API-agnostic; ported from nwd-mcp.
 /// </summary>
@@ -29,14 +29,35 @@ public static class ToolCompiler
         }
 
         if (!string.Equals(record.Source, "preset", StringComparison.Ordinal)
-            && !string.Equals(record.Source, "macro", StringComparison.Ordinal))
+            && !string.Equals(record.Source, "macro", StringComparison.Ordinal)
+            && !string.Equals(record.Source, "script", StringComparison.Ordinal))
         {
-            return Fail("Baked tool source must be preset or macro.");
+            return Fail("Baked tool source must be preset, macro or script.");
         }
 
         if (string.IsNullOrWhiteSpace(record.SourceCode))
         {
             return Fail("Baked tool source code is required.");
+        }
+
+        // A script tool is a send_code script run with its params as data: it is policy-checked like
+        // send_code and never dispatches commands itself, so the dispatch allow-list does not apply.
+        if (string.Equals(record.Source, "script", StringComparison.Ordinal))
+        {
+            if (!BakedToolRuntimeSource.TryReadScript(record.SourceCode, out var code, out _, out _))
+            {
+                return Fail("Script baked tool source must be a script descriptor with code.");
+            }
+
+            var scriptPolicy = BakeCompilerPolicy.ValidateSource(code);
+            if (!scriptPolicy.Ok)
+            {
+                return scriptPolicy;
+            }
+
+            return TryParseObject(record.ParamsSchema, out _)
+                ? new BakePolicyResult { Ok = true }
+                : Fail("Baked tool params schema must be a JSON object.");
         }
 
         var policy = BakeCompilerPolicy.ValidateSource(record.SourceCode);

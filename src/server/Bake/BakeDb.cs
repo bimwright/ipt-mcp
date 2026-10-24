@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS usage_events(
     ok INTEGER NOT NULL,
     duration_ms INTEGER NOT NULL
 )");
+        // data_hash: hash of a send_code call's data, so script-bake can count runs with distinct inputs.
+        if (!HasColumn(connection, "usage_events", "data_hash"))
+            Execute(connection, "ALTER TABLE usage_events ADD COLUMN data_hash TEXT NULL");
     }
 
     public bool TryInsertRegistryRecord(BakedToolRecord record)
@@ -192,15 +195,42 @@ ON CONFLICT(id) DO UPDATE SET
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = @"
-INSERT INTO usage_events(timestamp, session_id, tool, params_hash, ok, duration_ms)
-VALUES($timestamp, $session_id, $tool, $params_hash, $ok, $duration_ms)";
+INSERT INTO usage_events(timestamp, session_id, tool, params_hash, ok, duration_ms, data_hash)
+VALUES($timestamp, $session_id, $tool, $params_hash, $ok, $duration_ms, $data_hash)";
         Add(command, "$timestamp", string.IsNullOrWhiteSpace(usageEvent.Timestamp) ? DateTimeOffset.UtcNow.ToString("o") : usageEvent.Timestamp);
-        Add(command, "$session_id", usageEvent.SessionId ?? "server");
+        Add(command, "$session_id", string.IsNullOrEmpty(usageEvent.SessionId) ? "server" : usageEvent.SessionId);
         Add(command, "$tool", usageEvent.Tool);
         Add(command, "$params_hash", usageEvent.ParamsHash ?? usageEvent.NormalizedKey ?? string.Empty);
         command.Parameters.AddWithValue("$ok", usageEvent.Success ? 1 : 0);
         command.Parameters.AddWithValue("$duration_ms", usageEvent.DurationMs);
+        Add(command, "$data_hash", usageEvent.DataHash);
         command.ExecuteNonQuery();
+    }
+
+    /// <summary>Successful runs of one tool + params hash since <paramref name="since"/>, and how many distinct data hashes they had.</summary>
+    public (int Runs, int DistinctData) CountSuccessfulRuns(string tool, string paramsHash, DateTimeOffset since)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+SELECT COUNT(*), COUNT(DISTINCT data_hash) FROM usage_events
+WHERE tool = $tool AND params_hash = $params_hash AND ok = 1 AND timestamp >= $since";
+        Add(command, "$tool", tool);
+        Add(command, "$params_hash", paramsHash);
+        Add(command, "$since", since.ToUniversalTime().ToString("o"));
+        using var reader = command.ExecuteReader();
+        reader.Read();
+        return (reader.GetInt32(0), reader.GetInt32(1));
+    }
+
+    private static bool HasColumn(SqliteConnection connection, string table, string column)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"PRAGMA table_info({table})";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     private SqliteConnection OpenConnection()

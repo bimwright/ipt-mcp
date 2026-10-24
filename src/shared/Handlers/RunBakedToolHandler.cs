@@ -36,6 +36,10 @@ public sealed class RunBakedToolHandler : IInventorCommand
         if (!validation.Ok)
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, validation.Error ?? "Baked tool failed validation.", meta);
 
+        // Script tools run as send_code from the server, under the send_code gates; never here.
+        if (string.Equals(record.Source, "script", StringComparison.Ordinal))
+            return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, "Script baked tools run through send_code, not run_baked_tool dispatch.", meta);
+
         var runtimeParams = p["params"] as JObject ?? new JObject();
         if (string.Equals(record.Source, "preset", StringComparison.Ordinal))
         {

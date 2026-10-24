@@ -59,6 +59,8 @@ internal static class AgentOutputGuard
                     spilled["routing_hint"] = routing.DeepClone();
                 if (command == "send_code" && data?["size_hint"] is JValue size)
                     spilled["size_hint"] = size.DeepClone();
+                if (command == "send_code" && data?["bake_hint"] is JObject bake)
+                    spilled["bake_hint"] = bake.DeepClone();
                 return Payload(spilled, result.IsError == true);
             }
             catch (System.IO.IOException) { }
@@ -76,6 +78,8 @@ internal static class AgentOutputGuard
             compact["routing_hint"] = routingHint.DeepClone();
         if (command == "send_code" && data?["size_hint"] is JValue sizeHint)
             compact["size_hint"] = sizeHint.DeepClone();
+        if (command == "send_code" && data?["bake_hint"] is JObject bakeHint)
+            compact["bake_hint"] = bakeHint.DeepClone();
         if (command == "send_code" || command == "run_baked_tool") compact["mutation_applied"] = JValue.CreateNull();
         var summary = Payload(compact, result.IsError == true || data?.Value<bool?>("ok") == false);
         if (Measure(summary) <= limit) return summary;

@@ -58,7 +58,9 @@ authenticated localhost transport — **TCP on `127.0.0.1` for Inventor 2022–2
   **not** constrained by `ExportPathPolicy` (which only governs the typed export tools).
   The host Inventor process is the trust boundary — treat `send_code` as full local trust.
 - Baked-tool execution is restricted by `BakedToolDispatchAuthorizer` to read-only query commands
-  and may never re-enter the platform layer.
+  and may never re-enter the platform layer. The exception is a script baked tool (a `send_code`
+  script the user accepted): it runs as `send_code` and is refused wherever `send_code` is
+  disabled or the connection is read-only, so it adds no execution path beyond `send_code`.
 - See [`docs/toolbaker.md`](docs/toolbaker.md) for the full model.
 - ToolBaker and `send_code` run under the host Inventor process trust boundary. Treat them as
   trusted-operator-only.

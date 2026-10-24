@@ -25,7 +25,9 @@ public static class AcceptBakeSuggestionHandler
         string name,
         string outputChoice = "mcp_only",
         string? paramsSchema = null,
-        Func<JObject, Task<JObject>>? pluginApply = null)
+        Func<JObject, Task<JObject>>? pluginApply = null,
+        string? code = null,
+        string[]? modules = null)
     {
         if (db == null) throw new ArgumentNullException(nameof(db));
         var suggestion = db.GetSuggestion(id);
@@ -39,10 +41,22 @@ public static class AcceptBakeSuggestionHandler
         if (pluginApply == null) return Failure("plugin_apply_unavailable", "Plugin apply_bake transport is not configured.");
 
         var payload = ParsePayload(suggestion.PayloadJson);
+        var isScript = string.Equals(suggestion.Source, ScriptBake.Source, StringComparison.Ordinal);
+        if (isScript)
+        {
+            // Only the script's hash was recorded: the caller supplies the code, which must be the same script.
+            if (string.IsNullOrEmpty(code)) return Failure("code_required", "A script suggestion is baked from the script itself: pass the same code (and modules) that ran.");
+            if (!string.Equals(ScriptBake.Key(code!, modules), suggestion.ClusterKey, StringComparison.Ordinal))
+                return Failure("code_mismatch", "code/modules do not match the script this suggestion counted; pass that exact script and the same module names.");
+            var storable = CodeModuleStore.ValidateSourceForPersistence(code!);
+            if (storable != null) return Failure("code_not_storable", storable);
+        }
         JObject request;
         try
         {
-            request = BuildApplyRequest(suggestion, payload, name, outputChoice, paramsSchema);
+            request = isScript
+                ? BuildScriptRequest(suggestion, payload, name, outputChoice, code!, modules ?? Array.Empty<string>())
+                : BuildApplyRequest(suggestion, payload, name, outputChoice, paramsSchema);
         }
         catch (JsonException ex)
         {
@@ -66,7 +80,8 @@ public static class AcceptBakeSuggestionHandler
         var record = BakedToolRuntimeCommandFactory.FromApplyRequest(request);
         record.Description = (string?)applyResult["description"] ?? record.Description;
         record.ParamsSchema = (string?)applyResult["params_schema"] ?? record.ParamsSchema;
-        record.SourceCode = BakeRedactor.RedactSource((string?)applyResult["source_code"] ?? record.SourceCode);
+        // A script descriptor already passed the persistence check; text redaction would corrupt its JSON.
+        if (!isScript) record.SourceCode = BakeRedactor.RedactSource((string?)applyResult["source_code"] ?? record.SourceCode);
         record.CreatedFromSuggestionId = suggestion.Id;
         if (!db.TryInsertRegistryRecord(record))
         {
@@ -104,6 +119,25 @@ public static class AcceptBakeSuggestionHandler
             ["source_code"] = source == "macro"
                 ? BakedToolRuntimeSource.BuildMacro((sequence ?? new JArray(handlerTool)).Values<string>().OfType<string>().ToArray())
                 : BakedToolRuntimeSource.BuildPreset(handlerTool, fixedArgs),
+            ["created_from_suggestion_id"] = suggestion.Id
+        };
+    }
+
+    private static JObject BuildScriptRequest(BakeSuggestionRecord suggestion, JObject payload, string name, string? outputChoice, string code, string[] modules)
+    {
+        var dataType = (string?)payload["data_type"] ?? "object";
+        return new JObject
+        {
+            ["suggestion_id"] = suggestion.Id,
+            ["tool_name"] = name,
+            ["description"] = $"Baked send_code script; paramsJson is the script's data (JSON {dataType}).",
+            ["source"] = ScriptBake.Source,
+            ["output_choice"] = outputChoice ?? "mcp_only",
+            ["params_schema"] = new JObject { ["type"] = dataType }.ToString(Formatting.None),
+            ["handler_tool"] = string.Empty,
+            ["fixed_args"] = new JObject(),
+            ["sequence"] = new JArray(),
+            ["source_code"] = BakedToolRuntimeSource.BuildScript(code, modules, suggestion.ClusterKey),
             ["created_from_suggestion_id"] = suggestion.Id
         };
     }
