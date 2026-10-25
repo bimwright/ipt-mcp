@@ -68,7 +68,9 @@ public sealed class SourcePolicyTests
         {
             var text = File.ReadAllText(path);
             Assert.DoesNotContain("[\"value\"] =", text);
-            Assert.Contains("ParameterValueDto", text);
+            // Excel table tools report linked values as labelled value_database, not parameter DTOs.
+            if (!Path.GetFileName(path).StartsWith("Excel", StringComparison.Ordinal))
+                Assert.Contains("ParameterValueDto", text);
         }
     }
 

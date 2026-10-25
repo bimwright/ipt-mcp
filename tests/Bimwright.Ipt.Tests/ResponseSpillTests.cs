@@ -7,12 +7,21 @@ namespace Bimwright.Ipt.Tests;
 /// Spec F3-b: oversized send_code stdout / run_baked_tool results spill to
 /// <c>%LOCALAPPDATA%\Bimwright\ipt-mcp\spill\</c> (24 h TTL, 50-file cap).
 /// </summary>
+[Collection("Process-wide privacy state")]
 public sealed class ResponseSpillTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "ipt-spill-tests-" + Guid.NewGuid().ToString("N"));
+    private readonly bool _previousMaskLongTokens = Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens;
+
+    public ResponseSpillTests()
+    {
+        // These tests assert the default heuristic, independently of the user's opt-out.
+        Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = true;
+    }
 
     public void Dispose()
     {
+        Bimwright.Ipt.Shared.Security.SecretMasker.MaskLongTokens = _previousMaskLongTokens;
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
     }
 

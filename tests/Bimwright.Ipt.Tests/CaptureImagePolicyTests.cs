@@ -3,6 +3,8 @@ using Bimwright.Ipt.Shared.Handlers.Export;
 
 namespace Bimwright.Ipt.Tests;
 
+// Mutates BIMWRIGHT_INVENTOR_EXPORT_ROOT, which ExportPathPolicy also reads.
+[Collection("Process-wide privacy state")]
 public class CaptureImagePolicyTests
 {
     [Theory]

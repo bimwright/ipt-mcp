@@ -184,7 +184,8 @@ public sealed class SendCodeRoutingTests : IDisposable
     public void Routing_hint_stays_visible_when_the_final_MCP_response_spills(bool success)
     {
         var hint = SendCodeRouting.Match(Survey)!;
-        var payload = new JObject { ["ok"] = success, ["result"] = new string('x', 10000), ["routing_hint"] = hint };
+        // Spaced filler: a 24+ character alphanumeric run would be masked as a long token in the spill file.
+        var payload = new JObject { ["ok"] = success, ["result"] = string.Concat(Enumerable.Repeat("x ", 5000)), ["routing_hint"] = hint };
         var config = InventorMcpConfig.Load(new[] { "--local-app-data", _root, "--output-budget-bytes", "4096",
             "--output-warning-bytes", "1024", "--output-strong-warning-bytes", "2048" });
         var guarded = AgentOutputGuard.Apply("inventor_send_code", AgentOutputGuardTests.Result(payload), config);
