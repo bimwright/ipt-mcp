@@ -43,12 +43,12 @@ public sealed class ILogicTools
     }
 
     [McpServerTool(Name = "inventor_ilogic_run_rule", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
-     Description("Run an internal iLogic rule already stored in the target document (the rule's own side effects apply — parameters, features, saves). name required; arguments: flat object → Inventor NameValueMap for RunRuleWithArguments (readable in the rule via RuleArguments(\"key\")); document scopes to a document in memory; silent=true suppresses host prompts. Rule errors surface in exceptions[] (iLogic RuleExceptionsLog).")]
+     Description("Run an internal iLogic rule already stored in the target document (the rule's own side effects apply — parameters, features, saves). name required; arguments: flat object → Inventor NameValueMap for RunRuleWithArguments (readable in the rule via RuleArguments(\"key\")); document scopes to a document in memory; silent=true suppresses host prompts. Rule errors surface in exceptions[] (iLogic RuleExceptionsLog). The tool does not roll back the rule's side effects; inventor_undo reverts only what Inventor recorded on its undo stack.")]
     public Task<string> RunRule(string name, string? document = null, System.Text.Json.JsonElement? arguments = null, bool silent = false, CancellationToken ct = default)
         => Run("ilogic_run_rule", name, document, arguments, silent, ct);
 
     [McpServerTool(Name = "inventor_ilogic_run_external_rule", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
-     Description("Run a file-backed (external) iLogic rule by name — iLogic resolves it via the document's external-rule search order. Same arguments/document/silent parameters as inventor_ilogic_run_rule.")]
+     Description("Run a file-backed (external) iLogic rule by name — iLogic resolves it via the document's external-rule search order. Same arguments/document/silent parameters as inventor_ilogic_run_rule. Side effects are not rolled back, as with inventor_ilogic_run_rule.")]
     public Task<string> RunExternalRule(string name, string? document = null, System.Text.Json.JsonElement? arguments = null, bool silent = false, CancellationToken ct = default)
         => Run("ilogic_run_external_rule", name, document, arguments, silent, ct);
 
@@ -79,7 +79,7 @@ public sealed class ILogicTools
     }
 
     [McpServerTool(Name = "inventor_run_command", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true),
-     Description("Execute an Inventor control definition by internal name (Execute2), e.g. AppNewPartCmd — find names with inventor_list_commands. Many commands are inherently modal; use silent=true to let Inventor answer prompts with defaults.")]
+     Description("Execute an Inventor control definition by internal name (Execute2), e.g. AppNewPartCmd — find names with inventor_list_commands. Many commands are inherently modal; use silent=true to let Inventor answer prompts with defaults. The tool does not roll back the command's effects; inventor_undo reverts only what Inventor recorded on its undo stack.")]
     public Task<string> RunCommand(string name, bool silent = false, CancellationToken ct = default)
         => Call("run_command", Doc(null, ("name", name), ("silent", silent)), ct);
 

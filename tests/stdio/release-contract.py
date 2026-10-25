@@ -47,7 +47,8 @@ async def run_mode(server, flags, output, label, sweep=False):
             assert '--disable-send-code' in instructions and '--read-only' in instructions
             assert 'PLUGIN_ENABLE_SEND_CODE' not in instructions, 'Obsolete add-in opt-in guidance'
             version = json.loads((Path(__file__).resolve().parents[2] / 'server.json').read_text('utf-8'))['version']
-            assert init['result']['serverInfo']['version'].removesuffix('.0') == version.removesuffix('.0')
+            # serverInfo carries the full informational version (e.g. 0.2.1+<sha>); compare the release part.
+            assert init['result']['serverInfo']['version'].split('+')[0].removesuffix('.0') == version.removesuffix('.0')
             process.stdin.write(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
             await process.stdin.drain()
             listed = await request("tools/list", {})
@@ -65,7 +66,7 @@ async def run_mode(server, flags, output, label, sweep=False):
                 if tool["name"] != "inventor_send_code":
                     assert set(tool.get("annotations", {})) >= {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}, tool["name"]
                     if tool['annotations']['destructiveHint']:
-                        assert re.search(r'undo|undone|rollback|roll back', tool['description'], re.I), tool['name']
+                        assert re.search(r'undo|undone|rollback|roll(?:ed)? back', tool['description'], re.I), tool['name']
                 else:
                     assert not tool.get('annotations'), 'send_code must have no permission annotations'
                     assert tool.get('_meta', {}).get('anthropic/requiresUserInteraction') is not True
