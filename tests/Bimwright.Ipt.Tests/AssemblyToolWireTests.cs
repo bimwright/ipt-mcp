@@ -116,6 +116,120 @@ public sealed class AssemblyToolWireTests : IDisposable
             "list_features", "max_items", "include_health");
         AssertEnvelope(await CaptureAsync(() => tools.ProbeBrep("body:2", min_diameter_mm: 5, max_diameter_mm: 40, max_items: 50)),
             "probe_brep", "body", "min_diameter_mm", "max_diameter_mm", "max_items");
+        AssertEnvelope(await CaptureAsync(() => tools.ListFaces("body:1", "plane", 20, "P1.ipt")),
+            "list_faces", "body", "surface_type", "max_items", "document");
+        AssertEnvelope(await CaptureAsync(() => tools.ListEdges(curve_type: "circle")),
+            "list_edges", "curve_type", "max_items");
+    }
+
+    [Fact]
+    public async Task Sheet_fabrication_tools_emit_wire_keys_and_defaults()
+    {
+        var sheet = new SheetFabricationTools(_client);
+        var query = new SheetFabricationQueryTools(_client);
+
+        AssertEnvelope(await CaptureAsync(() => sheet.NewSheetFabricationPart(@"C:\templates\Sheet Metal (mm).ipt")),
+            "new_sheet_fabrication_part", "template");
+        AssertEnvelope(await CaptureAsync(() => query.SheetFabricationInfo("SM1.ipt")), "sheet_fabrication_info", "document");
+        AssertEnvelope(await CaptureAsync(() => sheet.SheetFabricationFace("Base", name: "plate", document: "SM1.ipt")),
+            "sheet_fabrication_face", "sketch", "name", "document");
+
+        var flange = await CaptureAsync(() => sheet.SheetFabricationFlange(["body:1/edge:4"], JsonDocument.Parse("\"flange_h\"").RootElement));
+        AssertEnvelope(flange, "sheet_fabrication_flange", "edges", "height", "angle_deg");
+        Assert.Equal(90, flange["params"]!.Value<double>("angle_deg"));
+        Assert.Equal("flange_h", (string?)flange["params"]!["height"]);
+        Assert.False(((JObject)flange["params"]!).ContainsKey("bend_radius_mm"));
+        var numeric = await CaptureAsync(() => sheet.SheetFabricationFlange(["edge:2"], JsonDocument.Parse("25").RootElement, 45, bend_radius_mm: 1.5));
+        Assert.Equal(25, numeric["params"]!.Value<double>("height"));
+        Assert.Equal(1.5, numeric["params"]!.Value<double>("bend_radius_mm"));
+
+        var cut = await CaptureAsync(() => sheet.SheetFabricationCut("Slot"));
+        AssertEnvelope(cut, "sheet_fabrication_cut", "sketch", "cut_across_bends", "cut_normal_to_flat", "direction");
+        Assert.False(cut["params"]!.Value<bool>("cut_across_bends"));
+        Assert.False(cut["params"]!.Value<bool>("cut_normal_to_flat"));
+        Assert.Equal("positive", (string?)cut["params"]!["direction"]);
+
+        AssertEnvelope(await CaptureAsync(() => sheet.FlatPattern("face:3")), "sheet_fabrication_flat_pattern", "face");
+        var thickness = await CaptureAsync(() => sheet.SetSheetFabricationThickness(JsonDocument.Parse("\"2.5 mm\"").RootElement));
+        AssertEnvelope(thickness, "sheet_fabrication_set_thickness", "thickness");
+        Assert.Equal("2.5 mm", (string?)thickness["params"]!["thickness"]);
+    }
+
+    [Fact]
+    public async Task Unwrap_try_rolls_back_by_default_and_empty_ids_fail_before_the_wire()
+    {
+        var sheet = new SheetFabricationTools(_client);
+        var trial = await CaptureAsync(() => sheet.UnwrapTry(["face:1", "body:1/face:2"]));
+        AssertEnvelope(trial, "unwrap_try", "faces", "alignment", "auto_face_chain", "merge_result_body", "keep");
+        Assert.False(trial["params"]!.Value<bool>("keep"));
+        Assert.Equal("origin", (string?)trial["params"]!["alignment"]);
+        Assert.True((await CaptureAsync(() => sheet.UnwrapTry(["face:1"], keep: true)))["params"]!.Value<bool>("keep"));
+
+        // No pipe server is listening here, so these must be rejected locally.
+        Assert.Equal("INVALID_ARGUMENT", ErrorCode(await sheet.UnwrapTry([])));
+        Assert.Equal("INVALID_ARGUMENT", ErrorCode(await sheet.SheetFabricationFlange([], JsonDocument.Parse("10").RootElement)));
+    }
+
+    [Fact]
+    public async Task ILogic_read_and_command_tools_emit_wire_keys()
+    {
+        var tools = new ILogicTools(_client);
+
+        AssertEnvelope(await CaptureAsync(() => tools.ListRules("Bracket.ipt")), "ilogic_list_rules", "document");
+        AssertEnvelope(await CaptureAsync(() => tools.GetRule("Resize")), "ilogic_get_rule", "name");
+        AssertEnvelope(await CaptureAsync(() => tools.ReadLog(4096)), "ilogic_read_log", "max_chars");
+        AssertEnvelope(await CaptureAsync(() => tools.ListCommands("undo", 20)), "list_commands", "filter", "max_items");
+
+        var command = await CaptureAsync(() => tools.RunCommand("AppZoomallCmd"));
+        AssertEnvelope(command, "run_command", "name");
+        Assert.False(((JObject)command["params"]!).ContainsKey("silent"));
+        Assert.True((await CaptureAsync(() => tools.RunCommand("AppZoomallCmd", silent: true)))["params"]!.Value<bool>("silent"));
+
+        var rule = await CaptureAsync(() => tools.RunRule("Resize", arguments: JsonDocument.Parse("{\"L\":120,\"mode\":\"fast\"}").RootElement));
+        AssertEnvelope(rule, "ilogic_run_rule", "name", "arguments");
+        Assert.Equal(120, rule["params"]!["arguments"]!.Value<int>("L"));
+        Assert.Equal("INVALID_ARGUMENT", ErrorCode(await tools.RunRule("Resize",
+            arguments: JsonDocument.Parse("{\"nested\":{\"a\":1}}").RootElement)));
+    }
+
+    [Fact]
+    public async Task Code_modules_are_stored_only_after_a_dry_compile_and_deleted_in_dependency_order()
+    {
+        var store = new CodeModuleStore(Path.Combine(_dir, "modules"));
+        var tools = new CodeTools(_client, store);
+        const string geo = "static double Sq(double x) => x * x;";
+
+        var (sent, failed) = await CaptureWithResultAsync(() => tools.SaveCodeModule("geo", geo),
+            new JObject { ["ok"] = false, ["diagnostics"] = new JArray() });
+        AssertEnvelope(sent, "send_code", "code", "compile_only", "modules");
+        Assert.True(sent["params"]!.Value<bool>("compile_only"));
+        Assert.Equal("", (string?)sent["params"]!["code"]);
+        Assert.False(failed.Value<bool>("saved"));
+        Assert.Empty(store.List());
+
+        static JObject Compiled(string module) => new()
+        {
+            ["ok"] = true,
+            ["signatures"] = new JArray(new JObject { ["module"] = module, ["signatures"] = new JArray("sig") }),
+        };
+        Assert.True((await CaptureWithResultAsync(() => tools.SaveCodeModule("geo", geo), Compiled("geo"))).Result.Value<bool>("saved"));
+        var (dependent, saved) = await CaptureWithResultAsync(() => tools.SaveCodeModule(
+            "shapes", "static double Area(double r) => 3.14159 * Sq(r);", requires: ["geo"]), Compiled("shapes"));
+        Assert.True(saved.Value<bool>("saved"));
+        Assert.Equal(new[] { "geo", "shapes" }, dependent["params"]!["modules"]!.Select(m => (string)m["name"]!));
+
+        var listed = JObject.Parse(await tools.ListCodeModules());
+        Assert.Equal(2, listed.Value<int>("count"));
+        Assert.All(listed["modules"]!, m => Assert.Null(m["code"]));
+        Assert.Contains(JObject.Parse(await tools.ListCodeModules(include_code: true))["modules"]!,
+            m => (string?)m["name"] == "geo" && (string?)m["code"] == geo);
+
+        var blocked = JObject.Parse(await tools.DeleteCodeModule("geo"));
+        Assert.Equal("INVALID_ARGUMENT", (string?)blocked["error"]?["code"]);
+        Assert.Contains("shapes", (string?)blocked["error"]?["message"]);
+        Assert.True(JObject.Parse(await tools.DeleteCodeModule("shapes")).Value<bool>("ok"));
+        Assert.True(JObject.Parse(await tools.DeleteCodeModule("geo")).Value<bool>("ok"));
+        Assert.Equal("INVALID_ARGUMENT", ErrorCode(await tools.DeleteCodeModule("geo")));
     }
 
     [Fact]
@@ -158,6 +272,9 @@ public sealed class AssemblyToolWireTests : IDisposable
                 "PORT A", [5.0, 10.0], sketch_name: "S1", font_size_mm: 3.5, rotation_deg: 90)),
             "draw_text", "text", "position", "sketch_name", "font_size_mm", "rotation_deg");
         AssertEnvelope(await CaptureAsync(() => exports.ViewFit()), "view_fit");
+        AssertEnvelope(await CaptureAsync(() => exports.SetViewState("Clean", design_view_create: true,
+                object_visibility: JsonDocument.Parse("{\"sketches\":false}").RootElement)),
+            "set_view_state", "design_view", "design_view_create", "object_visibility");
         AssertEnvelope(await CaptureAsync(() => exports.SetViewOrientation("iso_top_right", false)),
             "set_view_orientation", "orientation", "fit");
         AssertEnvelope(await CaptureAsync(() => exports.SetCamera(
@@ -177,17 +294,19 @@ public sealed class AssemblyToolWireTests : IDisposable
     }
 
     private async Task<JObject> CaptureAsync(Func<Task<string>> invoke)
+        => (await CaptureWithResultAsync(invoke, new JObject { ["accepted"] = true })).Envelope;
+
+    private async Task<(JObject Envelope, JObject Result)> CaptureWithResultAsync(Func<Task<string>> invoke, JObject data)
     {
         using var server = new NamedPipeServerStream(
             _pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-        var receive = ReceiveOnceAsync(server);
+        var receive = ReceiveOnceAsync(server, data);
         var invokeTask = invoke();
         var envelope = await receive;
-        await invokeTask;
-        return envelope;
+        return (envelope, JObject.Parse(await invokeTask));
     }
 
-    private static async Task<JObject> ReceiveOnceAsync(NamedPipeServerStream server)
+    private static async Task<JObject> ReceiveOnceAsync(NamedPipeServerStream server, JObject data)
     {
         await server.WaitForConnectionAsync();
         using var reader = new StreamReader(server, leaveOpen: true);
@@ -197,11 +316,13 @@ public sealed class AssemblyToolWireTests : IDisposable
         {
             ["id"] = envelope["id"],
             ["ok"] = true,
-            ["data"] = new JObject { ["accepted"] = true },
+            ["data"] = data,
             ["meta"] = new JObject(),
         }.ToString(Formatting.None));
         return envelope;
     }
+
+    private static string? ErrorCode(string json) => (string?)JObject.Parse(json)["error"]?["code"];
 
     private static void AssertEnvelope(JObject envelope, string command, params string[] keys)
     {
