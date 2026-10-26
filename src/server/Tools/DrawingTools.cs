@@ -50,7 +50,7 @@ internal static class DrawingWire
     {
         try
         {
-            var p = JObject.Parse(JsonSerializer.Serialize(args));
+            var p = WireJson.LoadObject(JsonSerializer.Serialize(args));
             if (timeout.HasValue) p["timeout_ms"] = timeout.Value;
             DrawingInput.Validate(command, p);
             var data = await client.SendAsync(command, p, ct, timeoutMs: timeout);

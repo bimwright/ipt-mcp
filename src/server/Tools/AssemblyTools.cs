@@ -74,7 +74,7 @@ public sealed class AssemblyTools
     {
         try
         {
-            var p = JObject.Parse(JsonSerializer.Serialize(new { name, document, source, occurrence_visibility, appearance, activate, timeout_ms }));
+            var p = WireJson.LoadObject(JsonSerializer.Serialize(new { name, document, source, occurrence_visibility, appearance, activate, timeout_ms }));
             DrawingPhase3Input.Validate("create_design_view", p);
             var data = await _client.SendAsync("create_design_view", p, ct, timeoutMs: timeout_ms);
             return ToolResponse.Serialize(data);

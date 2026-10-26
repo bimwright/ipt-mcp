@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
+using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json.Linq;
 
@@ -43,7 +44,7 @@ public sealed class SheetFabricationTools
         var p = new JObject
         {
             ["edges"] = new JArray(edges),
-            ["height"] = JToken.Parse(height.GetRawText()),
+            ["height"] = WireJson.Load(height.GetRawText()),
             ["angle_deg"] = angle_deg,
         };
         if (bend_radius_mm is { } br) p["bend_radius_mm"] = br;
@@ -83,7 +84,7 @@ public sealed class SheetFabricationTools
      Description("Override the sheet thickness on a sheet fabrication part. thickness: mm number or expression ('2.5 mm', 'plate_thk'). Clears use_sheet_fabrication_style_thickness so the part stops inheriting the style, then sets the Thickness parameter expression (culture-invariant — no locale hacks). Returns the applied expression, thickness_mm and fresh topology counts.")]
     public Task<string> SetSheetFabricationThickness(System.Text.Json.JsonElement thickness, string? document = null, CancellationToken ct = default)
     {
-        var p = new JObject { ["thickness"] = JToken.Parse(thickness.GetRawText()) };
+        var p = new JObject { ["thickness"] = WireJson.Load(thickness.GetRawText()) };
         if (!string.IsNullOrWhiteSpace(document)) p["document"] = document;
         return Call("sheet_fabrication_set_thickness", p, ct);
     }

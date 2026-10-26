@@ -63,7 +63,7 @@ public sealed class ILogicTools
                     property.Value.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array))
                 return Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT,
                     "arguments must be a flat JSON object containing scalar values."));
-            parsed = JObject.Parse(value.GetRawText());
+            parsed = WireJson.LoadObject(value.GetRawText());
         }
         return Call(command, Doc(document, ("name", name), ("arguments", parsed), ("silent", silent)), ct);
     }

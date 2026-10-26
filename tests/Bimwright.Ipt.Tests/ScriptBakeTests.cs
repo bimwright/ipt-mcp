@@ -126,6 +126,12 @@ public sealed class ScriptBakeTests : IDisposable
         var refused = JObject.Parse(await new ToolBakerWriteTools(new PluginClient(off), off, modules, new ServerState(off)).RunBakedTool("pors_rail", "[]", default));
         Assert.Equal("SEND_CODE_DISABLED", (string?)refused["error"]?["code"]);
 
+        // Params become data under the same rules as send_code: no target is configured, so this fails before the wire.
+        var overflow = JObject.Parse(await new ToolBakerWriteTools(new PluginClient(config), config, modules, new ServerState(config))
+            .RunBakedTool("pors_rail", "[{\"len\":1e400}]", default));
+        Assert.Equal("INVALID_ARGUMENT", (string?)overflow["error"]?["code"]);
+        Assert.Contains("[0].len", (string?)overflow["error"]?["message"]);
+
         var pipe = "ipt-script-bake-" + Guid.NewGuid().ToString("N");
         using var server = new NamedPipeServerStream(pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         File.WriteAllText(Path.Combine(_root, "target.json"), JsonConvert.SerializeObject(new TargetDescriptor
@@ -144,7 +150,8 @@ public sealed class ScriptBakeTests : IDisposable
         var request = JObject.Parse((await input.ReadLineAsync(timeout.Token))!);
         Assert.Equal("send_code", (string?)request["command"]);
         Assert.Equal(Code, (string?)request["params"]?["code"]);
-        Assert.Equal("P07", (string?)request["params"]?["data"]?[0]?["name"]);
+        Assert.Null(request["params"]?["data"]);
+        Assert.Equal("[{\"name\":\"P07\"}]", (string?)request["params"]?["data_json"]);
         await output.WriteLineAsync(new JObject { ["id"] = request["id"], ["ok"] = true, ["data"] = JObject.Parse("{ok:true,result:1}") }.ToString(Formatting.None));
         var response = JObject.Parse(await call);
         Assert.Equal(1, (int?)response["result"]);

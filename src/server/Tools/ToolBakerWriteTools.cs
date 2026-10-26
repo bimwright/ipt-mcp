@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bimwright.Ipt.Server.Bake;
 using Bimwright.Ipt.Server.Handlers;
+using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -48,7 +49,7 @@ public sealed class ToolBakerWriteTools
         JObject parsed;
         try
         {
-            parsed = string.IsNullOrWhiteSpace(paramsJson) ? new JObject() : JObject.Parse(paramsJson);
+            parsed = string.IsNullOrWhiteSpace(paramsJson) ? new JObject() : WireJson.LoadObject(paramsJson);
         }
         catch (JsonException ex)
         {
@@ -74,15 +75,8 @@ public sealed class ToolBakerWriteTools
                 $"'{record.Name}' is a script baked tool and runs as send_code, which is disabled on this connection");
         if (_modules == null || !Bimwright.Ipt.Shared.ToolBaker.BakedToolRuntimeSource.TryReadScript(record.SourceCode, out var code, out var modules, out _))
             return ToolResponse.Error("INVALID_ARGUMENT", $"baked tool '{record.Name}' has no runnable script");
-        JToken? data = null;
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(paramsJson)) data = JToken.Parse(paramsJson);
-        }
-        catch (JsonException ex)
-        {
-            return ToolResponse.Error("INVALID_ARGUMENT", "paramsJson must be JSON (it becomes the script's data): " + ex.Message);
-        }
+        if (!JsonArg.TryData(paramsJson, out var data, out var dataError))
+            return ToolResponse.Error("INVALID_ARGUMENT", "paramsJson becomes the script's data: " + dataError);
         return await new CodeTools(_client, _modules, _state).SendCodeCore(code, modules.Length > 0 ? modules : null,
             timeout_ms: null, silent: false, data, compile_only: false, observeBake: false, ct);
     }

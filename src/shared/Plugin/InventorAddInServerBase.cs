@@ -232,7 +232,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         var clock = System.Diagnostics.Stopwatch.StartNew();     // new: toast duration (includes STA queue time)
         try
         {
-            var env = JsonConvert.DeserializeObject<InventorCommandEnvelope>(line)!;
+            var env = InventorCommandEnvelope.Parse(line);
             envId = env.Id;
             if (!AuthToken.Verify(descriptor.AuthToken, env.AuthToken))
             {
@@ -439,7 +439,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private async Task<InventorCommandResult> ReRunCommandAsync(string toolName, string? paramsJson)
     {
         JObject p;
-        try { p = JObject.Parse(paramsJson ?? "{}"); } catch { p = new JObject(); }
+        try { p = WireJson.LoadObject(paramsJson ?? "{}"); } catch { p = new JObject(); }
         var env = new InventorCommandEnvelope
         {
             Id = Guid.NewGuid(),

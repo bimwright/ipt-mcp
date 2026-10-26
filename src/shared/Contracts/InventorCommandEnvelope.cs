@@ -15,4 +15,7 @@ public sealed class InventorCommandEnvelope
     [JsonProperty("record_calls")] public bool RecordCalls { get; set; }
     [JsonProperty("spill_retention_hours")] public int SpillRetentionHours {get;set;}=36;
     [JsonProperty("tool", NullValueHandling = NullValueHandling.Ignore)] public ToolMetadata? Tool { get; set; }
+
+    /// <summary>One NDJSON request line → envelope, keeping string parameters exactly as sent (<see cref="WireJson"/>).</summary>
+    public static InventorCommandEnvelope Parse(string line) => JsonConvert.DeserializeObject<InventorCommandEnvelope>(line, WireJson.Settings)!;
 }

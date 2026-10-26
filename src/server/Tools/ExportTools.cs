@@ -216,9 +216,9 @@ public sealed class ExportTools
         CancellationToken ct = default)
     {
         var p = new JObject();
-        if (eye is { } e) p["eye"] = JToken.Parse(e.GetRawText());
-        if (target is { } t) p["target"] = JToken.Parse(t.GetRawText());
-        if (up is { } u) p["up"] = JToken.Parse(u.GetRawText());
+        if (eye is { } e) p["eye"] = WireJson.Load(e.GetRawText());
+        if (target is { } t) p["target"] = WireJson.Load(t.GetRawText());
+        if (up is { } u) p["up"] = WireJson.Load(u.GetRawText());
         if (perspective.HasValue) p["perspective"] = perspective.Value;
         if (extents_mm is not null) p["extents_mm"] = new JArray(extents_mm);
         if (fit) p["fit"] = true;

@@ -92,14 +92,14 @@ public sealed class RunBakedToolHandler : IInventorCommand
     {
         if (string.IsNullOrWhiteSpace(json))
             return new JObject();
-        return JObject.Parse(json);
+        return WireJson.LoadObject(json);
     }
 
     private static JArray ParseArray(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
             return new JArray();
-        return JArray.Parse(json);
+        return WireJson.Load(json) as JArray ?? throw new Newtonsoft.Json.JsonReaderException("Expected a JSON array.");
     }
 
     private static string? CommandName(JToken step)

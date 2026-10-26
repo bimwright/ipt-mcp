@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- `inventor_send_code` `data` reaches the script as sent. ISO date-time strings stay strings (they became dates and came back in another format and offset), integers stay exact, and other numbers must be finite doubles: `1e400` and `NaN` are rejected with `INVALID_ARGUMENT` instead of arriving as the string `"Infinity"` or dropping the request; duplicate keys are rejected too. The server sends the data as JSON text (`data_json`) and `data_hash` covers that text, so equal hashes mean the script received equal data. The same rules apply to the `paramsJson` of script baked tools. Update the server and the add-in together: an older add-in does not read `data_json`, so a script that uses `data` fails to compile there instead of receiving changed values; a new add-in still accepts `data` from an older server.
+- ISO date-time strings in any tool argument (for example an iProperty value) reach the add-in handler unchanged instead of being converted to the machine's time zone and re-formatted.
 - iPart assembly failures preserve the committed mutation state in their recovery receipt and reuse the verified member signature without extra COM reads after commit.
 - Call journals rotate and retain files under bounded storage policies; transport shutdown closes active I/O, descriptor publication follows listener readiness, and queued STA work has bounded admission and cancellation before execution.
 - Positional dimensions distinguish an actual parent transaction from Inventor's unidentified idle transaction, allowing existing parts to be edited while preserving cross-document transaction checks and rollback receipts.

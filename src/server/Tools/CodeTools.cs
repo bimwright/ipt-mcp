@@ -53,7 +53,9 @@ public sealed class CodeTools
     public Task<string> SendCode(string code, string[]? modules = null, int? timeout_ms = null, bool silent = false,
         [Description("JSON input; the script sees it as the variable `data` (JToken).")] System.Text.Json.JsonElement? data = null,
         bool compile_only = false, CancellationToken ct = default)
-        => SendCodeCore(code, modules, timeout_ms, silent, JsonArg.From(data), compile_only, observeBake: true, ct);
+        => JsonArg.TryData(data, out var input, out var dataError)
+            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct)
+            : Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, dataError!));
 
     /// <summary>send_code with a Newtonsoft data token; <paramref name="observeBake"/> is off when a baked script tool runs.</summary>
     internal async Task<string> SendCodeCore(string code, string[]? modules, int? timeout_ms, bool silent, JToken? input,
@@ -78,7 +80,8 @@ public sealed class CodeTools
             if (Encoding.UTF8.GetByteCount(text) > MaxDataBytes)
                 return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT,
                     $"data exceeds {MaxDataBytes} bytes; split the work into several calls");
-            p["data"] = input;
+            // As text, so no Newtonsoft parse between here and the script prelude can re-type or round the values.
+            p["data_json"] = text;
             log["data_length"] = text.Length;
             log["data_hash"] = SendCodeSource.Hash(text);
         }

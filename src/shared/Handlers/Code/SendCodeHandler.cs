@@ -57,7 +57,9 @@ public sealed class SendCodeHandler : IInventorCommand
     }
 
     private const string DataSource = "data";
-    private const string DataPrelude = "Newtonsoft.Json.Linq.JToken data = Newtonsoft.Json.Linq.JToken.Parse(__data_json);";
+    // Same reader settings as the server's JsonArg.TryData: ISO date strings stay strings (JToken.Parse would make them
+    // Date tokens and lose format/offset), floats are doubles.
+    private const string DataPrelude = "Newtonsoft.Json.Linq.JToken data = Newtonsoft.Json.Linq.JToken.Load(new Newtonsoft.Json.JsonTextReader(new System.IO.StringReader(__data_json)) { DateParseHandling = Newtonsoft.Json.DateParseHandling.None, FloatParseHandling = Newtonsoft.Json.FloatParseHandling.Double });";
 
     public InventorCommandResult Execute(InventorCommandContext ctx, JObject p)
     {
@@ -92,7 +94,9 @@ public sealed class SendCodeHandler : IInventorCommand
         if (!policy.Ok)
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, policy.Error ?? "send_code source rejected by policy", meta);
 
-        var dataJson = p["data"] is { Type: not JTokenType.Null } d ? d.ToString(Newtonsoft.Json.Formatting.None) : null;
+        // data_json is the exact text from the server; a data object comes from an older server (already re-parsed on the way).
+        var dataJson = p["data_json"]?.Type == JTokenType.String ? (string?)p["data_json"]
+            : p["data"] is { Type: not JTokenType.Null } d ? d.ToString(Newtonsoft.Json.Formatting.None) : null;
         var parts = new Dictionary<string, string>(StringComparer.Ordinal) { [SendCodeSource.ScriptSource] = code };
         foreach (var m in modules) parts[m.Source] = m.Code;
         var sourceParts = modules;

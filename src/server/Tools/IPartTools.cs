@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json.Linq;
 
@@ -19,11 +20,11 @@ public sealed class IPartTools
     [McpServerTool(Name="inventor_create_ipart_factory",ReadOnly=false,Destructive=false,Idempotent=false,OpenWorld=false),
      Description("Create a Standard iPart factory COPY from a clean saved open ordinary part. output_path must be a new local .ipt path. columns=[{name,kind:parameter|material|description|suppression,target?}]; parameter/suppression targets are existing parameter/feature names. Member and Part Number are included automatically. base_member is a file-safe identifier without extension. Creates/saves the copy and adjacent .ipart-mcp.json state; does not modify or save the source. Native embedded table editing requires Excel. Not allowed inside batch_execute.")]
     public Task<string> CreateFactory(string output_path,string base_member,JsonElement columns,string? document=null,CancellationToken ct=default)
-        => Call("create_ipart_factory",new JObject { ["document"]=document,["output_path"]=output_path,["base_member"]=base_member,["columns"]=JToken.Parse(columns.GetRawText()) },ct);
+        => Call("create_ipart_factory",new JObject { ["document"]=document,["output_path"]=output_path,["base_member"]=base_member,["columns"]=WireJson.Load(columns.GetRawText()) },ct);
     [McpServerTool(Name="inventor_update_ipart_table",ReadOnly=false,Destructive=false,Idempotent=true,OpenWorld=false),
      Description("Preview/apply complete row upserts on a managed Standard iPart factory. rows=[{member,part_number,values:{configured_column:value}}]. Configured cells must be nonempty; clearing property cells is unsupported. Parameter numbers use the column's units; strings are Inventor expressions. Suppression values are compute/suppress or boolean true=suppress. Never removes rows. dry_run defaults true. Apply rebuilds changed rows and saves the managed factory; member regeneration is separate. Direct writes are refused once Excel owns the table. Not allowed in batch_execute.")]
     public Task<string> UpdateTable(JsonElement rows,bool dry_run=true,string? document=null,CancellationToken ct=default)
-        => Call("update_ipart_table",new JObject { ["document"]=document,["rows"]=JToken.Parse(rows.GetRawText()),["dry_run"]=dry_run },ct);
+        => Call("update_ipart_table",new JObject { ["document"]=document,["rows"]=WireJson.Load(rows.GetRawText()),["dry_run"]=dry_run },ct);
     [McpServerTool(Name="inventor_set_ipart_row",ReadOnly=false,Destructive=false,Idempotent=true,OpenWorld=false),
      Description("Select a member row by its exact name, rebuild/read back and save the managed factory. Does not change any assembly occurrence or generate a member file. Requires a clean factory and current synchronized Excel source. Not allowed in batch_execute.")]
     public Task<string> SetRow(string member,string? document=null,CancellationToken ct=default)
@@ -37,7 +38,7 @@ public sealed class IPartTools
     public Task<string> SyncExcel(string? path=null,string? sheet=null,string? header_cell=null,JsonElement? mapping=null,bool dry_run=true,string? document=null,CancellationToken ct=default)
     {
         var p=new JObject { ["document"]=document,["path"]=path,["sheet"]=sheet,["header_cell"]=header_cell,["dry_run"]=dry_run };
-        if(mapping.HasValue)p["mapping"]=JToken.Parse(mapping.Value.GetRawText());return Call("sync_ipart_excel",p,ct);
+        if(mapping.HasValue)p["mapping"]=WireJson.Load(mapping.Value.GetRawText());return Call("sync_ipart_excel",p,ct);
     }
     [McpServerTool(Name="inventor_place_ipart_member",ReadOnly=false,Destructive=false,Idempotent=false,OpenWorld=false),
      Description("Place an already generated, verified Standard iPart member in an open assembly. factory_document identifies an already open managed factory; member is its exact row name. position_mm=[x,y,z] defaults origin; grounded defaults false. Verifies occurrence row/reference and assembly constraints. Does not save the assembly or generate files. Not allowed in batch_execute.")]

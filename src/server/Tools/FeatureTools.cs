@@ -70,7 +70,7 @@ public sealed class FeatureTools
         var p = new JObject
         {
             ["sketch_name"] = sketchName,
-            ["distance_mm"] = JToken.Parse(distance.GetRawText()),
+            ["distance_mm"] = WireJson.Load(distance.GetRawText()),
             ["operation"] = operation,
             ["direction"] = direction,
         };
@@ -102,7 +102,7 @@ public sealed class FeatureTools
             return Task.FromResult(Err("commands must be an array of {command, params}"));
         return Call("batch_execute", new JObject
         {
-            ["commands"] = JToken.Parse(commands.GetRawText()),
+            ["commands"] = WireJson.Load(commands.GetRawText()),
             ["continue_on_error"] = continue_on_error,
         }, ct, timeoutMs: 120_000);   // 20 steps share one budget — raise over the 30 s default
     }
@@ -147,7 +147,7 @@ public sealed class FeatureTools
         {
             ["sketch_name"] = sketchName,
             ["axis_id"] = axisId,
-            ["angle_deg"] = JToken.Parse(angle.GetRawText()),
+            ["angle_deg"] = WireJson.Load(angle.GetRawText()),
             ["operation"] = operation,
         }, ct);
 
@@ -161,7 +161,7 @@ public sealed class FeatureTools
         {
             if (el.ValueKind != System.Text.Json.JsonValueKind.Array && el.ValueKind != System.Text.Json.JsonValueKind.Object)
                 return Task.FromResult(Err("edges must be an array of edge ids or a selector object"));
-            p["edges"] = JToken.Parse(el.GetRawText());
+            p["edges"] = WireJson.Load(el.GetRawText());
         }
         return Call("fillet", p, ct);
     }
@@ -184,9 +184,9 @@ public sealed class FeatureTools
             ["offset_mm"] = offset.HasValue ? new JValue(offset.Value) : JValue.CreateNull(),
         };
         if (refs is { Length: > 0 }) p["refs"] = new JArray(refs);
-        if (origin is { } o) p["origin"] = JToken.Parse(o.GetRawText());
-        if (x_axis is { } x) p["x_axis"] = JToken.Parse(x.GetRawText());
-        if (y_axis is { } y) p["y_axis"] = JToken.Parse(y.GetRawText());
+        if (origin is { } o) p["origin"] = WireJson.Load(o.GetRawText());
+        if (x_axis is { } x) p["x_axis"] = WireJson.Load(x.GetRawText());
+        if (y_axis is { } y) p["y_axis"] = WireJson.Load(y.GetRawText());
         if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
         if (visible.HasValue) p["visible"] = visible.Value;
         return Call("create_work_plane", p, ct);
@@ -199,7 +199,7 @@ public sealed class FeatureTools
     {
         var p = new JObject
         {
-            ["position"] = JToken.Parse(position.GetRawText()),
+            ["position"] = WireJson.Load(position.GetRawText()),
             ["construction"] = construction,
         };
         if (!string.IsNullOrWhiteSpace(name)) p["name"] = name;
