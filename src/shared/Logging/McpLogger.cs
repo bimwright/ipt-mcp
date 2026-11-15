@@ -115,6 +115,38 @@ namespace Bimwright.Ipt.Shared.Logging
             catch { }
         }
 
+        /// <summary>
+        /// Journal line for a command whose Inventor process ended while it ran (an orphaned
+        /// <see cref="InflightBreadcrumb"/> marker). Keeps the original session id.
+        /// </summary>
+        public static void LogCrashSuspected(JObject marker)
+        {
+            if (_logPath == null) Initialize();
+            if (_logPath == null) return;
+            try
+            {
+                AppendLineLocked(_logPath, BuildCrashSuspectedEntry(marker).ToString(Formatting.None));
+            }
+            catch { }
+        }
+
+        internal static JObject BuildCrashSuspectedEntry(JObject marker) => new JObject
+        {
+            ["timestamp"] = DateTime.UtcNow.ToString("o"),
+            ["session_id"] = marker.Value<string>("session_id"),
+            ["tool"] = marker.Value<string>("tool"),
+            ["success"] = false,
+            ["duration_ms"] = null,
+            ["error"] = "crash_suspected: Inventor (pid " + marker.Value<int?>("pid") + ") ended while this command was running; started "
+                        + marker.Value<string>("started_utc") + ".",
+            ["code"] = null,
+            ["params"] = marker["params"]?.DeepClone(),
+            ["result"] = null,
+            ["outcome"] = "crash_suspected",
+            ["request_id"] = marker.Value<string>("request_id"),
+            ["started_utc"] = marker.Value<string>("started_utc"),
+        };
+
         internal static McpLogSafePayload BuildLogSafePayload(string toolName, string? paramsJson, string? code)
         {
             var sourceField = CallLogPrivacy.SourceField(toolName);

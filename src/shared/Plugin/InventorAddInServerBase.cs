@@ -49,6 +49,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private string _configPath = "";
     private ConnectionWatch? _connectionWatch;
     private System.Windows.Forms.Timer? _toastSnapshotTimer;
+    private InflightBreadcrumb? _inflight;
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
@@ -76,6 +77,15 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         // Call journals are initialized lazily only for requests with record_calls=true.
         try { McpLogger.RunMaintenance(); } catch { }
         try { SendCodeJournal.RunMaintenance(IptPrivacyConfig.Load()); } catch { }
+        try
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            _inflight = new InflightBreadcrumb(McpLogger.LogDir, self.Id, self.StartTime.ToUniversalTime());
+            // A marker left by a dead Inventor means that process ended inside a command.
+            foreach (var orphan in InflightBreadcrumb.TakeOrphans(McpLogger.LogDir, self.Id, InflightBreadcrumb.IsSameProcessRunning))
+                if (!EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG")) McpLogger.LogCrashSuspected(orphan);
+        }
+        catch { _inflight = null; }
         try { _historyHost = new HistoryHost(); } catch { _historyHost = null; }
         _sessionLog = new McpSessionLog(_historyHost is { } hh ? hh.Post : (Action<Action>?)null);
         _sessionLog.EntryAdded += OnSessionEntryAdded;
@@ -282,11 +292,18 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             // Marshal the actual API work onto the STA thread. task.Wait is the single owner of
             // the timeout (spec F2-b): nothing else can interrupt work running on the STA thread.
             using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+            var breadcrumb = env.RecordCalls && !EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG") ? _inflight : null;
             var task = _sta!.TryInvokeAsync(() =>
             {
-                var r = dispatcher.Dispatch(ctx, env);
-                RefreshToastSnapshot();   // still on the STA: cheap HWND/visibility read for toast placement
-                return r;
+                // Marker on the STA, right before the API work: commands run one at a time here.
+                breadcrumb?.Begin(env.Id.ToString("N"), env.Command ?? "", env.Params?.ToString(Formatting.None));
+                try
+                {
+                    var r = dispatcher.Dispatch(ctx, env);
+                    RefreshToastSnapshot();   // still on the STA: cheap HWND/visibility read for toast placement
+                    return r;
+                }
+                finally { breadcrumb?.End(); }
             }, requestCancellation.Token);
             if (task == null)
             {
