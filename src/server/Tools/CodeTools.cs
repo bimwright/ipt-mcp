@@ -52,21 +52,33 @@ public sealed class CodeTools
                  "Returns result (the script's last expression / return value; >64 KiB spills to result_file) + captured stdout. modules: names of saved code modules (inventor_save_code_module) compiled in front of the script — call their functions instead of re-sending helper code; the response echoes {name, hash}. " +
                  "data: any JSON (max 512 KiB); when given, the script sees it as the variable `data` (Newtonsoft JToken; Newtonsoft.Json.Linq is imported) — do not declare your own `data` then. Pass coordinates, paths, member lists, specs and expected values here instead of inlining them into code, e.g. foreach (JObject m in data[\"members\"]) Tube((string)m[\"name\"], ...). compile_only=true compiles script + modules (+ data) without running or touching the document and returns diagnostics — use it before a long run and after fixing a compile error. Scripts over 4000 characters that inline data or helpers get an advisory size_hint. A script run with data may get a bake_hint: accept the suggestion to call it later with only the data, or use the baked tool it names.silent=true runs under Application.SilentOperation (Inventor answers prompts with defaults — use it for scripts that Save/Open/Close). timeout_ms (max 600000) overrides the per-call STA timeout. " +
                  "Errors carry diagnostics[{source: script|module:<name>, line, code, message, hint}] or, at runtime, location{source, line, text} + hint. " +
+                 "result_contract=\"task_v1\" (default \"legacy\"): the script must return McpTaskResult.Pass(value) or McpTaskResult.Fail(code, message, details?) (imported automatically); the response carries _task{contract, status: passed|failed|not_reported, error{code, message}}, Fail sets ok=false, and no McpTaskResult fails with TASK_RESULT_REQUIRED. Fail does not undo edits the script already made. Use it when the script checks its own work. " +
                  SendCodeTaskGuide.Text +
                  "COM interop tips: lengths are cm internally (mm/10); collections are 1-based and COM items come back as object — type the loop variable (foreach (Document d in app.Documents)) or cast; look up by name with the indexed property occs.ItemByName[\"Part:1\"] (brackets); indexed properties take brackets or get_X(): body.Volume[0.0001]; UnitVector↔Vector via AsVector()/AsUnitVector(); PartDocument→Document via (Document)(object)part; Matrix has no operators (PostMultiplyBy).")]
     public Task<string> SendCode(string code, string[]? modules = null, int? timeout_ms = null, bool silent = false,
         [Description("JSON input; the script sees it as the variable `data` (JToken).")] System.Text.Json.JsonElement? data = null,
-        bool compile_only = false, CancellationToken ct = default)
-        => JsonArg.TryData(data, out var input, out var dataError)
-            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct)
+        bool compile_only = false,
+        [Description("\"legacy\" (default) or \"task_v1\": return McpTaskResult.Pass/Fail and read _task.")] string result_contract = "legacy",
+        CancellationToken ct = default)
+        => result_contract is not ("legacy" or "task_v1")
+            ? Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, "result_contract must be \"legacy\" or \"task_v1\""))
+            : JsonArg.TryData(data, out var input, out var dataError)
+            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct, result_contract)
             : Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, dataError!));
 
     /// <summary>send_code with a Newtonsoft data token; <paramref name="observeBake"/> is off when a baked script tool runs.</summary>
     internal async Task<string> SendCodeCore(string code, string[]? modules, int? timeout_ms, bool silent, JToken? input,
-        bool compile_only, bool observeBake, CancellationToken ct)
+        bool compile_only, bool observeBake, CancellationToken ct, string resultContract = "legacy")
     {
         var p = new JObject { ["code"] = code };
         var log = new JObject { ["code"] = code };
+        var taskV1 = resultContract == "task_v1";
+        if (taskV1)
+        {
+            // Only sent when set, so a legacy request keeps its wire shape for older add-ins.
+            p["result_contract"] = resultContract;
+            log["result_contract"] = resultContract;
+        }
         if (timeout_ms is { } t) log["timeout_ms"] = t;
         if (silent)
         {
@@ -108,7 +120,8 @@ public sealed class CodeTools
         var sizeHint = SizeHint(code, input is not null, modules is { Length: > 0 });
         JObject? payload = null;
         try { payload = JToken.Parse(response) as JObject; } catch (Newtonsoft.Json.JsonException) { }
-        var bakeHint = observeBake && input is not null && !compile_only && _config is not null
+        // Baked script tools run as legacy send_code, so a task_v1 script is not observed for baking.
+        var bakeHint = observeBake && !taskV1 && input is not null && !compile_only && _config is not null
             ? ScriptBake.Observe(_config, code, modules, input, payload?["ok"]?.Type == JTokenType.Boolean && (bool)payload["ok"]!, started.ElapsedMilliseconds)
             : null;
         if ((hint is null && sizeHint is null && bakeHint is null) || payload is null) return response;

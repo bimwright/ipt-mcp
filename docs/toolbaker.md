@@ -121,7 +121,7 @@ that executes code, and it is held to the `send_code` gates rather than the disp
 
 - **Recording (adaptive bake only, off by default; `--enable-adaptive-bake` /
   `BIMWRIGHT_INVENTOR_ENABLE_ADAPTIVE_BAKE=1`).** Each `inventor_send_code` call with `data`
-  (not `compile_only`) records a usage event with two hashes: the script key (code + module names)
+  (not `compile_only`, not `result_contract="task_v1"`, since script tools run as legacy `send_code`) records a usage event with two hashes: the script key (code + module names)
   and the data hash. The code itself is never stored at this stage.
 - **Suggestion.** When one script key has succeeded with 3 different data hashes within 10 days,
   a `source=script` suggestion opens and that `send_code` response carries a `bake_hint` pointing at

@@ -82,6 +82,8 @@ public sealed class SendCodeHandler : IInventorCommand
 
         if (!TryReadModules(p["modules"], out var modules, out var moduleEcho, out var moduleError))
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, moduleError!, meta);
+        if (!SendCodeTask.TryReadContract(p["result_contract"], out var contract, out var contractError))
+            return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, contractError!, meta);
 
         // Banned-API source policy (shared with ToolBaker), per part so the message names the source.
         foreach (var m in modules)
@@ -140,14 +142,11 @@ public sealed class SendCodeHandler : IInventorCommand
             }
 
             // Debug info makes runtime stack frames carry the #line source + line (S1.4).
+            var imports = new List<string> { "System", "System.Collections.Generic", "System.Linq", "Newtonsoft.Json.Linq", "Inventor" };
+            if (contract == SendCodeTask.TaskV1) imports.Add(SendCodeTask.ScriptNamespace);
             var options = ScriptOptions.Default
                 .WithReferences(refs)
-                .WithImports(
-                    "System",
-                    "System.Collections.Generic",
-                    "System.Linq",
-                    "Newtonsoft.Json.Linq",
-                    "Inventor")
+                .WithImports(imports)
                 .WithEmitDebugInformation(true)
                 .WithFileEncoding(Encoding.UTF8);
 
@@ -167,6 +166,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 if (diags.Length > 0) AttachDiagnostics(data, diags);
                 else data["signatures"] = Signatures(modules);
                 AttachSkipped(data, skipped);
+                SendCodeTask.Apply(data, contract, completed: false, null);
                 return InventorCommandResult.Success(Guid.Empty, data, meta);
             }
 
@@ -207,7 +207,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["mutation_applied"] = JValue.CreateNull()
             };
             ResponseSpillWriter.AttachStdout("send_code", ok, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
-            if (state.ReturnValue is { } returnValue)
+            if (SendCodeTask.ResultValue(contract, state.ReturnValue) is { } returnValue)
             {
                 var token = ScriptResultToken.ToResultToken(returnValue, out var resultError);
                 if (resultError is null)
@@ -220,6 +220,7 @@ public sealed class SendCodeHandler : IInventorCommand
                     ok["error"] = resultError;
                 }
             }
+            SendCodeTask.Apply(ok, contract, completed: true, state.ReturnValue);
             Echo(ok, moduleEcho, silent);
             AttachSkipped(ok, skipped);
             return InventorCommandResult.Success(Guid.Empty, ok, meta);
@@ -234,6 +235,7 @@ public sealed class SendCodeHandler : IInventorCommand
             };
             AttachDiagnostics(data, errors);
             ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
+            SendCodeTask.Apply(data, contract, completed: false, null);
             Echo(data, moduleEcho, silent);
             AttachSkipped(data, skipped);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
@@ -260,6 +262,7 @@ public sealed class SendCodeHandler : IInventorCommand
             var rule = SendCodeHints.Match("runtime", text);
             if (rule != null) data["hint"] = rule.Hint;
             ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
+            SendCodeTask.Apply(data, contract, completed: false, null);
             Echo(data, moduleEcho, silent);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }

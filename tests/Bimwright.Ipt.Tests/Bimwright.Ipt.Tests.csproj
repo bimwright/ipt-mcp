@@ -59,6 +59,8 @@
     <Compile Include="..\..\src\shared\Handlers\Vec3Params.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\EnumText.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\Code\ScriptReferences.cs" LinkBase="Shared\Handlers\Code" />
+    <Compile Include="..\..\src\shared\Handlers\Code\McpTaskResult.cs" LinkBase="Shared\Handlers\Code" />
+    <Compile Include="..\..\src\shared\Handlers\Code\SendCodeTask.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Logging\*.cs" Exclude="..\..\src\shared\Logging\BoundedLogFile.cs" LinkBase="Shared\Logging" />
     <!-- Host-free toast model: the card state machine, content builder, layout, config and status text.
          The WPF card itself is covered by tests/Bimwright.Ipt.Toast.Tests. -->
