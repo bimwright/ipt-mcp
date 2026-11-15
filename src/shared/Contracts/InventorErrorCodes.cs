@@ -12,6 +12,8 @@ public static class InventorErrorCodes
     public const string AMBIGUOUS_TARGET = "AMBIGUOUS_TARGET";
     /// <summary>The selected Inventor session exited or its pid was reused; it is never replaced implicitly.</summary>
     public const string TARGET_LOST = "TARGET_LOST";
+    /// <summary>The Inventor process exited while a call was in flight; unsaved edits are lost.</summary>
+    public const string HOST_CRASHED = "HOST_CRASHED";
     public const string NO_DOCUMENT = "NO_DOCUMENT";
     public const string WRONG_DOCUMENT_TYPE = "WRONG_DOCUMENT_TYPE";
     public const string INVALID_ARGUMENT = "INVALID_ARGUMENT";

@@ -31,6 +31,9 @@ internal sealed class TargetBinding
         _probe = probe ?? ProbeProcess;
     }
 
+    /// <summary>The process probe this binding uses (injectable for tests).</summary>
+    internal Func<int, ProcessProbe> Probe => _probe;
+
     /// <summary>Target id of the live selection, without probing or binding.</summary>
     internal string? SelectedTargetId { get { lock (_gate) return _current?.TargetId; } }
 

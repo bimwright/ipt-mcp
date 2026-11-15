@@ -193,6 +193,34 @@ public sealed class PluginClient
         }
     }
 
+    // Windows Error Reporting can keep a crashing Inventor alive for a few seconds while it writes the dump.
+    internal const int CrashProbeMs = 5000;
+
+    /// <summary>
+    /// The add-in closed the connection without answering. If the Inventor process is gone (checked for up
+    /// to <paramref name="waitMs"/>), the host died inside the call: HOST_CRASHED. Otherwise TARGET_UNAVAILABLE.
+    /// Both name the target so the agent knows which session the call went to.
+    /// </summary>
+    internal static async Task<InventorGatewayException> ClassifyClosedConnectionAsync(TargetDescriptor target,
+        Func<int, TargetBinding.ProcessProbe> probe, int waitMs, CancellationToken ct = default)
+    {
+        var deadline = Environment.TickCount64 + waitMs;
+        while (true)
+        {
+            if (!probe(target.ProcessId).Running)
+                return new InventorGatewayException(InventorErrorCodes.HOST_CRASHED,
+                    $"Inventor {target.TargetId} exited during this call; it most likely crashed inside the command. " +
+                    "Edits since the last save are lost. Do not resend the call. Tell the user, and confirm with them before " +
+                    "switching to another Inventor and reopening the model. Inventor's own crash files, if written: " +
+                    @"%TEMP%\Inventor*.dmp and Inventor*data.tmp, %LOCALAPPDATA%\Autodesk\CER.");
+            if (Environment.TickCount64 >= deadline) break;
+            await Task.Delay(250, ct);
+        }
+        return new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE,
+            $"The add-in of {target.TargetId} closed the connection while Inventor is still running " +
+            "(it may be writing a crash report or showing a dialog). Call inventor_health before retrying; do not automatically resend mutations.");
+    }
+
     private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct, int timeoutMs)
     {
         if (!await _sendSlots.WaitAsync(0, ct))
@@ -229,7 +257,10 @@ public sealed class PluginClient
             var read = await NdjsonLineReader.ReadLineBoundedAsync(reader, _config.MaxResponseBytes);
             if (read.Overflow)
                 throw new InventorGatewayException(InventorErrorCodes.RESPONSE_TOO_LARGE, $"add-in response exceeded {_config.MaxResponseBytes} bytes");
-            return read.Line ?? throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE, "add-in closed the connection");
+            if (read.Line != null) return read.Line;
+            // A cancelled call closes its own stream: report cancellation/TIMEOUT, not a host fault.
+            budget.Token.ThrowIfCancellationRequested();
+            throw await ClassifyClosedConnectionAsync(target, _binding.Probe, CrashProbeMs, budget.Token);
         }
         catch (Exception) when (ct.IsCancellationRequested) { ct.ThrowIfCancellationRequested(); throw; }
         catch (Exception) when (budget.IsCancellationRequested)

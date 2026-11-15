@@ -41,6 +41,8 @@ public static class ServerInstructions
         "AMBIGUOUS_TARGET with candidates; call inventor_list_available_targets, ask the user which model if unclear, then " +
         "inventor_switch_target with pid:<n> or id:<target_id>. The selection is never replaced automatically: TARGET_LOST " +
         "means it exited, so confirm the model and switch explicitly. inventor_get_current_target reports the selected target. " +
+        "HOST_CRASHED means Inventor died inside that call: edits since the last save are lost; do not resend it, tell the user " +
+        "and confirm before switching to another Inventor. " +
         "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
         "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +
