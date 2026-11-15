@@ -43,7 +43,8 @@ public class ClosedConnectionTests
             .Select(m => m.GetCustomAttribute<DescriptionAttribute>()!.Description).Single();
 
         Assert.Contains("SecondFormattedText on a detail view", description);
-        Assert.Contains("GetMinimumDistance on TransientBRep", description);
+        Assert.Contains("GetMinimumDistance between a TransientBRep body and an occurrence body", description);
+        Assert.Contains("copy both with TransientBRep.Copy first", description);
         Assert.Contains("HOST_CRASHED", description);
     }
 
