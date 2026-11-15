@@ -41,6 +41,10 @@ public static class ServerInstructions
         "AMBIGUOUS_TARGET with candidates; call inventor_list_available_targets, ask the user which model if unclear, then " +
         "inventor_switch_target with pid:<n> or id:<target_id>. The selection is never replaced automatically: TARGET_LOST " +
         "means it exited, so confirm the model and switch explicitly. inventor_get_current_target reports the selected target. " +
+        "Before the first write, check the active document with the user and call inventor_switch_target(target=\"pid:<n>\", verify=true); " +
+        "writes return TARGET_UNCONFIRMED until then. DOCUMENT_CHANGED or DOCUMENT_UNCONFIRMED: the write was not started because " +
+        "another document is active; confirm the intended document again, or pass document=<path or name>. Opening or creating a document " +
+        "moves the confirmation to it. PAIRING_REQUIRED: update the server and add-in together; reads still work. " +
         "HOST_CRASHED means Inventor died inside that call: edits since the last save are lost; do not resend it, tell the user " +
         "and confirm before switching to another Inventor. " +
         "Versions are 4-digit years (2022..2027). " +

@@ -31,4 +31,9 @@ public sealed class InventorResponseMeta
     [JsonProperty("inventor_year")] public int? InventorYear { get; set; }
     [JsonProperty("duration_ms")] public long DurationMs { get; set; }
     [JsonProperty("read_only_enforced")] public bool? ReadOnlyEnforced { get; set; }
+    /// <summary>The active document after the command (document_target_v1), or <see cref="DocumentTargetPolicy.NoDocument"/>.</summary>
+    [JsonProperty("document_id", NullValueHandling = NullValueHandling.Ignore)] public string? DocumentId { get; set; }
+    [JsonProperty("document_title", NullValueHandling = NullValueHandling.Ignore)] public string? DocumentTitle { get; set; }
+    /// <summary>Set when an open/create command moved the confirmed document to the one it activated (owner decision Q-B).</summary>
+    [JsonProperty("repin_document_id", NullValueHandling = NullValueHandling.Ignore)] public string? RepinDocumentId { get; set; }
 }

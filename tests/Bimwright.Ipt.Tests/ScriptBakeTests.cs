@@ -138,11 +138,11 @@ public sealed class ScriptBakeTests : IDisposable
         {
             TargetId = "inventor-2027-" + Environment.ProcessId, ProcessId = Environment.ProcessId,
             InventorYear = 2027, HostApp = "Inventor", Transport = "pipe", PipeName = pipe,
-            AuthToken = "test-token", LastHeartbeatUtc = DateTimeOffset.UtcNow,
+            AuthToken = "test-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow,
         }));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var connected = server.WaitForConnectionAsync(timeout.Token);
-        var call = new ToolBakerWriteTools(new PluginClient(config), config, modules, new ServerState(config))
+        var call = new ToolBakerWriteTools(new PluginClient(config).Confirmed(), config, modules, new ServerState(config))
             .RunBakedTool("demo_rail", "[{\"name\":\"P07\"}]", timeout.Token);
         await connected;
         using var input = new StreamReader(server, leaveOpen: true);

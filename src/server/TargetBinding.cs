@@ -17,7 +17,8 @@ internal sealed class TargetBinding
 {
     internal readonly record struct ProcessProbe(bool Running, DateTime? StartUtc);
 
-    private sealed record Selection(string TargetId, int ProcessId, DateTime? StartUtc, string SelectedBy);
+    private sealed record Selection(string TargetId, int ProcessId, DateTime? StartUtc, string SelectedBy,
+        string? DocumentId = null, string? DocumentTitle = null);
 
     private readonly object _gate = new();
     private readonly string? _configSelector;
@@ -38,6 +39,27 @@ internal sealed class TargetBinding
     internal string? SelectedTargetId { get { lock (_gate) return _current?.TargetId; } }
 
     internal string? SelectedBy { get { lock (_gate) return _current?.SelectedBy; } }
+
+    /// <summary>The confirmed document of <paramref name="target"/> (document_target_v1), or null when not confirmed.</summary>
+    internal (string Id, string? Title)? PinnedDocument(TargetDescriptor target)
+    {
+        lock (_gate)
+            return _current is { DocumentId: { } id } cur && IsSelection(cur, target) ? (id, cur.DocumentTitle) : null;
+    }
+
+    /// <summary>Pins the document writes must run on; ignored unless <paramref name="target"/> is still the selection.</summary>
+    internal bool PinDocument(TargetDescriptor target, string documentId, string? title)
+    {
+        lock (_gate)
+        {
+            if (_current is not { } cur || !IsSelection(cur, target)) return false;
+            _current = cur with { DocumentId = documentId, DocumentTitle = title };
+            return true;
+        }
+    }
+
+    private static bool IsSelection(Selection s, TargetDescriptor t) =>
+        s.ProcessId == t.ProcessId && string.Equals(s.TargetId, t.TargetId, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The descriptor for this call; binds on first use only when the choice is unambiguous.</summary>
     internal TargetDescriptor Resolve(IReadOnlyList<TargetDescriptor> live)
@@ -90,6 +112,12 @@ internal sealed class TargetBinding
                 throw Fail(InventorErrorCodes.AMBIGUOUS_TARGET,
                     $"{matches.Count} Inventor sessions match '{key}'. Use pid:<n> or id:<target_id>. The current selection is unchanged.",
                     _current?.TargetId, matches);
+            // Selecting the same live process again keeps its confirmed document.
+            if (_current is { } cur && IsSelection(cur, matches[0]) && SameProcess(cur))
+            {
+                _current = cur with { SelectedBy = "switch_target" };
+                return matches[0];
+            }
             return Bind(matches[0], "switch_target");
         }
     }

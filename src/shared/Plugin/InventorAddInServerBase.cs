@@ -6,6 +6,7 @@ using System.Threading;
 using InvApi = global::Inventor;      // Autodesk.Inventor.Interop (aliased to avoid the Bimwright.Ipt collision)
 using Newtonsoft.Json;
 using Bimwright.Ipt.Shared.Contracts;
+using Bimwright.Ipt.Shared.Handlers.Core;
 using Bimwright.Ipt.Shared.Infrastructure;
 using Bimwright.Ipt.Shared.Logging;
 using Bimwright.Ipt.Shared.Transport;
@@ -50,6 +51,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     private ConnectionWatch? _connectionWatch;
     private System.Windows.Forms.Timer? _toastSnapshotTimer;
     private InflightBreadcrumb? _inflight;
+    private bool _closeDocumentHooked;
 
     public void Activate(InvApi.ApplicationAddInSite site, bool firstTime)
     {
@@ -107,6 +109,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _server = server;
         _descriptor = descriptor;
         _descriptor.SetupIdentity = setupIdentity;
+        _descriptor.Capabilities = new[] { DocumentTargetPolicy.Protocol };
         server.Start((line, tcs) => HandleLine(line, dispatcher, options, descriptor, tcs, server.Stopping));
         if (server is TcpTransportServer tcp) descriptor.Port = tcp.Port;
 
@@ -116,6 +119,15 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _descriptorWriter.Start(docTitle, docPath, lifetime: server.Stopping);
 
         StartToastUi();
+
+        // Document lifetime ids (document_target_v1): a closed document's id is dropped, so reopening it gets a new one.
+        try
+        {
+            _appEvents ??= _app.ApplicationEvents;
+            _appEvents.OnCloseDocument += OnCloseDocument;
+            _closeDocumentHooked = true;
+        }
+        catch { _closeDocumentHooked = false; }
 
         // Rising-edge watch (rvt-mcp IdlingUpdater parity — Inventor has no Idling event):
         // each client attach/re-attach gets one "Agent connected" toast.
@@ -296,10 +308,24 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             var task = _sta!.TryInvokeAsync(() =>
             {
                 // Marker on the STA, right before the API work: commands run one at a time here.
-                breadcrumb?.Begin(env.Id.ToString("N"), env.Command ?? "", env.Params?.ToString(Formatting.None));
+                // Document target (family contract FC-DOC-04): checked on the STA right before the handler.
+                var command = env.Command ?? "";
+                var isReadOnly = !dispatcher.Commands.TryGetValue(command, out var handler) || handler.IsReadOnly;
+                var before = ActiveDocumentStamp.Read(_app);
+                var refusal = DocumentTargetPolicy.Check(command, isReadOnly, env.Params, env.DocumentTarget, before.Id, before.Title);
+                if (refusal is { } refused)
+                {
+                    var rm = new InventorResponseMeta { TargetId = descriptor.TargetId, InventorYear = o.Year, DocumentId = before.Id, DocumentTitle = before.Title };
+                    return InventorCommandResult.Fail(env.Id, refused.Code, refused.Message, rm);
+                }
+                breadcrumb?.Begin(env.Id.ToString("N"), command, env.Params?.ToString(Formatting.None));
                 try
                 {
                     var r = dispatcher.Dispatch(ctx, env);
+                    var after = ActiveDocumentStamp.Read(_app);
+                    r.Meta.DocumentId = after.Id;
+                    r.Meta.DocumentTitle = after.Title;
+                    if (r.Ok) r.Meta.RepinDocumentId = DocumentTargetPolicy.Repin(command, env.DocumentTarget, before.Id, after.Id);
                     RefreshToastSnapshot();   // still on the STA: cheap HWND/visibility read for toast placement
                     return r;
                 }
@@ -552,6 +578,14 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         }
     }
 
+    private void OnCloseDocument(InvApi._Document document, string fullDocumentName, InvApi.EventTimingEnum timing,
+        InvApi.NameValueMap context, out InvApi.HandlingCodeEnum handling)
+    {
+        handling = InvApi.HandlingCodeEnum.kEventNotHandled;
+        if (timing != InvApi.EventTimingEnum.kBefore) return;
+        try { DocumentIdTable.Shared.Forget(document.InternalName); } catch { }
+    }
+
     /// <summary>A different view means a different anchor.</summary>
     private void OnActivateView(
         InvApi.View view, InvApi.EventTimingEnum timing, InvApi.NameValueMap context, out InvApi.HandlingCodeEnum handling)
@@ -614,6 +648,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             if (_appEvents != null)
             {
                 _appEvents.OnActivateView -= OnActivateView;
+                if (_closeDocumentHooked) _appEvents.OnCloseDocument -= OnCloseDocument;
+                _closeDocumentHooked = false;
             }
         }
         catch { }

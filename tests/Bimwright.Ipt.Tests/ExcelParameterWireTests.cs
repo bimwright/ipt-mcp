@@ -18,9 +18,9 @@ public sealed class ExcelParameterWireTests : IDisposable
         File.WriteAllText(Path.Combine(_directory, "target.json"), JsonConvert.SerializeObject(new TargetDescriptor
         {
             TargetId = "inventor-2027-" + Environment.ProcessId, ProcessId = Environment.ProcessId, InventorYear = 2027,
-            HostApp = "Inventor", Transport = "pipe", PipeName = _pipe, AuthToken = "test-token", LastHeartbeatUtc = DateTimeOffset.UtcNow,
+            HostApp = "Inventor", Transport = "pipe", PipeName = _pipe, AuthToken = "test-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow,
         }));
-        _tools = new ParameterTools(new PluginClient(new InventorMcpConfig { DescriptorDirectory = _directory, TimeoutMs = 5000 }));
+        _tools = new ParameterTools(new PluginClient(new InventorMcpConfig { DescriptorDirectory = _directory, TimeoutMs = 5000 }).Confirmed());
     }
     public void Dispose() => Directory.Delete(_directory, true);
 

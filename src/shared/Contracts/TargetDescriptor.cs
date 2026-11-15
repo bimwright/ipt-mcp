@@ -17,4 +17,6 @@ public sealed class TargetDescriptor
     [JsonProperty("document_path")] public string? DocumentPath { get; set; }
     [JsonProperty("last_heartbeat_utc")] public DateTimeOffset LastHeartbeatUtc { get; set; }
     [JsonProperty("setup_identity", NullValueHandling = NullValueHandling.Ignore)] public Newtonsoft.Json.Linq.JObject? SetupIdentity { get; set; }
+    /// <summary>Wire protocols the add-in supports, e.g. <see cref="DocumentTargetPolicy.Protocol"/>; older add-ins omit it.</summary>
+    [JsonProperty("capabilities", NullValueHandling = NullValueHandling.Ignore)] public string[]? Capabilities { get; set; }
 }

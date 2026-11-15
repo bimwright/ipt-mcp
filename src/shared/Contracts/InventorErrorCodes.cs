@@ -14,6 +14,14 @@ public static class InventorErrorCodes
     public const string TARGET_LOST = "TARGET_LOST";
     /// <summary>The Inventor process exited while a call was in flight; unsaved edits are lost.</summary>
     public const string HOST_CRASHED = "HOST_CRASHED";
+    /// <summary>A write was refused by the gateway: the target and its document are not confirmed (switch_target verify=true).</summary>
+    public const string TARGET_UNCONFIRMED = "TARGET_UNCONFIRMED";
+    /// <summary>The add-in refused a write: no document is confirmed. The command was not started.</summary>
+    public const string DOCUMENT_UNCONFIRMED = "DOCUMENT_UNCONFIRMED";
+    /// <summary>The add-in refused a write: the active document is not the confirmed one. The command was not started.</summary>
+    public const string DOCUMENT_CHANGED = "DOCUMENT_CHANGED";
+    /// <summary>A write was refused because the gateway and add-in do not both support the document target protocol.</summary>
+    public const string PAIRING_REQUIRED = "PAIRING_REQUIRED";
     public const string NO_DOCUMENT = "NO_DOCUMENT";
     public const string WRONG_DOCUMENT_TYPE = "WRONG_DOCUMENT_TYPE";
     public const string INVALID_ARGUMENT = "INVALID_ARGUMENT";

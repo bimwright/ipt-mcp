@@ -136,6 +136,7 @@ public sealed class PluginClient
         {
             var target = ResolveTarget();
             targetId = target.TargetId;
+            var pinned = GateWrite(command, @params, target);
 
             var effectiveTimeoutMs = ResolveEffectiveTimeout(_config.TimeoutMs, timeoutMs);
             var env = new InventorCommandEnvelope
@@ -148,7 +149,8 @@ public sealed class PluginClient
                 ReadOnly = _config.ReadOnly,
                 RecordCalls = _config.EnableCallLog,
                 SpillRetentionHours = _config.SpillRetentionHours,
-                Tool = ToolCatalog.ForCommand(ActivityCommand.Value ?? command, effectiveTimeoutMs)
+                Tool = ToolCatalog.ForCommand(ActivityCommand.Value ?? command, effectiveTimeoutMs),
+                DocumentTarget = new DocumentTargetEnvelope { ExpectedDocumentId = pinned?.Id },
             };
 
             var line = JsonConvert.SerializeObject(env) + "\n";
@@ -160,6 +162,9 @@ public sealed class PluginClient
             // "meta": null in the wire JSON overrides the initializer, so guard before reading it.
             targetId = result.Meta?.TargetId ?? targetId;
             pluginDurationMs = result.Meta?.DurationMs;
+            // Owner decision Q-B: an open/create command that activated a new document moves the pin to it.
+            if (result.Meta?.RepinDocumentId is { Length: > 0 } repin)
+                _binding.PinDocument(target, repin, result.Meta.DocumentTitle);
             data = result.Data;
             if (!result.Ok)
             {
@@ -191,6 +196,55 @@ public sealed class PluginClient
             ServerLogger.LogFinish(requestId, command, ok, sw.ElapsedMilliseconds, err, errCode, targetId,
                 responseBytes, pluginDurationMs, data);
         }
+    }
+
+    internal (string Id, string? Title)? PinnedDocument(TargetDescriptor target) => _binding.PinnedDocument(target);
+
+    internal bool PinDocument(TargetDescriptor target, string documentId, string? title) => _binding.PinDocument(target, documentId, title);
+
+    internal static bool SupportsDocumentTarget(TargetDescriptor target) =>
+        target.Capabilities?.Contains(DocumentTargetPolicy.Protocol, StringComparer.Ordinal) == true;
+
+    /// <summary>
+    /// Family contract FC-PAIR-01 / FC-DOC-03: a write is not sent to an add-in without document_target_v1,
+    /// nor before the target and its document are confirmed. Returns the pinned document for the envelope.
+    /// </summary>
+    private (string Id, string? Title)? GateWrite(string command, JObject @params, TargetDescriptor target)
+    {
+        var pinned = _binding.PinnedDocument(target);
+        // Commands without an MCP tool (health, internal calls) are left to the add-in's own check.
+        if (ToolCatalog.ForCommand(command, 0) is not { ReadOnly: false }
+            || !DocumentTargetPolicy.NeedsConfirmedTarget(command, isReadOnly: false, @params))
+            return pinned;
+        if (!SupportsDocumentTarget(target))
+            throw PairingRequired(target, command);
+        if (pinned is null)
+            throw new InventorGatewayException(InventorErrorCodes.TARGET_UNCONFIRMED,
+                $"{command} was not sent: writes need a confirmed Inventor and document. Check with the user that " +
+                (string.IsNullOrEmpty(target.DocumentTitle) ? "this Inventor" : $"'{target.DocumentTitle}'") +
+                $" is what to change, then call inventor_switch_target(target=\"pid:{target.ProcessId}\", verify=true) and repeat the call.",
+                new JObject { ["selected_target_id"] = target.TargetId, ["document_title"] = target.DocumentTitle });
+        return pinned;
+    }
+
+    private static InventorGatewayException PairingRequired(TargetDescriptor target, string command) =>
+        new(InventorErrorCodes.PAIRING_REQUIRED,
+            $"{command} was not sent: the Inventor add-in of {target.TargetId} does not confirm documents ({DocumentTargetPolicy.Protocol}). " +
+            "Update the ipt-mcp server and the Inventor add-in together from the same release, then restart Inventor and the MCP client. Reads still work.");
+
+    /// <summary>inventor_switch_target(verify=true): reads the active document on the selected target and pins it.</summary>
+    internal async Task<(string Id, string? Title)> ConfirmDocumentAsync(TargetDescriptor target, CancellationToken ct)
+    {
+        if (!SupportsDocumentTarget(target)) throw PairingRequired(target, "verify");
+        var data = await SendAsync("document_target", new JObject(), ct) as JObject;
+        var id = (string?)data?["document_id"];
+        if (string.IsNullOrEmpty(id))
+            throw new InventorGatewayException(InventorErrorCodes.API_ERROR, $"Inventor {target.TargetId} did not report its active document.");
+        var title = (string?)data!["document_title"];
+        if (!_binding.PinDocument(target, id!, title))
+            throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE,
+                $"The selected target changed while {target.TargetId} was being verified; call inventor_switch_target again.");
+        return (id!, title);
     }
 
     // Windows Error Reporting can keep a crashing Inventor alive for a few seconds while it writes the dump.

@@ -22,7 +22,7 @@ public sealed class Issue22GatewayTests
             JsonConvert.SerializeObject(new TargetDescriptor {
                 TargetId = $"inventor-{year}-{Environment.ProcessId}", ProcessId = Environment.ProcessId,
                 InventorYear = year, HostApp = "Inventor", Transport = "pipe", PipeName = name,
-                AuthToken = "token-" + year, LastHeartbeatUtc = DateTimeOffset.UtcNow }));
+                AuthToken = "token-" + year, Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow }));
         try
         {
             WriteDescriptor(2025, selectedName);
@@ -35,6 +35,7 @@ public sealed class Issue22GatewayTests
             Assert.False(other.IsConnected);
 
             var target = client.SwitchTarget("id:inventor-2025-" + Environment.ProcessId);
+            client.PinDocument(target, DocumentTargetFixture.DocumentId, null);
             var connected = selected.WaitForConnectionAsync(timeout.Token);
             var call = client.SendAsync("create_part", new { }, timeout.Token);
             await connected;
@@ -62,8 +63,8 @@ public sealed class Issue22GatewayTests
         File.WriteAllText(Path.Combine(root, "target.json"), JsonConvert.SerializeObject(new TargetDescriptor {
             TargetId = "inventor-2027-" + Environment.ProcessId, ProcessId = Environment.ProcessId,
             InventorYear = 2027, HostApp = "Inventor", Transport = "pipe", PipeName = name,
-            AuthToken = "test-token", LastHeartbeatUtc = DateTimeOffset.UtcNow }));
-        var client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = root });
+            AuthToken = "test-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow }));
+        var client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = root }).Confirmed();
         using var cancellation = new CancellationTokenSource();
         try
         {
@@ -89,7 +90,7 @@ public sealed class Issue22GatewayTests
         File.WriteAllText(Path.Combine(root, "target.json"), JsonConvert.SerializeObject(new TargetDescriptor {
             TargetId = "inventor-2027-" + Environment.ProcessId, ProcessId = Environment.ProcessId,
             InventorYear = 2027, HostApp = "Inventor", Transport = "pipe", PipeName = name,
-            AuthToken = "test-token", LastHeartbeatUtc = DateTimeOffset.UtcNow }));
+            AuthToken = "test-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow }));
         var client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = root });
         Task? call = null;
         try

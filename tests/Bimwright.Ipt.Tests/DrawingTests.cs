@@ -53,8 +53,8 @@ public sealed class DrawingTests : IDisposable
     public DrawingTests()
     {
         Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, "target.json"), JsonConvert.SerializeObject(new TargetDescriptor { TargetId = "inventor-2027-" + Environment.ProcessId, InventorYear = 2027, ProcessId = Environment.ProcessId, HostApp = "Inventor", Transport = "pipe", PipeName = _pipe, AuthToken = "fixture-token", LastHeartbeatUtc = DateTimeOffset.UtcNow }));
-        _client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = _dir, TimeoutMs = 5000 });
+        File.WriteAllText(Path.Combine(_dir, "target.json"), JsonConvert.SerializeObject(new TargetDescriptor { TargetId = "inventor-2027-" + Environment.ProcessId, InventorYear = 2027, ProcessId = Environment.ProcessId, HostApp = "Inventor", Transport = "pipe", PipeName = _pipe, AuthToken = "fixture-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow }));
+        _client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = _dir, TimeoutMs = 5000 }).Confirmed();
     }
     public void Dispose() => Directory.Delete(_dir, true);
     [Theory]

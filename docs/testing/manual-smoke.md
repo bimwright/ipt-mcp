@@ -58,8 +58,14 @@ integration end to end.
    **Expected:** `ok: true` with `inventor_year`, `process_id`, `has_active_document`, and
    `document_type`.
 
+   Then call `inventor_new_part` once before confirming → **Expected:** `TARGET_UNCONFIRMED`, nothing created.
+   Call `inventor_switch_target` with `pid:<n>` and `verify=true` → **Expected:** `document_confirmed: true`.
+
 7. **New part** — `inventor_new_part`
-   **Expected:** `ok: true`; a new throwaway part (`.ipt`) becomes the active document.
+   **Expected:** `ok: true`; a new throwaway part (`.ipt`) becomes the active document and
+   `inventor_get_current_target` reports it as `confirmed_document_title` (the confirmation follows
+   a document the agent opened or created). Activate another document by hand, run any write →
+   **Expected:** `DOCUMENT_CHANGED`, nothing changed; reactivate the part (or verify again) to continue.
 
 8. **Create a sketch and draw geometry**
    - `inventor_create_sketch` with `plane="XY"` → **Expected:** a new sketch is created and named;

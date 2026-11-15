@@ -24,7 +24,7 @@ public sealed class SendCodeDataTests : IDisposable
         {
             TargetId = "inventor-2027-" + Environment.ProcessId, ProcessId = Environment.ProcessId,
             InventorYear = 2027, HostApp = "Inventor", Transport = "pipe", PipeName = pipe,
-            AuthToken = "test-token", LastHeartbeatUtc = DateTimeOffset.UtcNow,
+            AuthToken = "test-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow,
         }));
         var config = new InventorMcpConfig { DescriptorDirectory = _root, TimeoutMs = 5000 };
         var tools = new CodeTools(new PluginClient(config), new CodeModuleStore(Path.Combine(_root, "modules")));

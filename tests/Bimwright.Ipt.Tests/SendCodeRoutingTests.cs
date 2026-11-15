@@ -120,13 +120,13 @@ public sealed class SendCodeRoutingTests : IDisposable
         {
             TargetId = "inventor-2027-" + Environment.ProcessId, ProcessId = Environment.ProcessId,
             InventorYear = 2027, HostApp = "Inventor", Transport = "pipe", PipeName = pipe,
-            AuthToken = "test-token", LastHeartbeatUtc = DateTimeOffset.UtcNow,
+            AuthToken = "test-token", Capabilities = DocumentTargetFixture.Capabilities, LastHeartbeatUtc = DateTimeOffset.UtcNow,
         }));
         var config = new InventorMcpConfig { DescriptorDirectory = _root, TimeoutMs = 5000 };
         if (scenario == "filtered") config.Toolsets.Add("code");
         var store = new CodeModuleStore(Path.Combine(_root, "modules"));
         if (scenario == "module") store.Save("helpers", "static int F() => 42;", null, Array.Empty<string>(), new JArray());
-        var tools = new CodeTools(new PluginClient(config), store, new ServerState(config));
+        var tools = new CodeTools(new PluginClient(config).Confirmed(), store, new ServerState(config));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var connected = server.WaitForConnectionAsync(timeout.Token);
         var call = tools.SendCode(Survey, scenario == "module" ? new[] { "helpers" } : null,

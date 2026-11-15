@@ -104,10 +104,11 @@ public sealed class SketchFeatureExpressionTests : IDisposable
             Transport = "pipe",
             PipeName = _pipeName,
             AuthToken = "test-token",
+            Capabilities = DocumentTargetFixture.Capabilities,
             LastHeartbeatUtc = DateTimeOffset.UtcNow,
         };
         File.WriteAllText(Path.Combine(_dir, "target.json"), JsonConvert.SerializeObject(descriptor));
-        _client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = _dir, TimeoutMs = 5000 });
+        _client = new PluginClient(new InventorMcpConfig { DescriptorDirectory = _dir, TimeoutMs = 5000 }).Confirmed();
     }
 
     public void Dispose()

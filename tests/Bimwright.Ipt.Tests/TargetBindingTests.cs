@@ -178,7 +178,7 @@ public sealed class TargetBindingTests : IDisposable
         Assert.Equal("AMBIGUOUS_TARGET", (string?)ambiguous["error"]!["code"]);
         Assert.Equal(2, ((JArray)ambiguous["data"]!["candidates"]!).Count);
 
-        var switched = JObject.Parse(tools.SwitchTarget("pid:" + _pids[1]));
+        var switched = JObject.Parse(tools.SwitchTarget("pid:" + _pids[1]).GetAwaiter().GetResult());
         Assert.True((bool)switched["ok"]!);
         Assert.Equal(_pids[1], (int)switched["target"]!["process_id"]!);
 

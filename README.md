@@ -96,6 +96,8 @@ Do **not** `dotnet tool install -g Bimwright.Ipt.Server` — that is not the sup
 
 Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The gateway binds automatically only when exactly one Inventor is live. With several open, calls return `AMBIGUOUS_TARGET` until you pick one: call `inventor_list_available_targets`, then `inventor_switch_target` with `pid:<n>` or `id:<target_id>`. A selected session is never swapped for another: if it exits, calls return `TARGET_LOST` until you switch explicitly.
 
+Writes run only on a confirmed document. Check the active document with the user, then call `inventor_switch_target` with `pid:<n>` and `verify=true` once per session; until then writes return `TARGET_UNCONFIRMED` and are not sent. If another document becomes active, a write returns `DOCUMENT_CHANGED` (or `DOCUMENT_UNCONFIRMED`) from the add-in and is not started; confirm again, or pass `document` (full path or name) to name the target document, which is not tied to the active one. Opening or creating a document with `inventor_open_document(s)`, `inventor_new_part`, `inventor_new_assembly`, `inventor_new_drawing`, `inventor_new_sheet_fabrication_part` or `inventor_create_part` moves the confirmation to the document it activates. The server and add-in must both support `document_target_v1`: with an older add-in or server, writes return `PAIRING_REQUIRED` and reads still work, so update both from the same release.
+
 `inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it.
 
 ---
@@ -199,7 +201,7 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 |---|---|
 | `inventor_list_available_targets` | List detected live Inventor add-in targets (year, pid, transport, active document); `selected` marks the gateway's target. |
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
-| `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, Inventor year, or pipe name; a selector matching several sessions is refused. Server-side only. |
+| `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, Inventor year, or pipe name; a selector matching several sessions is refused. `verify=true` confirms the active document for writes. |
 
 ### query (10) — read-only document/health/model probes and agent outcome reports
 

@@ -2,6 +2,8 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Bimwright.Ipt.Shared.Contracts;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json.Linq;
@@ -41,6 +43,7 @@ public sealed class MetaTools
                 var t = _client.ResolveTarget();
                 var json = JObject.FromObject(PublicTarget(t, true));
                 json["selected_by"] = _client.SelectedBy;
+                AddDocumentPin(json, t);
                 return ToolResponse.Serialize(json);
             }
             catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
@@ -48,17 +51,57 @@ public sealed class MetaTools
     }
 
     [McpServerTool(Name = "inventor_switch_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Select the Inventor session this gateway uses: pid:<n> or id:<target_id> (preferred), a 4-digit year (2022..2027), or a pipe name. A selector matching several sessions is refused. The selection is kept until switched again and is never replaced automatically. Server-side only; does not change the Inventor document.")]
-    public string SwitchTarget(string target) =>
-        LoggedMeta("inventor_switch_target", new { target }, () =>
+     Description("Select the Inventor session this gateway uses: pid:<n> or id:<target_id> (preferred), a 4-digit year (2022..2027), or a pipe name. A selector matching several sessions is refused. The selection is kept until switched again and is never replaced automatically. " +
+                 "verify=true also confirms the document that is active in that Inventor now: writes run only on a confirmed target and return TARGET_UNCONFIRMED until this is called once, and DOCUMENT_CHANGED (command not started) when another document became active. " +
+                 "Check with the user that the reported document is the one to change. Opening or creating a document with inventor_open_document/new_part/new_assembly/new_drawing/create_part moves the confirmation to it; a write with an explicit document parameter is not tied to the active document. " +
+                 "Selecting the same session again keeps its confirmed document. Does not change the Inventor document.")]
+    public Task<string> SwitchTarget(string target, bool verify = false, CancellationToken ct = default) =>
+        LoggedMetaAsync("inventor_switch_target", new { target, verify }, async () =>
         {
             try
             {
                 var t = _client.SwitchTarget(target);
-                return ToolResponse.Serialize(new { ok = true, selector = target, target = PublicTarget(t, true) });
+                var json = new JObject { ["ok"] = true, ["selector"] = target, ["target"] = JObject.FromObject(PublicTarget(t, true)) };
+                if (verify) await _client.ConfirmDocumentAsync(t, ct);
+                AddDocumentPin(json, t);
+                return ToolResponse.Serialize(json);
             }
             catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
         });
+
+    private void AddDocumentPin(JObject json, TargetDescriptor t)
+    {
+        var pin = _client.PinnedDocument(t);
+        json["document_confirmed"] = pin is not null;
+        json["confirmed_document_id"] = pin?.Id;
+        json["confirmed_document_title"] = pin?.Title;
+        if (pin is null)
+            json["next_step"] = PluginClient.SupportsDocumentTarget(t)
+                ? $"Before writes: inventor_switch_target(target=\"pid:{t.ProcessId}\", verify=true)."
+                : "This add-in does not confirm documents (document_target_v1); writes return PAIRING_REQUIRED until the server and add-in are updated together.";
+    }
+
+    private static async Task<string> LoggedMetaAsync(string tool, object? parameters, Func<Task<string>> run)
+    {
+        var requestId = Guid.NewGuid().ToString("N");
+        var sw = Stopwatch.StartNew();
+        ServerLogger.LogStart(requestId, tool, parameters);
+        try
+        {
+            var result = await run();
+            sw.Stop();
+            JToken? payload = null;
+            try { payload = JToken.Parse(result); } catch { /* non-JSON payload */ }
+            ServerLogger.LogFinish(requestId, tool, true, sw.ElapsedMilliseconds, data: payload);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            ServerLogger.LogFinish(requestId, tool, false, sw.ElapsedMilliseconds, ex.Message);
+            throw;
+        }
+    }
 
     private static string LoggedMeta(string tool, object? parameters, Func<string> run)
     {

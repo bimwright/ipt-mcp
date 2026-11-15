@@ -20,6 +20,7 @@ public static partial class InventorCommandRegistry
     {
         add(new HealthHandler());
         add(new ReportTaskResultHandler());
+        add(new DocumentTargetHandler());
         add(new GetDocumentInfoHandler());
         add(new ListBodiesHandler());
         add(new ListFeaturesHandler());

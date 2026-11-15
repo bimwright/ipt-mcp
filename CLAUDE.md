@@ -38,6 +38,8 @@ The server scans these files (`TargetRegistry.List()`), dropping any whose `proc
 
 Target binding (`src/server/TargetBinding.cs`, rvt-mcp #19 parity): with no selection, a call binds only when exactly one live target matches `--target` (or any target); several matches return `AMBIGUOUS_TARGET` with candidates. A selection is kept by pid + process start time and is never replaced implicitly: an exited or pid-reused process returns `TARGET_LOST` until `inventor_switch_target`; a running process whose descriptor is missing returns `TARGET_UNAVAILABLE` and keeps the selection. A failed switch leaves the current selection unchanged.
 
+Document target (`document_target_v1`, family contract FC-DOC/FC-PAIR; `src/shared/Contracts/DocumentTarget.cs`): `inventor_switch_target(verify=true)` pins the active document's lifetime id (add-in `DocumentIdTable`, keyed by InternalName, dropped on close). The gateway refuses writes before that (`TARGET_UNCONFIRMED`) or to an add-in without the capability (`PAIRING_REQUIRED`); the add-in checks on the STA right before the handler (`DOCUMENT_UNCONFIRMED`, `DOCUMENT_CHANGED`, `PAIRING_REQUIRED` for an old gateway). Writes with an explicit `document` parameter skip the active-document check; open/create commands are exempt and move the pin to the document they activate (`repin_document_id`); `send_code` compile_only and `apply_bake` are not document writes.
+
 ## Project Structure
 
 ```
@@ -158,7 +160,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; default `%LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
 
 ## Error Codes (`InventorErrorCodes`)
-`NO_TARGET, TARGET_UNAVAILABLE, AMBIGUOUS_TARGET, TARGET_LOST, HOST_CRASHED, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
+`NO_TARGET, TARGET_UNAVAILABLE, AMBIGUOUS_TARGET, TARGET_LOST, HOST_CRASHED, TARGET_UNCONFIRMED, DOCUMENT_UNCONFIRMED, DOCUMENT_CHANGED, PAIRING_REQUIRED, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
 
 ## Decision Log
 - **C# server over TypeScript** — single language, direct API access patterns shared with rvt-mcp / nwd-mcp.
