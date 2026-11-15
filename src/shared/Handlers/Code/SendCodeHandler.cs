@@ -118,12 +118,15 @@ public sealed class SendCodeHandler : IInventorCommand
         var rolledBack = false;
         string? hostMessages = null;
         var hostWarnings = false;
+        var skipped = Array.Empty<SkippedScriptReference>();
 
         try
         {
-            var refs = AppDomain.CurrentDomain.GetAssemblies()
+            var loaded = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
                 .ToArray();
+            // rvt-mcp #38: a loaded DLL whose metadata Roslyn cannot read is left out instead of failing every compile with CS0009.
+            var refs = ScriptReferences.FromPaths(loaded.Select(a => a.Location).Distinct(StringComparer.OrdinalIgnoreCase), out skipped);
 
             // The add-in loads into a private AssemblyLoadContext (EnableDynamicLoading), so the
             // Globals type and the Inventor interop live in that context. Roslyn's default loader
@@ -131,7 +134,7 @@ public sealed class SendCodeHandler : IInventorCommand
             // script to a *different* Globals type than the instance we pass in -> InvalidCastException.
             // Register the already-loaded assemblies so the script binds to the very same types.
             var loader = new InteractiveAssemblyLoader();
-            foreach (var asm in refs)
+            foreach (var asm in loaded)
             {
                 try { loader.RegisterDependency(asm); } catch { /* skip identity collisions */ }
             }
@@ -157,12 +160,13 @@ public sealed class SendCodeHandler : IInventorCommand
                 var data = new JObject
                 {
                     ["ok"] = diags.Length == 0 && shapeError == null,
-                    ["error"] = diags.Length > 0 ? CompileErrorText(diags) : shapeError,
+                    ["error"] = diags.Length > 0 ? CompileErrorText(diags) + SkippedNote(skipped) : shapeError,
                     ["compile_only"] = true,
                     ["modules"] = moduleEcho,
                 };
                 if (diags.Length > 0) AttachDiagnostics(data, diags);
                 else data["signatures"] = Signatures(modules);
+                AttachSkipped(data, skipped);
                 return InventorCommandResult.Success(Guid.Empty, data, meta);
             }
 
@@ -217,6 +221,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 }
             }
             Echo(ok, moduleEcho, silent);
+            AttachSkipped(ok, skipped);
             return InventorCommandResult.Success(Guid.Empty, ok, meta);
         }
         catch (CompilationErrorException ex)
@@ -225,11 +230,12 @@ public sealed class SendCodeHandler : IInventorCommand
             var data = new JObject
             {
                 ["ok"] = false,
-                ["error"] = ErrorSanitizer.Sanitize(CompileErrorText(errors.Length > 0 ? errors : ex.Diagnostics.ToArray()))
+                ["error"] = ErrorSanitizer.Sanitize(CompileErrorText(errors.Length > 0 ? errors : ex.Diagnostics.ToArray()) + SkippedNote(skipped))
             };
             AttachDiagnostics(data, errors);
             ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
             Echo(data, moduleEcho, silent);
+            AttachSkipped(data, skipped);
             return InventorCommandResult.Success(Guid.Empty, data, meta);
         }
         catch (Exception ex)
@@ -274,6 +280,17 @@ public sealed class SendCodeHandler : IInventorCommand
         if (moduleEcho.Count > 0) data["modules"] = moduleEcho;
         if (silent) data["silent"] = true;
     }
+
+    private static void AttachSkipped(JObject data, SkippedScriptReference[] skipped)
+    {
+        if (skipped.Length == 0) return;
+        data["skipped_references"] = new JArray(skipped.Select(s =>
+            new JObject { ["name"] = s.Name, ["reason"] = ErrorSanitizer.Sanitize(s.Reason) }));
+    }
+
+    private static string SkippedNote(SkippedScriptReference[] skipped) =>
+        skipped.Length == 0 ? string.Empty
+            : "\nSkipped references (unreadable metadata): " + string.Join(", ", skipped.Select(s => s.Name));
 
     private static bool TryReadModules(JToken? token, out List<SendCodeSource.Part> modules, out JArray echo, out string? error)
     {

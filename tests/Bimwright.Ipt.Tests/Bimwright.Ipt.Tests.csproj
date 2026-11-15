@@ -25,6 +25,8 @@
     <PackageReference Include="xunit" Version="2.6.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- Same Roslyn as the add-ins, for ScriptReferences (send_code compile references). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -56,6 +58,7 @@
     <Compile Include="..\..\src\shared\Handlers\Assembly\CreateDesignViewHandler.cs" LinkBase="Shared\Handlers\Assembly" />
     <Compile Include="..\..\src\shared\Handlers\Vec3Params.cs" LinkBase="Shared\Handlers" />
     <Compile Include="..\..\src\shared\Handlers\EnumText.cs" LinkBase="Shared\Handlers" />
+    <Compile Include="..\..\src\shared\Handlers\Code\ScriptReferences.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Logging\*.cs" Exclude="..\..\src\shared\Logging\BoundedLogFile.cs" LinkBase="Shared\Logging" />
     <!-- Host-free toast model: the card state machine, content builder, layout, config and status text.
          The WPF card itself is covered by tests/Bimwright.Ipt.Toast.Tests. -->
