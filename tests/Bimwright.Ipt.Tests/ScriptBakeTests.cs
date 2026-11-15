@@ -66,7 +66,7 @@ public sealed class ScriptBakeTests : IDisposable
     public async Task Accepting_needs_the_same_code_and_then_points_send_code_at_the_tool()
     {
         var config = Config();
-        for (var i = 0; i < 3; i++) ScriptBake.Observe(config, Code, ["pors_helpers"], Data(i), ok: true, 10);
+        for (var i = 0; i < 3; i++) ScriptBake.Observe(config, Code, ["demo_helpers"], Data(i), ok: true, 10);
         var db = Db(config);
         var id = Assert.Single(db.ListSuggestions()).Id;
         Task<JObject> Apply(JObject request)
@@ -75,25 +75,25 @@ public sealed class ScriptBakeTests : IDisposable
             return Task.FromResult(new JObject { ["success"] = true, ["source_code"] = record.SourceCode, ["params_schema"] = record.ParamsSchema });
         }
 
-        var missing = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "pors_rail", pluginApply: Apply));
+        var missing = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "demo_rail", pluginApply: Apply));
         Assert.Equal("code_required", (string?)missing["error_code"]);
-        var other = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "pors_rail", pluginApply: Apply, code: Code + " ", modules: ["pors_helpers"]));
+        var other = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "demo_rail", pluginApply: Apply, code: Code + " ", modules: ["demo_helpers"]));
         Assert.Equal("code_mismatch", (string?)other["error_code"]);
-        var noModules = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "pors_rail", pluginApply: Apply, code: Code));
+        var noModules = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "demo_rail", pluginApply: Apply, code: Code));
         Assert.Equal("code_mismatch", (string?)noModules["error_code"]);
 
-        var ok = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "pors_rail", pluginApply: Apply, code: Code, modules: ["pors_helpers"]));
+        var ok = JObject.Parse(await AcceptBakeSuggestionHandler.HandleAsync(db, id, "demo_rail", pluginApply: Apply, code: Code, modules: ["demo_helpers"]));
         Assert.True(ok.Value<bool>("ok"), ok.ToString());
-        var tool = db.GetRegistryRecord("pors_rail")!;
+        var tool = db.GetRegistryRecord("demo_rail")!;
         Assert.Equal(ScriptBake.Source, tool.Source);
         Assert.True(BakedToolRuntimeSource.TryReadScript(tool.SourceCode, out var code, out var modules, out _));
         Assert.Equal(Code, code);
-        Assert.Equal(new[] { "pors_helpers" }, modules);
+        Assert.Equal(new[] { "demo_helpers" }, modules);
         Assert.Equal("{\"type\":\"array\"}", tool.ParamsSchema);
 
-        var hint = ScriptBake.Observe(config, Code, ["pors_helpers"], Data(9), ok: true, 10);
+        var hint = ScriptBake.Observe(config, Code, ["demo_helpers"], Data(9), ok: true, 10);
         Assert.Equal("inventor_run_baked_tool", (string?)hint?["tool"]);
-        Assert.Equal("pors_rail", (string?)hint!["args_sketch"]?["name"]);
+        Assert.Equal("demo_rail", (string?)hint!["args_sketch"]?["name"]);
     }
 
     [Fact]
@@ -116,19 +116,19 @@ public sealed class ScriptBakeTests : IDisposable
         var db = Db(config);
         Assert.True(db.TryInsertRegistryRecord(new BakedToolRecord
         {
-            Name = "pors_rail", Description = "d", Source = "script", ParamsSchema = "{\"type\":\"array\"}", CompatMap = "{}",
+            Name = "demo_rail", Description = "d", Source = "script", ParamsSchema = "{\"type\":\"array\"}", CompatMap = "{}",
             SourceCode = BakedToolRuntimeSource.BuildScript(Code, [], ScriptBake.Key(Code, null)),
             ReviewedByUser = true, CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
         }));
         var modules = new CodeModuleStore(Path.Combine(_root, "modules"));
 
         var off = new InventorMcpConfig { BakeDirectory = config.BakeDirectory, DescriptorDirectory = _root, EnableSendCode = false };
-        var refused = JObject.Parse(await new ToolBakerWriteTools(new PluginClient(off), off, modules, new ServerState(off)).RunBakedTool("pors_rail", "[]", default));
+        var refused = JObject.Parse(await new ToolBakerWriteTools(new PluginClient(off), off, modules, new ServerState(off)).RunBakedTool("demo_rail", "[]", default));
         Assert.Equal("SEND_CODE_DISABLED", (string?)refused["error"]?["code"]);
 
         // Params become data under the same rules as send_code: no target is configured, so this fails before the wire.
         var overflow = JObject.Parse(await new ToolBakerWriteTools(new PluginClient(config), config, modules, new ServerState(config))
-            .RunBakedTool("pors_rail", "[{\"len\":1e400}]", default));
+            .RunBakedTool("demo_rail", "[{\"len\":1e400}]", default));
         Assert.Equal("INVALID_ARGUMENT", (string?)overflow["error"]?["code"]);
         Assert.Contains("[0].len", (string?)overflow["error"]?["message"]);
 
@@ -143,7 +143,7 @@ public sealed class ScriptBakeTests : IDisposable
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var connected = server.WaitForConnectionAsync(timeout.Token);
         var call = new ToolBakerWriteTools(new PluginClient(config), config, modules, new ServerState(config))
-            .RunBakedTool("pors_rail", "[{\"name\":\"P07\"}]", timeout.Token);
+            .RunBakedTool("demo_rail", "[{\"name\":\"P07\"}]", timeout.Token);
         await connected;
         using var input = new StreamReader(server, leaveOpen: true);
         using var output = new StreamWriter(server, leaveOpen: true) { AutoFlush = true };
