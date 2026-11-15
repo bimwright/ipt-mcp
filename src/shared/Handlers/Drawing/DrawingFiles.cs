@@ -42,6 +42,11 @@ internal static partial class DrawingOperations
         }
         catch { copy.Close(true); throw; }
     }
+    /// <summary>PDF of every sheet in document order, none excluded from printing: the source can be translated as is.</summary>
+    private static bool UseDirectPdf(string format, Sheet[] selected, Sheet[] all) =>
+        format == "pdf" && ExportStrategy.IsWholeDocument(
+            selected.Select(s => s.InternalName).ToArray(), all.Select(s => s.InternalName).ToArray(), all.Any(s => s.ExcludeFromPrinting));
+
     private static InventorCommandResult Export(InventorCommandContext ctx, DrawingDocument d, JObject p)
     {
         var app = DrawingSupport.App(ctx); var format = (string)p["format"]!; var extension = format == "pdf" ? ".pdf" : format == "native_idw" ? ".idw" : ".dwg";
@@ -59,10 +64,12 @@ internal static partial class DrawingOperations
             if (File.Exists(job.path) && !overwrite) throw new ArgumentException("Output exists; explicit overwrite_existing=true required: " + job.path);
         }
         var rows = new JArray(); var failed = 0; var dirty = d.Dirty; var sourcePath = d.FullFileName;
+        var allSheets = d.Sheets.Cast<Sheet>().ToArray();
         using (SilentOperationScope.Enter(app, p.Value<bool?>("silent") ?? true))
             foreach (var job in jobs)
             {
                 var temp = IoPath.Combine(IoPath.GetDirectoryName(job.path)!, ".ipt-mcp-" + Guid.NewGuid().ToString("N") + extension); DrawingDocument? copy = null;
+                var strategy = format == "native_idw" ? "save_as" : UseDirectPdf(format, job.sheets, allSheets) ? "direct" : "copy_sheets";
                 try
                 {
                     Directory.CreateDirectory(IoPath.GetDirectoryName(job.path)!);
@@ -74,20 +81,22 @@ internal static partial class DrawingOperations
                     }
                     else
                     {
-                        // A hidden disposable copy supports ordered/noncontiguous subsets without
+                        // Whole drawing to PDF: translate the source directly (SaveCopyAs leaves it unchanged).
+                        // Sheet.CopyTo into a template copy has killed Inventor (2026-11-14), so it is used
+                        // only where it is needed: ordered/noncontiguous subsets and per-sheet DWG, without
                         // changing ExcludeFromPrinting or activating sheets in the source document.
-                        copy = CopySheets(app, d, job.sheets);
+                        if (strategy == "copy_sheets") copy = CopySheets(app, d, job.sheets);
                         var translator = ExportSupport.GetTranslator(app, format == "pdf" ? PdfTranslator : DwgTranslator, format);
-                        ExportSupport.SaveCopyAs(app, translator, copy, temp, options =>
+                        ExportSupport.SaveCopyAs(app, translator, copy ?? d, temp, options =>
                         {
                             if (format == "pdf") { options.Value["Sheet_Range"] = PrintRangeEnum.kPrintAllSheets; options.Value["Vector_Resolution"] = p.Value<int?>("dpi") ?? 300; }
                         });
                     }
                     var bytes = new FileInfo(temp).Length; if (bytes <= 0) throw new InvalidOperationException("Export produced an empty file.");
                     File.Move(temp, job.path, overwrite);
-                    rows.Add(new JObject { ["ok"] = true, ["status"] = "completed", ["path"] = job.path, ["bytes"] = bytes, ["sheets"] = new JArray(job.sheets.Select(x => x.Name)) });
+                    rows.Add(new JObject { ["ok"] = true, ["status"] = "completed", ["path"] = job.path, ["bytes"] = bytes, ["sheets"] = new JArray(job.sheets.Select(x => x.Name)), ["export_strategy"] = strategy });
                 }
-                catch (Exception ex) { failed++; rows.Add(new JObject { ["ok"] = false, ["status"] = "failed", ["path"] = job.path, ["sheets"] = new JArray(job.sheets.Select(x => x.Name)), ["error"] = ex.Message }); }
+                catch (Exception ex) { failed++; rows.Add(new JObject { ["ok"] = false, ["status"] = "failed", ["path"] = job.path, ["sheets"] = new JArray(job.sheets.Select(x => x.Name)), ["export_strategy"] = strategy, ["error"] = ex.Message }); }
                 finally { if (copy != null) copy.Close(true); if (File.Exists(temp)) File.Delete(temp); }
             }
         var unchanged = d.Dirty == dirty && d.FullFileName == sourcePath;
