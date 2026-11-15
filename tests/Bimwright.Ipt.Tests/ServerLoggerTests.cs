@@ -204,6 +204,31 @@ public sealed class ServerLoggerTests : IDisposable
         Assert.Equal(JTokenType.Null, entry["data_ok"]!.Type);
     }
 
+    [Theory]
+    [InlineData("""{"ok":false,"error":{"code":"INVALID_ARGUMENT","message":"out_dir must be under an allowed output root"}}""",
+        "out_dir must be under an allowed output root", "INVALID_ARGUMENT")]
+    [InlineData("""{"ok":false,"error_code":"not_found","message":"Bake suggestion was not found."}""",
+        "Bake suggestion was not found.", "not_found")]
+    [InlineData("""{"ok":false,"error":"plain text"}""", "plain text", null)]
+    [InlineData("""{"ok":true}""", null, null)]
+    public void ServerOnlyErrorReadsCodeAndMessage(string json, string? error, string? code)
+    {
+        var (e, c) = ServerLogger.ServerOnlyError(JObject.Parse(json));
+
+        Assert.Equal(error, e);
+        Assert.Equal(code, c);
+    }
+
+    [Fact]
+    public void ResultErrorCodeIsNotHashedLikeAScriptBody()
+    {
+        var capped = (JObject)ServerLogger.CapResult(JToken.Parse(
+            """{"ok":false,"error":{"code":"INVALID_ARGUMENT","message":"m"},"code":"var x = 1;"}"""));
+
+        Assert.Equal("INVALID_ARGUMENT", (string?)capped["error"]!["code"]);
+        Assert.Equal(JTokenType.Object, capped["code"]!.Type); // top-level code body still hashed
+    }
+
     [Fact]
     public void DataErrorIsTruncatedTo300Chars()
     {

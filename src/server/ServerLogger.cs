@@ -120,18 +120,35 @@ internal static class ServerLogger
                 catch (JsonException) { data = new JValue(text); }
             }
             var obj = data as JObject;
-            var error = thrown ?? obj?["error"]?.ToString(Formatting.None);
+            var (error, errorCode) = thrown is null ? ServerOnlyError(obj) : (thrown, null);
             var reportedFailure = obj != null
                 && ((obj["ok"] is { Type: JTokenType.Boolean } okToken && !okToken.Value<bool>())
                     || obj["error"] is { Type: not JTokenType.Null });
             var ok = thrown is null && result?.IsError != true && !reportedFailure;
-            WriteEntry(BuildFinishEntry(SessionId, requestId, toolName, ok, durationMs, ok ? null : error, null, null,
-                text is null ? null : Encoding.UTF8.GetByteCount(text), null, data));
+            WriteEntry(BuildFinishEntry(SessionId, requestId, toolName, ok, durationMs, ok ? null : error,
+                ok ? null : errorCode, null, text is null ? null : Encoding.UTF8.GetByteCount(text), null, data));
         }
         catch
         {
             // Logging must never break a call.
         }
+    }
+
+    /// <summary>
+    /// Error text and code of a server-only tool result: <c>{"error":{"code","message"}}</c>,
+    /// <c>{"error":"…","error_code":"…"}</c> or <c>{"error_code","message"}</c>.
+    /// </summary>
+    internal static (string? error, string? errorCode) ServerOnlyError(JObject? obj)
+    {
+        if (obj is null) return (null, null);
+        if (obj["error"] is JObject err)
+            return ((string?)err["message"] ?? err.ToString(Formatting.None),
+                err["code"]?.Type == JTokenType.String ? (string?)err["code"] : null);
+        var code = obj["error_code"]?.Type == JTokenType.String ? (string?)obj["error_code"] : null;
+        var text = obj["error"] is { Type: not JTokenType.Null } e
+            ? (e.Type == JTokenType.String ? (string?)e : e.ToString(Formatting.None))
+            : code is null ? null : (string?)obj["message"];
+        return (text, code);
     }
 
     internal static string BuildSessionId(DateTime startUtc, int processId) =>
@@ -174,9 +191,11 @@ internal static class ServerLogger
         switch (token)
         {
             case JObject obj:
+                // {"error":{"code":"INVALID_ARGUMENT",...}} carries an error code, not a script body.
+                var isError = obj.Parent is JProperty { Name: "error" };
                 foreach (var prop in obj.Properties().ToArray())
                 {
-                    if ((prop.Name == "code" || prop.Name == "source_code") && prop.Value.Type == JTokenType.String)
+                    if (!isError && (prop.Name == "code" || prop.Name == "source_code") && prop.Value.Type == JTokenType.String)
                     {
                         var body = prop.Value.Value<string>() ?? "";
                         prop.Value = new JObject { ["length"] = body.Length, ["sha256"] = Bimwright.Ipt.Shared.Contracts.SendCodeSource.Hash(body) };
