@@ -1,6 +1,11 @@
 using System;
+using System.ComponentModel;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Bimwright.Ipt.Server;
+using Bimwright.Ipt.Server.Tools;
+using ModelContextProtocol.Server;
 using Bimwright.Ipt.Shared.Contracts;
 using Xunit;
 
@@ -28,6 +33,18 @@ public class ClosedConnectionTests
 
         Assert.Equal(InventorErrorCodes.HOST_CRASHED, ex.Code);
         Assert.Equal(3, probes);
+    }
+
+    [Fact]
+    public void SendCodeDescriptionWarnsAboutKnownCrashingCalls()
+    {
+        var description = typeof(CodeTools).GetMethods()
+            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>()?.Name == "inventor_send_code")
+            .Select(m => m.GetCustomAttribute<DescriptionAttribute>()!.Description).Single();
+
+        Assert.Contains("SecondFormattedText on a detail view", description);
+        Assert.Contains("GetMinimumDistance on TransientBRep", description);
+        Assert.Contains("HOST_CRASHED", description);
     }
 
     [Fact]
