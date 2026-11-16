@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **147 tools** by default (`--toolsets all`); `--disable-send-code` exposes **141 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **149 tools** by default (`--toolsets all`); `--disable-send-code` exposes **143 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -205,7 +205,7 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 | `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
 | `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, Inventor year, or pipe name; a selector matching several sessions is refused. `verify=true` confirms the active document for writes. |
 
-### query (10) — read-only document/health/model probes and agent outcome reports
+### query (11) — read-only document/health/model probes and agent outcome reports
 
 Start each Inventor session with one `inventor_health(check_updates=true)` call after selecting the intended target if needed, so the agent discovers newer stable releases. If network access is unavailable or disallowed, use the offline default and leave the update check not checked/unknown. Later routine probes stay offline. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `server_informational_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use loaded assembly informational-version metadata, falling back to the component's module id. Runtime identity is captured at server startup or add-in activation. `artifact_sha256` is a disk observation at that capture time (`artifact_hash_basis=on_disk_at_identity_capture`), not a digest of loaded memory or proof that a later file replacement has taken effect.
 
@@ -237,7 +237,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_probe_brep` | Survey the part's B-rep for port mouths: planar faces with inner-loop circular edges — normal (IsParamReversed-corrected), center_mm, port_diameter_mm, all circles on the face. |
 | `inventor_list_sketch_points` | Inspect a named sketch: point references, positions in mm, circle/arc centres and line endpoints, plus `origin_ref`. Optional `document` selects an open part; `max_items` defaults to 200 (1–1000). Does not project geometry or change the document. |
 
-### document (10) — document lifecycle (write)
+### document (12) — document lifecycle (write)
 
 | Tool | Description |
 |---|---|
@@ -251,6 +251,8 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_save_all` | Update a root document and save it with every dirty referenced document, silently; per-file saved / read_only / error; `dry_run`. |
 | `inventor_open_documents` | Open several documents in one call (default without windows, for `document`-targeted edits). |
 | `inventor_close_documents` | Close documents by path/name, or all visible ones (`keep_active`); optional save. |
+| `inventor_save_checkpoint` | With user approval, copy the confirmed active local file into `<name>.checkpoints\` next to it (saving first if it has unsaved changes), verified by size and SHA-256 and indexed. Assembly and drawing checkpoints hold only that file (`REFERENCES_NOT_CAPTURED`). `allow_format_upgrade=true` only after the user approved converting an older-format file. |
+| `inventor_manage_checkpoints` | `action=list`; `prune` (preview with `dry_run=true`, apply with the previewed `plan_hash` after approval; milestones are kept); `restore` copies a checkpoint to `<name>-restored-<id>.<ext>` and never overwrites the working file. |
 
 ### ipart (8) — Standard iPart families and Excel catalogs
 

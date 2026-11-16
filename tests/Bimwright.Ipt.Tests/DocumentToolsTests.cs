@@ -40,6 +40,8 @@ public sealed class DocumentToolsTests
         "inventor_save_all",
         "inventor_open_documents",
         "inventor_close_documents",
+        "inventor_save_checkpoint",
+        "inventor_manage_checkpoints",
     };
 
     private static string[] ToolNamesOf(Type t)

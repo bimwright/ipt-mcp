@@ -16,6 +16,8 @@ public static partial class InventorCommandRegistry
     {
         add(new ListOpenDocumentsHandler());
         add(new GetDocumentStateHandler());
+        add(new SaveCheckpointHandler());
+        add(new ManageCheckpointsHandler());
         add(new NewPartHandler());
         add(new NewAssemblyHandler());
         add(new OpenDocumentHandler());

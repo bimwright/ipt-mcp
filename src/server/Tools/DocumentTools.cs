@@ -73,6 +73,42 @@ public sealed class DocumentTools
             ["save"] = save, ["silent"] = silent,
         }, ct);
 
+    [McpServerTool(Name = "inventor_save_checkpoint", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
+     Description("With user approval, before risky work or at handover, copy the confirmed active local file into \"<name>.checkpoints\\\" next to it (rvt-mcp revit_save_checkpoint parity). If it has unsaved changes it is saved first, overwriting the working file (Inventor keeps OldVersions; a part/assembly save also saves dirty references). The copy is verified (size + SHA-256) and indexed. An assembly or drawing checkpoint holds only that file, not its referenced parts (warning REFERENCES_NOT_CAPTURED). Refused for unsaved, template or read-only documents. allow_format_upgrade=true only after the user approved converting an older-format file. A timeout may leave it running: check inventor_manage_checkpoints(action=\"list\") before retrying. Example: inventor_save_checkpoint(label=\"Before re-dimensioning flanges\", reason=\"User approved\", milestone=false).")]
+    public async Task<string> SaveCheckpoint(
+        [Description("Checkpoint label, 1-80 characters.")] string label,
+        [Description("Optional reason, up to 500 characters.")] string? reason = null,
+        [Description("Keep this checkpoint when pruning, not counted toward keep_last (default false).")] bool milestone = false,
+        [Description("Allow a save that converts an older-format file to this Inventor's format, only after explicit user approval (default false).")] bool allow_format_upgrade = false,
+        [Description("Seconds to wait, 1-900 (default 300).")] int timeout_seconds = 300,
+        CancellationToken ct = default)
+    {
+        if (timeout_seconds < 1 || timeout_seconds > 900) return ToolResponse.Error("INVALID_ARGUMENT", "timeout_seconds must be between 1 and 900.");
+        return await CallWithData("save_checkpoint", new JObject { ["label"] = label, ["reason"] = reason, ["milestone"] = milestone, ["allow_format_upgrade"] = allow_format_upgrade }, timeout_seconds, ct);
+    }
+
+    [McpServerTool(Name = "inventor_manage_checkpoints", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
+     Description("Checkpoints of the confirmed active local file (rvt-mcp revit_manage_checkpoints parity): action=list shows them; action=prune frees space and cannot be undone: run dry_run=true, show the plan to the user, then apply with dry_run=false and its plan_hash only after approval (milestones are kept); action=restore copies checkpoint_id to \"<name>-restored-<id>.<ext>\" next to the file and never overwrites the working file. Example: inventor_manage_checkpoints(action=\"prune\", keep_last=5, dry_run=true).")]
+    public async Task<string> ManageCheckpoints(
+        [Description("list, prune, or restore.")] string action,
+        [Description("Non-milestone checkpoints to keep when pruning, 1-100 (default 5).")] int keep_last = 5,
+        [Description("For prune, preview without deleting (default true).")] bool dry_run = true,
+        [Description("plan_hash of the user-approved prune preview; required when dry_run=false.")] string? plan_hash = null,
+        [Description("Checkpoint id to restore (from action=list).")] string? checkpoint_id = null,
+        [Description("Seconds to wait, 1-900 (default 300).")] int timeout_seconds = 300,
+        CancellationToken ct = default)
+    {
+        if (timeout_seconds < 1 || timeout_seconds > 900) return ToolResponse.Error("INVALID_ARGUMENT", "timeout_seconds must be between 1 and 900.");
+        return await CallWithData("manage_checkpoints", new JObject { ["action"] = action, ["keep_last"] = keep_last, ["dry_run"] = dry_run, ["plan_hash"] = plan_hash, ["checkpoint_id"] = checkpoint_id }, timeout_seconds, ct);
+    }
+
+    /// <summary>Like <see cref="Call"/>, but a failure keeps the handler's data (saved_first, reason, partial prune results).</summary>
+    private async Task<string> CallWithData(string command, JObject p, int timeoutSeconds, CancellationToken ct)
+    {
+        try { return ToolResponse.Serialize(await _client.SendAsync(command, p, ct, timeoutSeconds * 1000)); }
+        catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
+    }
+
     private async Task<string> Call(string command, JObject p, CancellationToken ct)
     {
         try

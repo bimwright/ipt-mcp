@@ -52,6 +52,7 @@ public static class ServerInstructions
         "TIMEOUT means the command started and its outcome is unknown: inspect before retrying a write. " +
         "TARGET_BUSY means the add-in did not accept the connection (nothing was sent): wait for the long call to finish, then retry. " +
         "Documents: call inventor_get_document_state before saving and follow its policy (never choose a save path yourself; ask before a save that migrates the file format). " +
+        "Checkpoints: inventor_save_checkpoint only with user approval before risky work; prune or restore with inventor_manage_checkpoints (prune needs the previewed plan_hash). " +
         "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
         "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +
