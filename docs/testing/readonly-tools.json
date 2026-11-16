@@ -14,6 +14,7 @@
     "inventor_get_iproperty",
     "inventor_get_mass_properties",
     "inventor_get_parameter",
+    "inventor_get_report_history",
     "inventor_health",
     "inventor_ilogic_get_rule",
     "inventor_ilogic_list_rules",

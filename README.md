@@ -98,7 +98,7 @@ Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwri
 
 Writes run only on a confirmed document. Check the active document with the user, then call `inventor_switch_target` with `pid:<n>` and `verify=true` once per session; until then writes return `TARGET_UNCONFIRMED` and are not sent. If another document becomes active, a write returns `DOCUMENT_CHANGED` (or `DOCUMENT_UNCONFIRMED`) from the add-in and is not started; confirm again, or pass `document` (full path or name) to name the target document, which is not tied to the active one. Once the confirmed document is closed, opening or creating another one moves the confirmation to it. Opening or creating a document with `inventor_open_document(s)`, `inventor_new_part`, `inventor_new_assembly`, `inventor_new_drawing`, `inventor_new_sheet_fabrication_part` or `inventor_create_part` moves the confirmation to the document it activates. The server and add-in must both support `document_target_v1`: with an older add-in or server, writes return `PAIRING_REQUIRED` and reads still work, so update both from the same release.
 
-`inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it.
+`inventor_send_code` is enabled by default. `--disable-send-code` hides code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` disables execution in the host. Read-only mode excludes it. Pass `usage_context="project"` for real project work or `"test"` when testing ipt-mcp itself (default `"unknown"`); it is recorded in the call journal and does not change how the script runs.
 
 ---
 
@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **149 tools** by default (`--toolsets all`); `--disable-send-code` exposes **143 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **150 tools** by default (`--toolsets all`); `--disable-send-code` exposes **144 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -205,7 +205,7 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 | `inventor_get_current_target` | Report the selected target; never selects one (`bound=false` with the live candidates when nothing is selected yet). |
 | `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, `auto` or Inventor year; a selector matching several sessions is refused. `rebind=true` is needed to leave a running session this gateway selected. `verify=true` confirms the active document for writes. Not registered under `--read-only`. |
 
-### query (11) — read-only document/health/model probes and agent outcome reports
+### query (12) — read-only document/health/model probes and agent outcome reports
 
 Start each Inventor session with one `inventor_health(check_updates=true)` call after selecting the intended target if needed, so the agent discovers newer stable releases. If network access is unavailable or disallowed, use the offline default and leave the update check not checked/unknown. Later routine probes stay offline. Its existing host fields and `setup_gateway`/`setup_plugin` identities are preserved; the compact `mcp` block adds `server_version`, `server_informational_version`, `plugin_version`, `server_build_id`, `plugin_build_id`, `version_alignment` and `revision_alignment`. Alignment is `match`, `mismatch` or `unknown`; a matching version or revision does not prove binary compatibility or publisher trust. Build ids use loaded assembly informational-version metadata, falling back to the component's module id. Runtime identity is captured at server startup or add-in activation. `artifact_sha256` is a disk observation at that capture time (`artifact_hash_basis=on_disk_at_identity_capture`), not a digest of loaded memory or proof that a later file replacement has taken effect.
 
@@ -228,7 +228,8 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | Tool | Description |
 |---|---|
 | `inventor_health` | Call with `check_updates=true` once at session start to discover releases and notify the user when `update.notification` is present. Routine probes stay offline by default. Reports host state and loaded server/plugin identities. |
-| `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`. No model changes. |
+| `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`, optional Markdown `body` (max 32 KiB). Shows the summary card and saves the report under `%LOCALAPPDATA%\Bimwright\ipt-mcp\reports\` with the write tools run since the last report, also when Inventor is not reachable. No model changes. |
+| `inventor_get_report_history` | Saved agent reports, newest first: a page of summaries (`offset`, `limit` 1–50), or one report in full by `report_id`. Local data; works without Inventor. |
 | `inventor_list_open_documents` | List documents in memory: title, path, type, is_active, dirty, visible; optional `filter` / `dirty_only`. |
 | `inventor_get_document_state` | Check before saving or ending work: `mode` (`local_file`, `unsaved`, `template`, `read_only`), `is_modified`, `dirty_references`, `modifiable`, `is_read_only`, `exists_on_disk`, `saved_in_version`, `needs_migrating`, `file_save_counter`, `document_id`, plus the save `policy {mode, rules, allowed}` and the project's `old_versions_to_keep`. Active document, `document`, or `scope=all`; works with no document open. |
 | `inventor_get_document_info` | Title, full path, type and dirty flag of the active or a targeted document; `references=true` adds its file references (with missing flags). |
@@ -435,6 +436,8 @@ The activity card expires **20 seconds after the last result by default**. Choos
 
 To report a whole job's outcome, the agent explicitly calls `inventor_report_task_result` with a unique agent/job `task_id` (1–80 chars), `outcome` (`completed`, `failed`, `cancelled`), and a truthful single-line `summary` (1–120 chars). The report **replaces the same shared slot**, says **Agent reported**, and has an **8-second** lifetime, paused by real hover and rearmed on leave. It does not increment activity counters; the next tool result starts a new activity card. Idle time and successful tool calls never imply task completion. The report bypasses the Inventor command queue (it touches no Inventor API), so it still lands while a long `send_code` holds the main thread. Its response carries `toast_shown`, indicating whether a card was retained for display; a card held while Inventor is minimized or behind a dialog counts and appears once the frame is usable. Reports respect the Toasts toggle and require the updated server **and** add-in.
 
+**Saved reports.** The server also saves every report as one JSON file in `%LOCALAPPDATA%\Bimwright\ipt-mcp\reports\` (the newest 500 are kept), with the optional Markdown `body` and the write tools the session ran since the previous report; resending a `task_id` from the same session replaces that report. Reports are agent-reported, not verified. `inventor_get_report_history` reads them back. Until the agent reports, results of model-changing tools carry a `_report` reminder (once in full, then short; for `send_code`, one conditional reminder because the server cannot tell whether a script changed the model). Reads, open/close/save, checkpoints and exports carry none.
+
 Toasts use **code-only WPF on a dedicated STA UI thread**, with an **unowned, no-activate window** independent of Inventor's main STA and without Inventor COM calls on the toast thread. Command-result notifications are posted after the response is handed back. Toasts do not steal focus, hide while Inventor is minimized or a modal dialog is open, and **stay topmost even when another application is in the foreground**. The card uses one fixed light style, like rvt-mcp and dwg-mcp; there is no theme setting and nothing reads the screen behind it.
 
 Toggle toasts from the ribbon: **Bimwright ▸ MCP → Toasts** (Status opens a diagnostic dialog). The choice persists in `%LOCALAPPDATA%\Bimwright\ipt-mcp\iptmcp.config.json` under `enableToast`. The environment variable `BIMWRIGHT_INVENTOR_ENABLE_TOAST` overrides the JSON value. The retired `toastTheme` key and `BIMWRIGHT_INVENTOR_TOAST_THEME` are ignored. A malformed config file is left untouched — the toggle refuses to overwrite it.
@@ -499,7 +502,7 @@ Inventor and Autodesk are registered trademarks of Autodesk, Inc. bimwright is a
 
 ## Permissions & auto mode
 
-The allow list below is generated from the 28 read-only annotations and checked against the running server. Replace `ipt-mcp` with your exact client server ID. Do not use `mcp__ipt-mcp__*` or other server-wide wildcards. `inventor_send_code` has no annotations and no forced-interaction metadata; its exact allow rule is a separate user choice. Actual client permission persistence must be tested in that client.
+The allow list below is generated from the 39 read-only annotations and checked against the running server. Replace `ipt-mcp` with your exact client server ID. Do not use `mcp__ipt-mcp__*` or other server-wide wildcards. `inventor_send_code` has no annotations and no forced-interaction metadata; its exact allow rule is a separate user choice. Actual client permission persistence must be tested in that client.
 
 <!-- BEGIN GENERATED READONLY -->
 ```json
@@ -518,6 +521,7 @@ The allow list below is generated from the 28 read-only annotations and checked 
       "mcp__ipt-mcp__inventor_get_iproperty",
       "mcp__ipt-mcp__inventor_get_mass_properties",
       "mcp__ipt-mcp__inventor_get_parameter",
+      "mcp__ipt-mcp__inventor_get_report_history",
       "mcp__ipt-mcp__inventor_health",
       "mcp__ipt-mcp__inventor_ilogic_get_rule",
       "mcp__ipt-mcp__inventor_ilogic_list_rules",

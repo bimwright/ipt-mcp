@@ -133,8 +133,36 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         // Rising-edge watch (rvt-mcp IdlingUpdater parity — Inventor has no Idling event):
         // each client attach/re-attach gets one "Agent connected" toast.
         _connectionWatch = new ConnectionWatch(_server, info => _toasts?.NotifyConnection(info));
+
+        StartUpdateNotice(runtimeLayout.DataRoot, server.Stopping);
         }
         catch { Deactivate(); throw; }
+    }
+
+    /// <summary>
+    /// rvt-mcp parity: at most one GitHub request a day (BIMWRIGHT_DISABLE_UPDATE_CHECK=1 turns it off); when a newer
+    /// stable release exists and was not skipped, one modeless card per Inventor session on the History UI thread,
+    /// after Inventor has had time to finish starting. Never touches the STA and never blocks the MCP path.
+    /// </summary>
+    private void StartUpdateNotice(string dataRoot, CancellationToken lifetime)
+    {
+        if (_historyHost is not { } host || Bimwright.Ipt.Shared.Update.UpdateChecker.IsDisabled(Environment.GetEnvironmentVariable)) return;
+        var statePath = Path.Combine(dataRoot, "update-check.json");
+        var current = Bimwright.Ipt.Shared.Update.UpdateChecker.VersionOf(GetType().Assembly);
+        Task.Run(async () =>
+        {
+            try
+            {
+                var info = await Bimwright.Ipt.Shared.Update.UpdateChecker.CheckAsync(current, statePath).ConfigureAwait(false);
+                if (info == null || info.IsSkipped) return;
+                await Task.Delay(TimeSpan.FromSeconds(20), lifetime).ConfigureAwait(false);
+                host.Post(() =>
+                {
+                    try { new UpdateNoticeWindow(info, statePath).Show(); } catch { }
+                });
+            }
+            catch { }
+        });
     }
 
     /// <summary>Ribbon + Inventor events for toasts. Failures here never stop the MCP transport.</summary>

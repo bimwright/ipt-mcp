@@ -53,9 +53,73 @@ public sealed class QueryTools
     }
 
     [McpServerTool(Name = "inventor_report_task_result", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Report an agent task's final outcome to the user as a summary toast. Call once after verifying the whole requested job, never after each tool or merely because tools went idle. task_id must be unique per agent/job (1-80 chars); outcome is completed, failed or cancelled; summary is a truthful single-line result (1-120 chars). Agent-reported, not independently verified. Does not change the model; respects the Toasts toggle and requires the updated add-in.")]
-    public Task<string> ReportTaskResult(string task_id, string outcome, string summary, CancellationToken ct = default)
-        => Call("report_task_result", new JObject { ["task_id"] = task_id, ["outcome"] = outcome, ["summary"] = summary }, ct);
+     Description("Report an agent task's final outcome to the user: a summary toast in Inventor and a report saved under %LOCALAPPDATA%\\Bimwright\\ipt-mcp\\reports (read back with inventor_get_report_history). " +
+                 "Call once after verifying the whole requested job, when it changed a model or found something the user should check; never after each tool, merely because tools went idle, or for a chat-only answer. Responses of model writes carry _report until you do. " +
+                 "task_id must be unique per agent/job (1-80 chars; resending it from this session replaces that report); outcome is completed, failed or cancelled; summary is a truthful single-line result (1-120 chars); body is optional Markdown detail, max 32 KiB UTF-8. " +
+                 "The report records the write tools this session ran since the last report. Saved even when Inventor is not reachable (toast_shown=false). Agent-reported, not independently verified. Does not change the model.")]
+    public async Task<string> ReportTaskResult(string task_id, string outcome, string summary,
+        [Description("Optional Markdown detail (what changed, what to check), max 32 KiB UTF-8.")] string? body = null,
+        CancellationToken ct = default)
+    {
+        var invalid = Bimwright.Ipt.Shared.Contracts.ReportLimits.Validate(task_id, outcome, summary, body);
+        if (invalid != null) return ToolResponse.Error(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.INVALID_ARGUMENT, invalid);
+
+        JObject? card = null;
+        InventorGatewayException? cardError = null;
+        try { card = await _client.SendAsync("report_task_result", new JObject { ["task_id"] = task_id, ["outcome"] = outcome, ["summary"] = summary }, ct) as JObject; }
+        catch (InventorGatewayException ex) { cardError = ex; }
+
+        var (calls, truncated) = _client.Reports.TakeCalls();
+        var report = new JObject
+        {
+            ["schema"] = 1,
+            ["task_id"] = task_id.Trim(), ["outcome"] = outcome.Trim(), ["summary"] = summary.Trim(), ["body"] = body,
+            ["agent_reported"] = true,
+            ["source"] = new JObject { ["server_session"] = ServerLogger.SessionId, ["target_id"] = _client.SelectedTargetId },
+            ["calls"] = calls, ["calls_truncated"] = truncated,
+        };
+        string? saveError = null;
+        (string Id, bool Replaced, string Path) saved = default;
+        try { saved = _client.ReportStore.Save(report); }
+        catch (System.Exception ex) when (ex is System.IO.IOException || ex is System.UnauthorizedAccessException) { saveError = ex.Message; }
+
+        if (saveError != null && cardError != null)
+            return ToolResponse.Error(cardError.Code, cardError.Message + " The report was not saved either: " + saveError);
+        var result = card ?? new JObject { ["task_id"] = task_id.Trim(), ["outcome"] = outcome.Trim(), ["summary"] = summary.Trim(), ["agent_reported"] = true };
+        result["report_saved"] = saveError == null;
+        if (saveError == null)
+        {
+            result["report_id"] = saved.Id;
+            result["replaced"] = saved.Replaced;
+            result["call_count"] = (report["calls"] as JArray)?.Count ?? 0;
+        }
+        else result["save_error"] = saveError;
+        if (cardError != null)
+        {
+            result["toast_shown"] = false;
+            result["toast_error"] = new JObject { ["code"] = cardError.Code, ["message"] = cardError.Message };
+        }
+        return ToolResponse.Serialize(result);
+    }
+
+    [McpServerTool(Name = "inventor_get_report_history", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Read saved agent reports (inventor_report_task_result) from %LOCALAPPDATA%\\Bimwright\\ipt-mcp\\reports, newest first. Without report_id: a page of summaries (offset >= 0, limit 1-50, default 10) and the total. " +
+                 "With report_id (32 hex characters): that report in full, with its body and the write tools recorded since the report before it. Read-only local data; no Inventor connection required. Example: inventor_get_report_history(limit=5).")]
+    public string GetReportHistory(string? report_id = null, int offset = 0, int limit = 10)
+    {
+        if (!string.IsNullOrEmpty(report_id))
+        {
+            if (!Reports.ReportStore.IsReportId(report_id))
+                return ToolResponse.Error(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.INVALID_ARGUMENT, "report_id must be 32 hexadecimal characters.");
+            return _client.ReportStore.Get(report_id) is { } report
+                ? ToolResponse.Serialize(report)
+                : ToolResponse.Error(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.INVALID_ARGUMENT, "No saved report has this report_id (the newest 500 are kept).");
+        }
+        if (offset < 0 || limit is < 1 or > 50)
+            return ToolResponse.Error(Bimwright.Ipt.Shared.Contracts.InventorErrorCodes.INVALID_ARGUMENT, "offset must be >= 0 and limit 1-50.");
+        var (items, total) = _client.ReportStore.List(offset, limit);
+        return ToolResponse.Serialize(new JObject { ["total"] = total, ["offset"] = offset, ["reports"] = items, ["agent_reported"] = true });
+    }
 
     [McpServerTool(Name = "inventor_list_open_documents", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("List the documents Inventor has in memory (open windows and documents loaded as assembly references): title, full path, document type, is_active, dirty (unsaved changes), visible (has a window). filter keeps documents whose path or title contains the text; dirty_only=true keeps only unsaved ones — e.g. before inventor_save_all.")]

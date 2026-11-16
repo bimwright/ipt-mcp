@@ -17,7 +17,7 @@ public sealed class DocumentToolsTests
     {
         "inventor_list_sketch_points",
         "inventor_health",
-        "inventor_report_task_result",
+        "inventor_report_task_result", "inventor_get_report_history",
         "inventor_list_open_documents",
         "inventor_get_document_state",
         "inventor_get_document_info",

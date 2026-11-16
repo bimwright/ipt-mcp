@@ -60,6 +60,9 @@ public sealed class ExcelParameterWireTests : IDisposable
         if (command == "link_excel_table") { Assert.Equal(@"C:\fixture.xlsx", (string?)request["params"]?["path"]); Assert.Equal("A6", (string?)request["params"]?["start_cell"]); }
         if (command == "reload_excel_table") Assert.Equal("excel:table-id", (string?)request["params"]?["table_id"]);
         if (fail) Assert.False((bool)response["ok"]!);
+        // FC-RPT-05: a successful model write gains only the report reminder.
+        Assert.Equal(!fail && command != "list_excel_tables", response["_report"] != null);   // reads carry none
+        response.Remove("_report");
         Assert.True(JToken.DeepEquals(data, fail ? response["data"] : response), response.ToString());
     }
 }

@@ -395,6 +395,7 @@ Inventor 和 Autodesk 是 Autodesk, Inc. 的注册商标。bimwright 是一个�
       "mcp__ipt-mcp__inventor_get_iproperty",
       "mcp__ipt-mcp__inventor_get_mass_properties",
       "mcp__ipt-mcp__inventor_get_parameter",
+      "mcp__ipt-mcp__inventor_get_report_history",
       "mcp__ipt-mcp__inventor_health",
       "mcp__ipt-mcp__inventor_ilogic_get_rule",
       "mcp__ipt-mcp__inventor_ilogic_list_rules",

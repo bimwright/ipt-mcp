@@ -162,7 +162,13 @@ public sealed class SendCodeRoutingTests : IDisposable
             Assert.Equal("API_ERROR", (string?)response["error"]?["code"]);
             Assert.True(JToken.DeepEquals(data, response["data"]));
         }
-        else Assert.True(JToken.DeepEquals(data, response));
+        else
+        {
+            // FC-RPT-05: the gateway adds only the conditional report reminder to a script's result.
+            Assert.Equal(Bimwright.Ipt.Server.Reports.ReportTracker.ScriptText, (string?)response["_report"]);
+            response.Remove("_report");
+            Assert.True(JToken.DeepEquals(data, response));
+        }
     }
 
     [Fact]

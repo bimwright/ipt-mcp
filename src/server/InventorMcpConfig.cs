@@ -13,6 +13,8 @@ public sealed class InventorMcpConfig
     public bool EnableCallLog { get; set; }
     public string? LocalAppDataRoot { get; set; }
     public string DataDirectory { get; private set; } = Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot;
+    /// <summary>Saved agent reports (FC-RPT-04); null means &lt;DataDirectory&gt;\reports. Tests set a temporary folder.</summary>
+    internal string? ReportDirectory { get; set; }
     public bool EnableToolBaker { get; set; } = true;
     public bool EnableAdaptiveBake { get; set; }
     public int TimeoutMs { get; set; } = 30000;

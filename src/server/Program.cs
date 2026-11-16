@@ -84,6 +84,7 @@ var mcp = builder.Services
         }
     }));
 mcp = Program.RegisterToolsets(mcp, Program.ResolveToolTypesForRegistration(cfg), cfg.ReadOnly, pluginClient.GatewayIdentity);
+mcp.WithPrompts<Bimwright.Ipt.Server.Prompts.InventorPrompts>();
 
 await builder.Build().RunAsync();
 

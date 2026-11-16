@@ -59,19 +59,29 @@ public sealed class CodeTools
         [Description("JSON input; the script sees it as the variable `data` (JToken).")] System.Text.Json.JsonElement? data = null,
         bool compile_only = false,
         [Description("\"legacy\" (default) or \"task_v1\": return McpTaskResult.Pass/Fail and read _task.")] string result_contract = "legacy",
+        [Description("\"project\" for real project work, \"test\" when testing or developing ipt-mcp itself, \"unknown\" (default). Recorded in the call journal only; does not change how the script runs.")] string usage_context = "unknown",
         CancellationToken ct = default)
         => result_contract is not ("legacy" or "task_v1")
             ? Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, "result_contract must be \"legacy\" or \"task_v1\""))
+            : usage_context is not ("project" or "test" or "unknown")
+            ? Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, "usage_context must be \"project\", \"test\" or \"unknown\""))
             : JsonArg.TryData(data, out var input, out var dataError)
-            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct, result_contract)
+            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct, result_contract, usage_context)
             : Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, dataError!));
 
     /// <summary>send_code with a Newtonsoft data token; <paramref name="observeBake"/> is off when a baked script tool runs.</summary>
     internal async Task<string> SendCodeCore(string code, string[]? modules, int? timeout_ms, bool silent, JToken? input,
-        bool compile_only, bool observeBake, CancellationToken ct, string resultContract = "legacy")
+        bool compile_only, bool observeBake, CancellationToken ct, string resultContract = "legacy", string usageContext = "unknown")
     {
         var p = new JObject { ["code"] = code };
         var log = new JObject { ["code"] = code };
+        // rvt-mcp parity: usage_context marks project work vs ipt-mcp testing in the journal. Only sent when set, so a
+        // default request keeps its wire shape for older add-ins.
+        if (usageContext != "unknown")
+        {
+            p["usage_context"] = usageContext;
+            log["usage_context"] = usageContext;
+        }
         var taskV1 = resultContract == "task_v1";
         if (taskV1)
         {

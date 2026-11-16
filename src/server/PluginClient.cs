@@ -72,12 +72,19 @@ public sealed class PluginClient
     private readonly TargetBinding _binding;
     private readonly SemaphoreSlim _sendSlots = new(32, 32);
 
+    /// <summary>Writes since the last agent report and the _report reminder (FC-RPT-05).</summary>
+    internal Reports.ReportTracker Reports { get; } = new(command => ToolCatalog.ForCommand(command, 0)?.ReadOnly);
+
+    /// <summary>Saved agent reports (FC-RPT-04).</summary>
+    internal Reports.ReportStore ReportStore { get; }
+
     public PluginClient(InventorMcpConfig config) : this(config, null) { }
 
     internal PluginClient(InventorMcpConfig config, Func<int, TargetBinding.ProcessProbe>? processProbe)
     {
         _config = config;
         _registry = new TargetRegistry(config.DescriptorDirectory);
+        ReportStore = new Reports.ReportStore(config.ReportDirectory ?? System.IO.Path.Combine(config.DataDirectory, "reports"));
         _binding = new TargetBinding(config.TargetId, processProbe);
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
         _setupIdentity = SetupRuntimeIdentity.Capture(config.LocalAppDataRoot is { } root
@@ -184,6 +191,8 @@ public sealed class PluginClient
             }
 
             ok = true;
+            if (Reports.Record(command, @params, requestId, result.Meta?.DocumentTitle) is { } reminder && result.Data is JObject reminded)
+                reminded["_report"] = reminder;
             if (command == "health" && result.Data is JObject healthData)
                 healthData["setup_gateway"] = GatewayIdentity;
             return result.Data ?? JValue.CreateNull();

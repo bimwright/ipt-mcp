@@ -58,7 +58,8 @@ public static class ServerInstructions
         "read-only mode hides write tools and inventor_switch_target (use --target pid:<n> at startup) but keeps query, list/get target, and read-only baked tool inspection. " +
         "Activity toasts group tool calls; they do not indicate that a whole job is finished. " +
         "If inventor_report_task_result is available, call it once when the requested job is verified complete, failed or cancelled, " +
-        "with a unique agent/job task_id and a truthful concise summary. Never infer success from idle time or a single successful tool. " +
+        "with a unique agent/job task_id, a truthful concise summary and an optional Markdown body; results of model writes carry _report until you do. " +
+        "Not for chat-only answers. Never infer success from idle time or a single successful tool. Saved reports: inventor_get_report_history. " +
         SendCodeTaskGuide.Text +
         "inventor_send_code is enabled by default. Use --disable-send-code to disable it; " +
         "--read-only and toolset filters always hide code execution. The add-in requires no extra opt-in; " +

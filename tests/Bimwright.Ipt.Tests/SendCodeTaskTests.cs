@@ -122,12 +122,15 @@ public sealed class SendCodeTaskTests : IDisposable
             new CodeModuleStore(Path.Combine(_root, "modules")));
         var response = JObject.Parse(await tools.SendCode("return 1;", result_contract: "task_v2"));
         Assert.Equal("INVALID_ARGUMENT", (string?)response["error"]?["code"]);
+        var context = JObject.Parse(await tools.SendCode("return 1;", usage_context: "production"));
+        Assert.Equal("INVALID_ARGUMENT", (string?)context["error"]?["code"]);
     }
 
     [Theory]
-    [InlineData("legacy", false)]
-    [InlineData("task_v1", true)]
-    public async Task Only_task_v1_is_sent_on_the_wire(string contract, bool sent)
+    [InlineData("legacy", false, "unknown")]
+    [InlineData("task_v1", true, "project")]
+    [InlineData("legacy", false, "test")]
+    public async Task Only_task_v1_is_sent_on_the_wire(string contract, bool sent, string usage)
     {
         var pipe = "ipt-send-task-" + Guid.NewGuid().ToString("N");
         using var server = new NamedPipeServerStream(pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
@@ -141,13 +144,15 @@ public sealed class SendCodeTaskTests : IDisposable
             new CodeModuleStore(Path.Combine(_root, "modules")));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var connected = server.WaitForConnectionAsync(timeout.Token);
-        var call = tools.SendCode("return McpTaskResult.Pass();", result_contract: contract, ct: timeout.Token);
+        var call = tools.SendCode("return McpTaskResult.Pass();", result_contract: contract, usage_context: usage, ct: timeout.Token);
         await connected;
         using var input = new StreamReader(server, leaveOpen: true);
         using var output = new StreamWriter(server, leaveOpen: true) { AutoFlush = true };
         var request = JObject.Parse((await input.ReadLineAsync(timeout.Token))!);
         Assert.Equal(sent, request["params"]?["result_contract"] is not null);
         if (sent) Assert.Equal("task_v1", (string?)request["params"]?["result_contract"]);
+        // usage_context, like result_contract, is only on the wire when set (rvt-mcp parity).
+        Assert.Equal(usage == "unknown" ? null : usage, (string?)request["params"]?["usage_context"]);
         await output.WriteLineAsync(new JObject { ["id"] = request["id"], ["ok"] = true, ["data"] = Ok() }.ToString(Formatting.None));
         await call;
     }

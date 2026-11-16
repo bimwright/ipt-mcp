@@ -153,13 +153,19 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - `ServerInstructions.Text` is keyword-dense (part/sketch/extrude/parameter/iproperty/export) so MCP Tool Search can discover the surface.
 
 ### Read-only and execution switches
-- `code` is on by default. `--disable-send-code` hides all four code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` is the host kill switch. `--read-only` keeps only annotated read tools (28), with no script execution. Treat send_code as full local host trust.
+- `code` is on by default. `--disable-send-code` hides all four code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` is the host kill switch. `--read-only` keeps only annotated read tools (39), with no script execution. Treat send_code as full local host trust.
 - `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write, drawing`) but keeps `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, and DROPS `inventor_switch_target` (family contract FC-SRV-08: a read-only gateway uses `--target`, or the only live session). The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 
 ### Config precedence
 `InventorMcpConfig.Load(args)`: JSON file (`--config`) < environment (`BIMWRIGHT_INVENTOR_*`) < CLI flags. Descriptor dir defaults to `%LOCALAPPDATA%\Bimwright\ipt-mcp`.
 The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; default `%LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
+
+Agent reports (family contract FC-RPT-04/05, `src/server/Reports/`): `inventor_report_task_result` shows the toast through the add-in and the server saves the report (`ReportStore`, one JSON file per report in `<data>\reports\`, newest 500 kept, a resent `task_id` replaces its report) with the write calls `ReportTracker` recorded since the last report; it saves even when the add-in is unreachable. `inventor_get_report_history` is read-only and server-only. `PluginClient.SendAsync` adds `_report` to successful model writes (classified by the tool's `ReadOnly` annotation; open/close/save/checkpoint commands, `export_*` and `send_code` compile_only excluded; `send_code` gets one conditional reminder).
+
+MCP prompts (`src/server/Prompts/InventorPrompts.cs`, rvt-mcp parity): `inventor_getting_started`, `inventor_change`, `inventor_save`; read-only gateways get read-only wording. Tests check that every tool a prompt names exists, and that read-only prompts name only read-only tools.
+
+Update notice (`src/shared/Update/UpdateCheck.cs` host-free + `Views/UpdateNoticeWindow.cs`, rvt-mcp parity): the add-in checks GitHub's latest stable release at most once a day (`update-check.json` in the data root; `BIMWRIGHT_DISABLE_UPDATE_CHECK=1` turns it off) and shows one unowned, non-activating card per Inventor session on the History UI thread, with a copyable agent prompt, the release page and "Skip this version".
 
 ## Error Codes (`InventorErrorCodes`)
 `NO_TARGET, TARGET_UNAVAILABLE, TARGET_BUSY, AMBIGUOUS_TARGET, TARGET_LOST, TARGET_REBIND_REQUIRED, INVALID_TARGET_SELECTOR, HOST_CRASHED, TARGET_UNCONFIRMED, DOCUMENT_UNCONFIRMED, DOCUMENT_CHANGED, PAIRING_REQUIRED, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, HOST_BUSY, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
