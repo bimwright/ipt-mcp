@@ -118,7 +118,7 @@ Inventor must be CLOSED before deploying add-in DLLs it would otherwise lock. Th
 ### Threading / STA marshalling (the novel piece)
 Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every command onto Inventor's main STA thread via `InventorStaDispatcher`: a hidden message-only WinForms `Control` created during `Activate` (on the STA thread), whose handle is forced so `BeginInvoke` works.
 - TCP / Named-Pipe listener runs on a background thread.
-- Each request → `InventorStaDispatcher.InvokeAsync(work)` → `Control.BeginInvoke` → runs on the UI thread; `HandleLine` applies the `env.TimeoutMs` wait and is the single owner of TIMEOUT.
+- Each request → `InventorStaDispatcher.InvokeAsync(work)` → `Control.BeginInvoke` → runs on the UI thread; `HandleLine` applies the `env.TimeoutMs` wait and is the single owner of TIMEOUT. Host busy (`HostBusyPolicy`, family contract FC-BUSY): a modal dialog (probed before queueing and again on the STA), a full queue, or work that expired before it started returns `HOST_BUSY` (not started, never runs later); `TIMEOUT` is only for a command that started.
 - `CommandDispatcher.Dispatch` runs **inside** `InvokeAsync`, so all `Inventor.Application` access is STA-bound.
 - `InventorStaDispatcher.Stats` counts queued/executing work; `health` reports `sta_busy`/`pending_commands` and still answers (queue counters only) when the STA thread is jammed.
 - The listener thread NEVER touches `_marshal` except via `BeginInvoke`.
@@ -160,7 +160,7 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; default `%LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
 
 ## Error Codes (`InventorErrorCodes`)
-`NO_TARGET, TARGET_UNAVAILABLE, AMBIGUOUS_TARGET, TARGET_LOST, HOST_CRASHED, TARGET_UNCONFIRMED, DOCUMENT_UNCONFIRMED, DOCUMENT_CHANGED, PAIRING_REQUIRED, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
+`NO_TARGET, TARGET_UNAVAILABLE, AMBIGUOUS_TARGET, TARGET_LOST, HOST_CRASHED, TARGET_UNCONFIRMED, DOCUMENT_UNCONFIRMED, DOCUMENT_CHANGED, PAIRING_REQUIRED, NO_DOCUMENT, WRONG_DOCUMENT_TYPE, INVALID_ARGUMENT, UNSUPPORTED_HOST, API_ERROR, TIMEOUT, HOST_BUSY, RESPONSE_TOO_LARGE, READ_ONLY, SEND_CODE_DISABLED, UNAUTHORIZED`.
 
 ## Decision Log
 - **C# server over TypeScript** — single language, direct API access patterns shared with rvt-mcp / nwd-mcp.

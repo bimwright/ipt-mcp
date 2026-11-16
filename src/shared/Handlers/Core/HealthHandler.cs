@@ -39,7 +39,7 @@ public sealed class HealthHandler : IInventorCommand
             ["sta_busy"] = pendingOthers > 0,
             ["pending_commands"] = pendingOthers,
             ["modal_dialog"] = Bimwright.Ipt.Shared.Plugin.ModalDialogProbe.Probe(),
-        };
+        }.WithHostBusy(staBusy: pendingOthers > 0);
         return InventorCommandResult.Success(Guid.Empty, data, meta);
     }
 }

@@ -47,6 +47,9 @@ public static class ServerInstructions
         "moves the confirmation to it. PAIRING_REQUIRED: update the server and add-in together; reads still work. " +
         "HOST_CRASHED means Inventor died inside that call: edits since the last save are lost; do not resend it, tell the user " +
         "and confirm before switching to another Inventor. " +
+        "HOST_BUSY means Inventor could not start the command (a modal dialog waits for the user, or earlier work kept it busy): " +
+        "it was not started and will not run later; ask the user to answer the dialog, check inventor_health host_busy, then send it again. " +
+        "TIMEOUT means the command started and its outcome is unknown: inspect before retrying a write. " +
         "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
         "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +

@@ -27,7 +27,10 @@ public static class InventorErrorCodes
     public const string INVALID_ARGUMENT = "INVALID_ARGUMENT";
     public const string UNSUPPORTED_HOST = "UNSUPPORTED_HOST";
     public const string API_ERROR = "API_ERROR";
+    /// <summary>A command did not finish in time after it started; its outcome is unknown.</summary>
     public const string TIMEOUT = "TIMEOUT";
+    /// <summary>Inventor could not start the command (modal dialog, full queue, or busy past the deadline). The command was not started.</summary>
+    public const string HOST_BUSY = "HOST_BUSY";
     public const string RESPONSE_TOO_LARGE = "RESPONSE_TOO_LARGE";
     public const string READ_ONLY = "READ_ONLY";
     public const string SEND_CODE_DISABLED = "SEND_CODE_DISABLED";

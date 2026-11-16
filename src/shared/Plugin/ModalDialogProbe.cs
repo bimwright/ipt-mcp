@@ -55,14 +55,20 @@ internal static class ModalDialogProbe
         return result;
     }
 
+    /// <summary>True when a modal dialog owns Inventor's UI (HOST_BUSY); <paramref name="title"/> is its caption.</summary>
+    public static bool IsOpen(out string? title)
+    {
+        var probe = Probe();
+        title = (string?)probe["title"];
+        return probe["open"]?.Value<bool>() == true;
+    }
+
     /// <summary>One-line suffix for TIMEOUT messages; empty when no modal dialog is detected.</summary>
     public static string TimeoutSuffix()
     {
-        var probe = Probe();
-        if (probe["open"]?.Value<bool>() != true) return "";
-        var title = (string?)probe["title"];
+        if (!IsOpen(out var title)) return "";
         return " A modal dialog is open in Inventor" + (string.IsNullOrEmpty(title) ? "" : $" (\"{title}\")")
-               + " and is blocking it — ask the user to answer it. Typed save/open/close tools run silently; "
+               + " and is blocking it — ask the user to answer it. Typed save/open/close/export and new_drawing/add_sheet/set_title_block tools run silently; "
                + "for send_code pass silent:true so Inventor answers prompts with their defaults.";
     }
 

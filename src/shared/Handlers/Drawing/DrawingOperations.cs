@@ -114,6 +114,8 @@ internal static partial class DrawingOperations
         var existing = app.Documents.Cast<Inventor.Document>().Where(x => x.DisplayName == name).ToArray();
         if (existing.Length > 0) { if (existing.Length != 1 || existing[0] is not DrawingDocument found) throw new ArgumentException("Document name conflicts."); DrawingSupport.Existing(found.AttributeSets, p); return DrawingSupport.Success(ctx, new JObject { ["created"] = false, ["existing"] = true, ["document"] = found.DisplayName, ["path"] = found.FullFileName }); }
         DrawingDocument? d = null;
+        // A template whose title block has prompted entries opens a "Prompted Texts" dialog that blocks the STA.
+        using var silent = SilentOperationScope.Enter(app, p);
         try
         {
             d = (DrawingDocument)app.Documents.Add(DocumentTypeEnum.kDrawingDocumentObject, path, p.Value<bool?>("visible") ?? true); d.DisplayName = name;
@@ -155,6 +157,7 @@ internal static partial class DrawingOperations
         var dimensions = size switch { "A0" => new[] { 1189.0, 841.0 }, "A1" => new[] { 841.0, 594.0 }, "A2" => new[] { 594.0, 420.0 }, "A3" => new[] { 420.0, 297.0 }, "A4" => new[] { 297.0, 210.0 }, _ => new[] { (double)p["width_mm"]!, (double)p["height_mm"]! } };
         var portrait = (string?)p["orientation"] == "portrait";
         if (size != "custom" && portrait) Array.Reverse(dimensions);
+        using var silent = SilentOperationScope.Enter(DrawingSupport.App(ctx), p);   // title block prompts must not open a dialog
         return DrawingSupport.Atomic(ctx, d, "Add drawing sheet", () =>
         {
             var nativeSize = size switch { "A0" => DrawingSheetSizeEnum.kA0DrawingSheetSize, "A1" => DrawingSheetSizeEnum.kA1DrawingSheetSize, "A2" => DrawingSheetSizeEnum.kA2DrawingSheetSize, "A3" => DrawingSheetSizeEnum.kA3DrawingSheetSize, "A4" => DrawingSheetSizeEnum.kA4DrawingSheetSize, _ => DrawingSheetSizeEnum.kCustomDrawingSheetSize };
@@ -193,6 +196,7 @@ internal static partial class DrawingOperations
             if (item["value"] is not JValue) throw new ArgumentException("iProperty value must be scalar."); props.Add((prop, item["value"]!));
         }
         else if (DrawingInput.Present(p, "iproperties")) throw new ArgumentException("iproperties must be an array.");
+        using var silent = SilentOperationScope.Enter(DrawingSupport.App(ctx), p);
         return DrawingSupport.Atomic(ctx, d, "Update drawing title block", () =>
         {
             if (replacing) { sheet.TitleBlock?.Delete(); sheet.AddTitleBlock(def, PromptStrings: values); }

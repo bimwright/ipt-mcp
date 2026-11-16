@@ -303,6 +303,16 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
 
             // Marshal the actual API work onto the STA thread. task.Wait is the single owner of
             // the timeout (spec F2-b): nothing else can interrupt work running on the STA thread.
+            // Host busy (FC-BUSY-01): a modal dialog is waiting for the user. Refuse before queueing,
+            // so the command neither times out behind the dialog nor runs later.
+            if (HostBusyPolicy.RefusesForModal(env.Command, ModalDialogProbe.IsOpen(out var dialogTitle)))
+            {
+                var busy = HostBusyPolicy.ModalMessage(env.Command, dialogTitle);
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.HOST_BUSY, busy, meta));
+                RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.HOST_BUSY, busy, clock.ElapsedMilliseconds);
+                return;
+            }
+
             using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(stopping);
             var breadcrumb = env.RecordCalls && !EnvFlag("BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG") ? _inflight : null;
             var task = _sta!.TryInvokeAsync(() =>
@@ -310,6 +320,10 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 // Marker on the STA, right before the API work: commands run one at a time here.
                 // Document target (family contract FC-DOC-04): checked on the STA right before the handler.
                 var command = env.Command ?? "";
+                // A dialog's own message loop can run queued work: never start a command inside it.
+                if (HostBusyPolicy.RefusesForModal(command, ModalDialogProbe.IsOpen(out var staDialogTitle)))
+                    return InventorCommandResult.Fail(env.Id, InventorErrorCodes.HOST_BUSY, HostBusyPolicy.ModalMessage(command, staDialogTitle),
+                        new InventorResponseMeta { TargetId = descriptor.TargetId, InventorYear = o.Year });
                 var isReadOnly = !dispatcher.Commands.TryGetValue(command, out var handler) || handler.IsReadOnly;
                 var before = ActiveDocumentStamp.Read(_app);
                 var refusal = DocumentTargetPolicy.Check(command, isReadOnly, env.Params, env.DocumentTarget, before.Id, before.Title);
@@ -342,9 +356,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 }
                 else
                 {
-                    const string message = "Inventor STA queue is full; this operation was not started.";
-                    tcs.TrySetResult(Err(env.Id, InventorErrorCodes.API_ERROR, message, meta));
-                    RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.API_ERROR, message, clock.ElapsedMilliseconds);
+                    var message = HostBusyPolicy.QueueFullMessage(env.Command);
+                    tcs.TrySetResult(Err(env.Id, InventorErrorCodes.HOST_BUSY, message, meta));
+                    RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.HOST_BUSY, message, clock.ElapsedMilliseconds);
                 }
                 return;
             }
@@ -373,10 +387,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             }
             else if (task.IsCanceled)
             {
-                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
-                    $"{env.Command} expired before STA execution; the operation was not started.", meta));
-                RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
-                    "Operation was not started before its deadline", clock.ElapsedMilliseconds);
+                var expired = HostBusyPolicy.ExpiredMessage(env.Command, env.TimeoutMs);
+                tcs.TrySetResult(Err(env.Id, InventorErrorCodes.HOST_BUSY, expired, meta));
+                RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.HOST_BUSY, expired, clock.ElapsedMilliseconds);
             }
             else if (env.Command == "send_code" || env.Command == "ilogic_run_snippet")
             {
@@ -391,7 +404,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             {
                 tcs.TrySetResult(Err(env.Id, InventorErrorCodes.TIMEOUT,
                     $"{env.Command} did not finish within {env.TimeoutMs} ms; it may still complete on Inventor's STA thread." +
-                    ModalDialogProbe.TimeoutSuffix(), meta));
+                    HostBusyPolicy.StartedTimeoutNote + ModalDialogProbe.TimeoutSuffix(), meta));
                 RecordOutcome(env, dispatcher, false, null, InventorErrorCodes.TIMEOUT,
                     $"Inventor did not answer within {env.TimeoutMs} ms", clock.ElapsedMilliseconds);
             }
@@ -604,7 +617,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     /// queue counters without touching <c>Inventor.Application</c> (spec F2-b).
     /// </summary>
     private Newtonsoft.Json.Linq.JObject BusyHealthData(PluginOptions o, bool healthIsQueued = true)
-        => new()
+        => new Newtonsoft.Json.Linq.JObject
         {
             ["inventor_year"] = o.Year,
             ["process_id"] = System.Diagnostics.Process.GetCurrentProcess().Id,
@@ -616,7 +629,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             ["pending_commands"] = Math.Max(0, (_sta?.Stats.PendingCommands ?? 0) - (healthIsQueued ? 1 : 0)),
             ["answered_without_sta"] = true,
             ["modal_dialog"] = ModalDialogProbe.Probe(),
-        };
+        }.WithHostBusy(staBusy: true);
 
     /// <summary>Reads the active document's display name and full path (best effort) off the STA thread.</summary>
     private void ReadActiveDocument(out string? title, out string? path)
