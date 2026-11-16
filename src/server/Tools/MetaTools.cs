@@ -12,9 +12,9 @@ namespace Bimwright.Ipt.Server.Tools;
 
 /// <summary>
 /// Server-side target/meta tools. These never round-trip to the add-in; they
-/// operate purely on the server's view of the descriptor registry. They stay
-/// exposed even under <c>--read-only</c> so an agent can always enumerate and
-/// pin a target.
+/// operate purely on the server's view of the descriptor registry. List and get
+/// stay under <c>--read-only</c>; switch_target does not (family contract
+/// FC-SRV-08): a read-only gateway uses <c>--target</c>, or the only live session.
 /// </summary>
 [McpServerToolType]
 [Toolset("meta")]
@@ -33,15 +33,27 @@ public sealed class MetaTools
         });
 
     [McpServerTool(Name = "inventor_get_current_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Report the Inventor target this gateway uses. Binds automatically only when exactly one target is live; otherwise returns AMBIGUOUS_TARGET, TARGET_LOST or NO_TARGET with candidates.")]
+     Description("Report the Inventor target this gateway uses. Never selects one: with no selection yet it returns bound=false with the live candidates (the first host call binds only when exactly one is live). A selection that exited returns TARGET_LOST.")]
     public string GetCurrentTarget()
     {
         return LoggedMeta("inventor_get_current_target", null, () =>
         {
             try
             {
-                var t = _client.ResolveTarget();
+                if (_client.CurrentTarget() is not { } t)
+                {
+                    var candidates = _client.ListTargets();
+                    return ToolResponse.Serialize(new JObject
+                    {
+                        ["bound"] = false,
+                        ["candidates"] = JArray.FromObject(candidates.Select(c => PublicTarget(c, false))),
+                        ["next_step"] = candidates.Count == 0
+                            ? "No live Inventor target. Start Inventor with the bimwright add-in loaded."
+                            : "Check with the user which Inventor to use, then inventor_switch_target(target=\"pid:<n>\", verify=true) before writes.",
+                    });
+                }
                 var json = JObject.FromObject(PublicTarget(t, true));
+                json["bound"] = true;
                 json["selected_by"] = _client.SelectedBy;
                 AddDocumentPin(json, t);
                 return ToolResponse.Serialize(json);
@@ -50,17 +62,20 @@ public sealed class MetaTools
         });
     }
 
-    [McpServerTool(Name = "inventor_switch_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Select the Inventor session this gateway uses: pid:<n> or id:<target_id> (preferred), a 4-digit year (2022..2027), or a pipe name. A selector matching several sessions is refused. The selection is kept until switched again and is never replaced automatically. " +
+    [McpServerTool(Name = "inventor_switch_target", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Select the Inventor session this gateway uses: pid:<n> or id:<target_id> (preferred), auto, or a 4-digit year (2022..2027); other text returns INVALID_TARGET_SELECTOR. A selector matching several sessions is refused. The selection is kept until switched again and is never replaced automatically. " +
+                 "auto and a year never move an existing selection to another Inventor, and leaving a running session this gateway selected needs rebind=true (TARGET_REBIND_REQUIRED otherwise); check with the user first. A refused switch keeps the current selection. Not available under --read-only (use --target at startup). " +
                  "verify=true also confirms the document that is active in that Inventor now: writes run only on a confirmed target and return TARGET_UNCONFIRMED until this is called once, and DOCUMENT_CHANGED (command not started) when another document became active. " +
                  "Check with the user that the reported document is the one to change. Opening or creating a document with inventor_open_document/new_part/new_assembly/new_drawing/create_part moves the confirmation to it; a write with an explicit document parameter is not tied to the active document. " +
                  "Selecting the same session again keeps its confirmed document. Does not change the Inventor document.")]
-    public Task<string> SwitchTarget(string target, bool verify = false, CancellationToken ct = default) =>
-        LoggedMetaAsync("inventor_switch_target", new { target, verify }, async () =>
+    public Task<string> SwitchTarget(string target, bool verify = false,
+        [Description("Leave a running Inventor this gateway selected and move to another (default false). Only after the user agreed.")] bool rebind = false,
+        CancellationToken ct = default) =>
+        LoggedMetaAsync("inventor_switch_target", new { target, verify, rebind }, async () =>
         {
             try
             {
-                var t = _client.SwitchTarget(target);
+                var t = _client.SwitchTarget(target, rebind);
                 var json = new JObject { ["ok"] = true, ["selector"] = target, ["target"] = JObject.FromObject(PublicTarget(t, true)) };
                 if (verify) await _client.ConfirmDocumentAsync(t, ct);
                 AddDocumentPin(json, t);

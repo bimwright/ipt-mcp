@@ -371,14 +371,14 @@ public sealed class ServerLoggerTests : IDisposable
         var meta = new MetaTools(new PluginClient(new InventorMcpConfig { DescriptorDirectory = dir.FullName }));
         var skip = File.Exists(JournalPath) ? ReadJournalLines().Length : 0;
 
-        var payload = meta.GetCurrentTarget();
+        var payload = meta.SwitchTarget("pid:999999").GetAwaiter().GetResult();
 
         Assert.Contains("NO_TARGET", payload);
         // Other tests may call the same meta tool in parallel and interleave journal lines
         // (a found-target payload carries no `ok`, i.e. data_ok=null), so assert on the
         // expected shape rather than a single positional line.
         var entries = AppendedFinishLines(skip)
-            .Where(e => (string?)e["tool"] == "inventor_get_current_target")
+            .Where(e => (string?)e["tool"] == "inventor_switch_target")
             .ToArray();
         Assert.Contains(entries, e => (bool)e["success"]! && (bool?)e["data_ok"] == false);
     }

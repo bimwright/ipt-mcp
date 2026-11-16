@@ -410,7 +410,6 @@ Inventor および Autodesk は Autodesk, Inc. の登録商標です。bimwright
       "mcp__ipt-mcp__inventor_probe_brep",
       "mcp__ipt-mcp__inventor_report_task_result",
       "mcp__ipt-mcp__inventor_sheet_fabrication_info",
-      "mcp__ipt-mcp__inventor_switch_target",
       "mcp__ipt-mcp__inventor_view_fit"
     ]
   }

@@ -9,7 +9,7 @@ using Xunit;
 namespace Bimwright.Ipt.Tests;
 
 /// <summary>
-/// Declares the Phase 3 surface: 149 all-enabled, 143 code-off and 39 read-only.
+/// Declares the Phase 3 surface: 149 all-enabled, 143 code-off and 38 read-only.
 /// These expectations do not claim that the current source has been built or tested.
 /// </summary>
 public sealed class RegistrationCountTests
@@ -181,7 +181,7 @@ public sealed class RegistrationCountTests
         Assert.DoesNotContain(typeof(SheetFabricationTools), types);
         Assert.Contains(typeof(ILogicTools), types);
         Assert.Equal(12, types.Length);
-        Assert.Equal(39, names.Length);
+        Assert.Equal(38, names.Length);
         Assert.Contains("inventor_find_view_geometry", names);
 
         // Dropped: every write/export/code/toolbaker_write owner.

@@ -71,8 +71,9 @@ public sealed class MetaToolsTests : IDisposable
 
         Assert.Equal(2025, client.SwitchTarget("id:inventor-2025-" + pid).InventorYear);
 
-        // Both descriptors share this test's pid, so a bare pid is ambiguous and refused.
-        Assert.Equal("AMBIGUOUS_TARGET", Assert.Throws<InventorGatewayException>(() => client.SwitchTarget(pid.ToString())).Code);
+        // Both descriptors share this test's pid, so pid:<n> is ambiguous and refused; a bare number is not a selector.
+        Assert.Equal("AMBIGUOUS_TARGET", Assert.Throws<InventorGatewayException>(() => client.SwitchTarget("pid:" + pid)).Code);
+        Assert.Equal("INVALID_TARGET_SELECTOR", Assert.Throws<InventorGatewayException>(() => client.SwitchTarget(pid.ToString())).Code);
         Assert.Equal(2025, client.ResolveTarget().InventorYear);
     }
 }

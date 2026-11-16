@@ -9,6 +9,9 @@ using Bimwright.Ipt.Shared.Views.Toast;
 
 internal static class Program
 {
+    // FC-TST-02: every card title ends with the PID of the process that hosts the toast (Inventor in production).
+    private static readonly string Pid = " · PID: " + System.Diagnostics.Process.GetCurrentProcess().Id;
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -135,7 +138,7 @@ internal static class Program
                 var hasProductHeader = false;
                 foreach (var child in header.Children)
                 {
-                    if (child is TextBlock text && text.Text == "ipt-mcp")
+                    if (child is TextBlock text && text.Text == "ipt-mcp" + Pid)
                     {
                         hasProductHeader = true;
                         break;
@@ -216,13 +219,13 @@ internal static class Program
             if (window == null)
                 throw new Exception("The activity card was not created.");
             var footer = BrandRow(window);
-            if (TitleText(window) != "ipt-mcp" || ToolText(window) != "List Rooms"
+            if (TitleText(window) != "ipt-mcp" + Pid || ToolText(window) != "List Rooms"
                 || footer.Visibility != Visibility.Collapsed)
                 throw new Exception("A card opened with branding off must omit the wordmark row.");
             show = true;
             manager.ApplyShowBranding();
             Pump();
-            if (TitleText(window) != "ipt-mcp" || ToolText(window) != "List Rooms"
+            if (TitleText(window) != "ipt-mcp" + Pid || ToolText(window) != "List Rooms"
                 || footer.Visibility != Visibility.Hidden)
                 throw new Exception("Turning branding on must reserve a blank brand row and leave the text alone.");
         }
@@ -238,13 +241,13 @@ internal static class Program
             instanceIdentity: "ipt-mcp 2027");
         try
         {
-            if (TitleText(window) != "ipt-mcp 2027" || ToolText(window) != "List Rooms")
+            if (TitleText(window) != "ipt-mcp 2027" + Pid || ToolText(window) != "List Rooms")
                 throw new Exception("The title must carry the supplied instance identity above the tool.");
             window.SetShowBranding(false);
-            if (TitleText(window) != "ipt-mcp 2027" || BrandRow(window).Visibility != Visibility.Collapsed)
+            if (TitleText(window) != "ipt-mcp 2027" + Pid || BrandRow(window).Visibility != Visibility.Collapsed)
                 throw new Exception("Turning branding off must keep the title and collapse the wordmark row.");
             window.SetShowBranding(true);
-            if (TitleText(window) != "ipt-mcp 2027" || BrandRow(window).Visibility != Visibility.Hidden)
+            if (TitleText(window) != "ipt-mcp 2027" + Pid || BrandRow(window).Visibility != Visibility.Hidden)
                 throw new Exception("Turning branding on must keep the title and reserve the wordmark row.");
         }
         finally { window.CloseImmediate(); }
@@ -252,7 +255,7 @@ internal static class Program
         var plain = new McpToastWindow(snapshot, null, null, null, null, null);
         try
         {
-            if (TitleText(plain) != "ipt-mcp")
+            if (TitleText(plain) != "ipt-mcp" + Pid)
                 throw new Exception("A card without identity must fall back to the product name.");
         }
         finally { plain.CloseImmediate(); }

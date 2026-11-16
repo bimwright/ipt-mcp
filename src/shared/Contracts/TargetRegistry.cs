@@ -27,16 +27,26 @@ public sealed class TargetRegistry
             if (!string.Equals(d.HostApp, "Inventor", StringComparison.OrdinalIgnoreCase)) continue;
             if (d.InventorYear is < 2022 or > 2027) continue;
             if (now - d.LastHeartbeatUtc > _maxAge) { DeleteQuietly(file); continue; }
-            if (!IsProcessAlive(d.ProcessId)) { DeleteQuietly(file); continue; }
+            if (!IsProcessAlive(d.ProcessId, d.ProcessStartUtc)) { DeleteQuietly(file); continue; }
             live.Add(d);
         }
         return live.OrderByDescending(x => x.LastHeartbeatUtc).ToList();
     }
 
-    private static bool IsProcessAlive(int pid)
+    /// <summary>
+    /// Alive, and the same process when the descriptor names its start time (FC-TGT-04): Windows reuses pids,
+    /// so a descriptor whose pid now belongs to a later process is stale.
+    /// </summary>
+    private static bool IsProcessAlive(int pid, DateTimeOffset? startUtc)
     {
         if (pid <= 0) return false;
-        try { System.Diagnostics.Process.GetProcessById(pid); return true; }
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(pid);
+            if (startUtc is not { } expected) return true;
+            try { return Math.Abs((p.StartTime.ToUniversalTime() - expected.UtcDateTime).TotalSeconds) < 1; }
+            catch { return true; }   // start time unreadable (access denied): keep the pid-only check
+        }
         catch { return false; }
     }
 

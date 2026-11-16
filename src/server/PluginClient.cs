@@ -95,7 +95,10 @@ public sealed class PluginClient
     public TargetDescriptor ResolveTarget() => _binding.Resolve(_registry.List());
 
     /// <summary>Selects one live target by pid:&lt;n&gt;, id:&lt;target_id&gt;, year, pid or pipe name; ambiguity is refused.</summary>
-    public TargetDescriptor SwitchTarget(string selector) => _binding.Switch(selector, _registry.List());
+    public TargetDescriptor SwitchTarget(string selector, bool rebind = false) => _binding.Switch(selector, _registry.List(), rebind);
+
+    /// <summary>The current selection without binding one (inventor_get_current_target, FC-TGT-05); null when none.</summary>
+    public TargetDescriptor? CurrentTarget() => _binding.Current(_registry.List());
 
     internal string? SelectedTargetId => _binding.SelectedTargetId;
 

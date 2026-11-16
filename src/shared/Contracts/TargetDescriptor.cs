@@ -19,4 +19,9 @@ public sealed class TargetDescriptor
     [JsonProperty("setup_identity", NullValueHandling = NullValueHandling.Ignore)] public Newtonsoft.Json.Linq.JObject? SetupIdentity { get; set; }
     /// <summary>Wire protocols the add-in supports, e.g. <see cref="DocumentTargetPolicy.Protocol"/>; older add-ins omit it.</summary>
     [JsonProperty("capabilities", NullValueHandling = NullValueHandling.Ignore)] public string[]? Capabilities { get; set; }
+    /// <summary>
+    /// Start time of the Inventor process (family contract FC-TGT-04): pid plus start time names one instance,
+    /// since Windows reuses pids. Older add-ins omit it and the gateway reads the process instead.
+    /// </summary>
+    [JsonProperty("process_start_utc", NullValueHandling = NullValueHandling.Ignore)] public DateTimeOffset? ProcessStartUtc { get; set; }
 }

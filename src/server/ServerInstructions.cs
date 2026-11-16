@@ -55,7 +55,7 @@ public static class ServerInstructions
         "Checkpoints: inventor_save_checkpoint only with user approval before risky work; prune or restore with inventor_manage_checkpoints (prune needs the previewed plan_hash). " +
         "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
-        "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +
+        "read-only mode hides write tools and inventor_switch_target (use --target pid:<n> at startup) but keeps query, list/get target, and read-only baked tool inspection. " +
         "Activity toasts group tool calls; they do not indicate that a whole job is finished. " +
         "If inventor_report_task_result is available, call it once when the requested job is verified complete, failed or cancelled, " +
         "with a unique agent/job task_id and a truthful concise summary. Never infer success from idle time or a single successful tool. " +

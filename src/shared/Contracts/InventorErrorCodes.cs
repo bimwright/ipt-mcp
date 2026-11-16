@@ -14,6 +14,10 @@ public static class InventorErrorCodes
     public const string AMBIGUOUS_TARGET = "AMBIGUOUS_TARGET";
     /// <summary>The selected Inventor session exited or its pid was reused; it is never replaced implicitly.</summary>
     public const string TARGET_LOST = "TARGET_LOST";
+    /// <summary>switch_target would leave a live confirmed session, or move a binding with auto/year; the selection is unchanged (FC-TGT-03).</summary>
+    public const string TARGET_REBIND_REQUIRED = "TARGET_REBIND_REQUIRED";
+    /// <summary>The switch_target selector is not auto, a year 2022..2027, pid:&lt;n&gt; or id:&lt;target_id&gt;; the selection is unchanged (FC-TGT-06).</summary>
+    public const string INVALID_TARGET_SELECTOR = "INVALID_TARGET_SELECTOR";
     /// <summary>The Inventor process exited while a call was in flight; unsaved edits are lost.</summary>
     public const string HOST_CRASHED = "HOST_CRASHED";
     /// <summary>A write was refused by the gateway: the target and its document are not confirmed (switch_target verify=true).</summary>

@@ -146,10 +146,109 @@ public sealed class TargetBindingTests : IDisposable
 
         Assert.Equal(InventorErrorCodes.AMBIGUOUS_TARGET, Code(() => client.SwitchTarget("2027")));
         Assert.Equal(InventorErrorCodes.NO_TARGET, Code(() => client.SwitchTarget("pid:1")));
-        Assert.Equal(InventorErrorCodes.INVALID_ARGUMENT, Code(() => client.SwitchTarget(" ")));
+        Assert.Equal(InventorErrorCodes.INVALID_TARGET_SELECTOR, Code(() => client.SwitchTarget(" ")));
         Assert.Equal(_pids[0], client.ResolveTarget().ProcessId);
 
-        Assert.Equal(_pids[2], client.SwitchTarget("BimwrightInventor-" + _pids[2]).ProcessId);
+        Assert.Equal(_pids[2], client.SwitchTarget("BimwrightInventor-" + _pids[2], rebind: true).ProcessId);
+    }
+
+    [Theory]
+    [InlineData("auto", true)]
+    [InlineData("2022", true)]
+    [InlineData("2027", true)]
+    [InlineData("pid:123", true)]
+    [InlineData("id:inventor-2027-123", true)]
+    [InlineData("inventor-2027-123", true)]          // older clients: bare target id
+    [InlineData("BimwrightInventor-123", true)]      // older clients: pipe name
+    [InlineData("", false)]
+    [InlineData("2021", false)]
+    [InlineData("2028", false)]
+    [InlineData("123", false)]
+    [InlineData("pid:", false)]
+    [InlineData("pid:abc", false)]
+    [InlineData("pid:-5", false)]
+    [InlineData("id:", false)]
+    [InlineData("R2027", false)]
+    [InlineData("revit-2027", false)]
+    public void Selector_syntax_FC_TGT_06(string selector, bool valid)
+        => Assert.Equal(valid, TargetBinding.IsValidSelector(selector));
+
+    [Fact]
+    public void Invalid_selector_keeps_the_selection_FC_TGT_06()
+    {
+        Write(2027, _pids[0]);
+        var client = Client();
+        client.SwitchTarget("pid:" + _pids[0]);
+        Assert.Equal(InventorErrorCodes.INVALID_TARGET_SELECTOR, Code(() => client.SwitchTarget("R2027")));
+        Assert.Equal(_pids[0], client.ResolveTarget().ProcessId);
+    }
+
+    [Fact]
+    public void Leaving_a_selected_live_session_needs_rebind_FC_TGT_03()
+    {
+        Write(2026, _pids[0]);
+        Write(2027, _pids[1]);
+        var client = Client();
+        client.SwitchTarget("pid:" + _pids[0]);
+
+        Assert.Equal(InventorErrorCodes.TARGET_REBIND_REQUIRED, Code(() => client.SwitchTarget("pid:" + _pids[1])));
+        Assert.Equal(InventorErrorCodes.TARGET_REBIND_REQUIRED, Code(() => client.SwitchTarget("2027")));
+        Assert.Equal(_pids[0], client.ResolveTarget().ProcessId);   // refused switches keep the selection
+
+        // Selecting the same session again is not leaving it.
+        Assert.Equal(_pids[0], client.SwitchTarget("2026").ProcessId);
+
+        Assert.Equal(_pids[1], client.SwitchTarget("pid:" + _pids[1], rebind: true).ProcessId);
+        Assert.Equal(_pids[1], client.ResolveTarget().ProcessId);
+    }
+
+    [Fact]
+    public void Auto_or_year_never_moves_an_automatic_binding_but_pid_does_FC_TGT_03()
+    {
+        Write(2026, _pids[0]);
+        var client = Client();
+        client.ResolveTarget();                       // first call bound automatically (not confirmed)
+        Write(2027, _pids[1]);
+
+        Assert.Equal(InventorErrorCodes.TARGET_REBIND_REQUIRED, Code(() => client.SwitchTarget("2027")));
+        Assert.Equal(InventorErrorCodes.AMBIGUOUS_TARGET, Code(() => client.SwitchTarget("auto")));
+        Assert.Equal(_pids[1], client.SwitchTarget("pid:" + _pids[1]).ProcessId);
+    }
+
+    [Fact]
+    public void A_lost_selection_is_replaced_by_pid_without_rebind_but_never_by_auto()
+    {
+        Write(2027, _pids[0]);
+        Write(2027, _pids[1]);
+        var client = Client();
+        client.SwitchTarget("pid:" + _pids[0]);
+        _processes[_pids[0]] = new TargetBinding.ProcessProbe(false, null);
+        Remove(2027, _pids[0]);
+
+        Assert.Equal(InventorErrorCodes.TARGET_REBIND_REQUIRED, Code(() => client.SwitchTarget("auto")));
+        Assert.Equal(InventorErrorCodes.TARGET_LOST, Code(() => client.ResolveTarget()));
+        Assert.Equal(InventorErrorCodes.TARGET_REBIND_REQUIRED, Code(() => client.SwitchTarget("2027")));
+        Assert.Equal(_pids[1], client.SwitchTarget("pid:" + _pids[1]).ProcessId);
+    }
+
+    [Fact]
+    public void Get_current_target_never_binds_FC_TGT_05()
+    {
+        Write(2027, _pids[0]);
+        var client = Client();
+        var tools = new MetaTools(client);
+
+        var report = JObject.Parse(tools.GetCurrentTarget());
+        Assert.False((bool)report["bound"]!);
+        Assert.Single((JArray)report["candidates"]!);
+        Assert.Null(client.SelectedTargetId);
+        tools.ListAvailableTargets();
+        Assert.Null(client.SelectedTargetId);
+
+        client.ResolveTarget();
+        var bound = JObject.Parse(tools.GetCurrentTarget());
+        Assert.True((bool)bound["bound"]!);
+        Assert.Equal(_pids[0], (int)bound["process_id"]!);
     }
 
     [Fact]
@@ -175,8 +274,8 @@ public sealed class TargetBindingTests : IDisposable
         var tools = new MetaTools(client);
 
         var ambiguous = JObject.Parse(tools.GetCurrentTarget());
-        Assert.Equal("AMBIGUOUS_TARGET", (string?)ambiguous["error"]!["code"]);
-        Assert.Equal(2, ((JArray)ambiguous["data"]!["candidates"]!).Count);
+        Assert.False((bool)ambiguous["bound"]!);
+        Assert.Equal(2, ((JArray)ambiguous["candidates"]!).Count);
 
         var switched = JObject.Parse(tools.SwitchTarget("pid:" + _pids[1]).GetAwaiter().GetResult());
         Assert.True((bool)switched["ok"]!);

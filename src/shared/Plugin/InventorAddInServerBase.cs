@@ -110,6 +110,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _descriptor = descriptor;
         _descriptor.SetupIdentity = setupIdentity;
         _descriptor.Capabilities = new[] { DocumentTargetPolicy.Protocol };
+        try { using var self = System.Diagnostics.Process.GetCurrentProcess(); _descriptor.ProcessStartUtc = self.StartTime.ToUniversalTime(); } catch { }
         server.Start((line, tcs) => HandleLine(line, dispatcher, options, descriptor, tcs, server.Stopping));
         if (server is TcpTransportServer tcp) descriptor.Port = tcp.Port;
 

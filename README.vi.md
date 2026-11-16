@@ -414,7 +414,6 @@ Allow list dưới đây được sinh từ 28 annotation read-only và có test
       "mcp__ipt-mcp__inventor_probe_brep",
       "mcp__ipt-mcp__inventor_report_task_result",
       "mcp__ipt-mcp__inventor_sheet_fabrication_info",
-      "mcp__ipt-mcp__inventor_switch_target",
       "mcp__ipt-mcp__inventor_view_fit"
     ]
   }

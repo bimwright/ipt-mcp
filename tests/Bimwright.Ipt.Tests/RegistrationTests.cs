@@ -83,12 +83,13 @@ public sealed class RegistrationTests
     }
 
     [Fact]
-    public void ReadOnly_keeps_switch_target_meta_tool()
+    public void ReadOnly_drops_switch_target_but_keeps_list_and_get_FC_SRV_08()
     {
         var cfg = new InventorMcpConfig { Toolsets = { "all" }, ReadOnly = true };
         var names = ToolNames(cfg);
 
-        Assert.Contains("inventor_switch_target", names);
+        // A read-only gateway uses --target at startup (or the only live session); it cannot switch.
+        Assert.DoesNotContain("inventor_switch_target", names);
         Assert.Contains("inventor_list_available_targets", names);
         Assert.Contains("inventor_get_current_target", names);
     }

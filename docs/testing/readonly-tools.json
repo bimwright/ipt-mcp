@@ -39,7 +39,6 @@
     "inventor_probe_brep",
     "inventor_report_task_result",
     "inventor_sheet_fabrication_info",
-    "inventor_switch_target",
     "inventor_view_fit"
   ]
 }

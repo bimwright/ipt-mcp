@@ -185,7 +185,7 @@ public sealed class DocumentTargetTests : IDisposable
         var tools = new MetaTools(client);
 
         var verifyAnswer = AnswerOnce(r => Ok(r, new JObject { ["document_id"] = "doc-a", ["document_title"] = "A.ipt" }), timeout.Token);
-        var switched = JObject.Parse(await tools.SwitchTarget("pid:" + Environment.ProcessId, verify: true, timeout.Token));
+        var switched = JObject.Parse(await tools.SwitchTarget("pid:" + Environment.ProcessId, verify: true, ct: timeout.Token));
         Assert.Equal("document_target", (string?)(await verifyAnswer)["command"]);
         Assert.True((bool)switched["document_confirmed"]!);
         Assert.Equal("doc-a", (string?)switched["confirmed_document_id"]);

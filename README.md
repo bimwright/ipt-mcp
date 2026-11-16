@@ -94,7 +94,7 @@ Do **not** `dotnet tool install -g Bimwright.Ipt.Server` — that is not the sup
 
 **Developer:** `pwsh scripts/package-bundle.ps1` on a box with Inventor interop (skip years without SDK). Close Inventor before rebuilds.
 
-Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The gateway binds automatically only when exactly one Inventor is live. With several open, calls return `AMBIGUOUS_TARGET` until you pick one: call `inventor_list_available_targets`, then `inventor_switch_target` with `pid:<n>` or `id:<target_id>`. A selected session is never swapped for another: if it exits, calls return `TARGET_LOST` until you switch explicitly.
+Add-in discovery is automatic: each running add-in writes `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`. The gateway binds automatically only when exactly one Inventor is live. With several open, calls return `AMBIGUOUS_TARGET` until you pick one: call `inventor_list_available_targets`, then `inventor_switch_target` with `pid:<n>` or `id:<target_id>`. A selected session is never swapped for another: if it exits, calls return `TARGET_LOST` until you switch explicitly with `pid:<n>` or `id:<target_id>`. Leaving a running session that this gateway selected needs `rebind=true` (otherwise `TARGET_REBIND_REQUIRED`), and `auto` or a year never moves a selection. A malformed selector returns `INVALID_TARGET_SELECTOR`. `inventor_get_current_target` and `inventor_list_available_targets` never select a session. Under `--read-only`, `inventor_switch_target` is not available: pass `--target pid:<n>` at startup, or run with a single Inventor open. Each toast card title ends with `PID: <n>` of its Inventor, so you can match it to the session the agent selected.
 
 Writes run only on a confirmed document. Check the active document with the user, then call `inventor_switch_target` with `pid:<n>` and `verify=true` once per session; until then writes return `TARGET_UNCONFIRMED` and are not sent. If another document becomes active, a write returns `DOCUMENT_CHANGED` (or `DOCUMENT_UNCONFIRMED`) from the add-in and is not started; confirm again, or pass `document` (full path or name) to name the target document, which is not tied to the active one. Opening or creating a document with `inventor_open_document(s)`, `inventor_new_part`, `inventor_new_assembly`, `inventor_new_drawing`, `inventor_new_sheet_fabrication_part` or `inventor_create_part` moves the confirmation to the document it activates. The server and add-in must both support `document_target_v1`: with an older add-in or server, writes return `PAIRING_REQUIRED` and reads still work, so update both from the same release.
 
@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **149 tools** by default (`--toolsets all`); `--disable-send-code` exposes **143 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **149 tools** by default (`--toolsets all`); `--disable-send-code` exposes **143 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -202,8 +202,8 @@ Sheet Fabrication creation requires a sheet fabrication template and cannot run 
 | Tool | Description |
 |---|---|
 | `inventor_list_available_targets` | List detected live Inventor add-in targets (year, pid, transport, active document); `selected` marks the gateway's target. |
-| `inventor_get_current_target` | Report the server's currently selected target, or `NO_TARGET` if none is live. |
-| `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, Inventor year, or pipe name; a selector matching several sessions is refused. `verify=true` confirms the active document for writes. |
+| `inventor_get_current_target` | Report the selected target; never selects one (`bound=false` with the live candidates when nothing is selected yet). |
+| `inventor_switch_target` | Select the target by `pid:<n>`, `id:<target_id>`, `auto` or Inventor year; a selector matching several sessions is refused. `rebind=true` is needed to leave a running session this gateway selected. `verify=true` confirms the active document for writes. Not registered under `--read-only`. |
 
 ### query (11) — read-only document/health/model probes and agent outcome reports
 
@@ -543,7 +543,6 @@ The allow list below is generated from the 28 read-only annotations and checked 
       "mcp__ipt-mcp__inventor_probe_brep",
       "mcp__ipt-mcp__inventor_report_task_result",
       "mcp__ipt-mcp__inventor_sheet_fabrication_info",
-      "mcp__ipt-mcp__inventor_switch_target",
       "mcp__ipt-mcp__inventor_view_fit"
     ]
   }

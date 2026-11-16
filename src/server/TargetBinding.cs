@@ -61,6 +61,20 @@ internal sealed class TargetBinding
     private static bool IsSelection(Selection s, TargetDescriptor t) =>
         s.ProcessId == t.ProcessId && string.Equals(s.TargetId, t.TargetId, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The selection as inventor_get_current_target reports it (FC-TGT-05): never binds. Null when nothing is
+    /// selected yet; a selection that exited or is unavailable throws as <see cref="Resolve"/> does.
+    /// </summary>
+    internal TargetDescriptor? Current(IReadOnlyList<TargetDescriptor> live)
+    {
+        lock (_gate)
+        {
+            if (_current is null && _lost is { } lost) throw Lost(lost, live);
+            if (_current is null) return null;
+        }
+        return Resolve(live);
+    }
+
     /// <summary>The descriptor for this call; binds on first use only when the choice is unambiguous.</summary>
     internal TargetDescriptor Resolve(IReadOnlyList<TargetDescriptor> live)
     {
@@ -96,12 +110,18 @@ internal sealed class TargetBinding
         }
     }
 
-    /// <summary>Explicit selection. A failed switch leaves the current selection unchanged.</summary>
-    internal TargetDescriptor Switch(string selector, IReadOnlyList<TargetDescriptor> live)
+    /// <summary>
+    /// Explicit selection. A failed switch leaves the current selection unchanged. Moving to another Inventor
+    /// process needs pid:/id: (auto and a year never move a binding), and leaving a live session that was
+    /// selected with switch_target or has a confirmed document needs <paramref name="rebind"/> (FC-TGT-03).
+    /// </summary>
+    internal TargetDescriptor Switch(string selector, IReadOnlyList<TargetDescriptor> live, bool rebind = false)
     {
         var key = (selector ?? "").Trim();
-        if (key.Length == 0)
-            throw new InventorGatewayException(InventorErrorCodes.INVALID_ARGUMENT, "target is required: pid:<n>, id:<target_id>, a 4-digit year, or a pipe name.");
+        if (!IsValidSelector(key))
+            throw new InventorGatewayException(InventorErrorCodes.INVALID_TARGET_SELECTOR,
+                $"Invalid target selector '{key}'. Use pid:<n> or id:<target_id> (preferred), auto, or a year 2022..2027; call inventor_list_available_targets to see running sessions. The current selection is unchanged.",
+                new JObject { ["selected_target_id"] = SelectedTargetId, ["candidates"] = JArray.FromObject(live.Select(Summary)) });
         lock (_gate)
         {
             var matches = live.Where(t => Matches(key, t)).ToList();
@@ -118,6 +138,23 @@ internal sealed class TargetBinding
                 _current = cur with { SelectedBy = "switch_target" };
                 return matches[0];
             }
+            // Leaving the Inventor process this gateway is on (FC-TGT-03); another add-in endpoint of the same process is not leaving it.
+            // A lost selection counts too: after TARGET_LOST the next session is chosen by pid:/id:, never by auto/year.
+            if ((_current ?? _lost) is { } previous && !rebind && previous.ProcessId != matches[0].ProcessId)
+            {
+                var explicitSelector = key.StartsWith("pid:", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("id:", StringComparison.OrdinalIgnoreCase)
+                    || LegacyTargetId.IsMatch(key) || LegacyPipeName.IsMatch(key);
+                var leavesLiveConfirmed = (previous.SelectedBy == "switch_target" || previous.DocumentId is not null) && SameProcess(previous);
+                if (!explicitSelector || leavesLiveConfirmed)
+                    throw Fail(InventorErrorCodes.TARGET_REBIND_REQUIRED, leavesLiveConfirmed
+                        ? $"The target was not changed. Inventor pid {previous.ProcessId} is still running and was selected for this session" +
+                          (previous.DocumentTitle is { } title ? $" (confirmed document '{title}')" : "") +
+                          $". Check with the user, then call inventor_switch_target(target=\"pid:{matches[0].ProcessId}\", rebind=true) only if this session should leave it."
+                        : $"The target was not changed. '{key}' would move this session from pid {previous.ProcessId} to pid {matches[0].ProcessId}; auto and year selectors never move a binding. " +
+                          $"Check that session, then select it with inventor_switch_target(target=\"pid:{matches[0].ProcessId}\") if intended.",
+                        previous.TargetId, matches);
+            }
             return Bind(matches[0], "switch_target");
         }
     }
@@ -128,9 +165,28 @@ internal sealed class TargetBinding
         lock (_gate) return _current is { } cur ? Find(cur, live) : null;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex LegacyTargetId = new(@"^inventor-\d{4}-\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex LegacyPipeName = new(@"^BimwrightInventor-\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// switch_target selector syntax (FC-TGT-06): auto, a year 2022..2027, pid:&lt;n&gt;, id:&lt;target_id&gt;; a bare
+    /// target id or pipe name is still accepted for older clients.
+    /// </summary>
+    internal static bool IsValidSelector(string selector)
+    {
+        var s = (selector ?? "").Trim();
+        if (string.Equals(s, "auto", StringComparison.OrdinalIgnoreCase)) return true;
+        if (s.Length == 4 && int.TryParse(s, System.Globalization.NumberStyles.None, null, out var year)) return year is >= 2022 and <= 2027;
+        if (s.StartsWith("pid:", StringComparison.OrdinalIgnoreCase))
+            return int.TryParse(s.Substring(4).Trim(), System.Globalization.NumberStyles.None, null, out var pid) && pid > 0;
+        if (s.StartsWith("id:", StringComparison.OrdinalIgnoreCase)) return s.Substring(3).Trim().Length > 0;
+        return LegacyTargetId.IsMatch(s) || LegacyPipeName.IsMatch(s);
+    }
+
     internal static bool Matches(string selector, TargetDescriptor t)
     {
         var s = selector.Trim();
+        if (string.Equals(s, "auto", StringComparison.OrdinalIgnoreCase)) return true;
         if (s.StartsWith("pid:", StringComparison.OrdinalIgnoreCase))
             return int.TryParse(s.Substring(4).Trim(), out var pid) && t.ProcessId == pid;
         if (s.StartsWith("id:", StringComparison.OrdinalIgnoreCase))
@@ -155,7 +211,7 @@ internal sealed class TargetBinding
         var probe = _probe(t.ProcessId);
         if (!probe.Running)
             throw Fail(InventorErrorCodes.TARGET_UNAVAILABLE, $"Inventor target {t.TargetId} exited while it was being selected.", null, Array.Empty<TargetDescriptor>());
-        _current = new Selection(t.TargetId, t.ProcessId, probe.StartUtc, selectedBy);
+        _current = new Selection(t.TargetId, t.ProcessId, probe.StartUtc ?? t.ProcessStartUtc?.UtcDateTime, selectedBy);
         _lost = null;
         return t;
     }

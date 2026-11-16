@@ -39,6 +39,28 @@ public sealed class TargetRegistryTests : IDisposable
     private const int DeadProcessId = 0x7FFFFFFE;
 
     [Fact]
+    public void A_reused_pid_with_another_start_time_is_stale_FC_TGT_04()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var started = new DateTimeOffset(self.StartTime.ToUniversalTime());
+        void Write(string name, DateTimeOffset start)
+        {
+            var path = Path.Combine(_dir, name);
+            WriteDescriptor(name, 2027, self.Id, "Inventor", DateTimeOffset.UtcNow);
+            File.WriteAllText(path, File.ReadAllText(path).Replace("\"last_heartbeat_utc\"",
+                $"\"process_start_utc\": \"{start.UtcDateTime:O}\", \"last_heartbeat_utc\""));
+        }
+
+        Write("same.json", started);
+        var live = Assert.Single(new TargetRegistry(_dir).List());
+        Assert.Equal(started, live.ProcessStartUtc);
+
+        Write("same.json", started.AddHours(-3));   // this pid belonged to an earlier process
+        Assert.Empty(new TargetRegistry(_dir).List());
+        Assert.False(File.Exists(Path.Combine(_dir, "same.json")));
+    }
+
+    [Fact]
     public void IgnoresDeadProcess()
     {
         WriteDescriptor("dead.json", 2025, DeadProcessId, "Inventor", DateTimeOffset.UtcNow);

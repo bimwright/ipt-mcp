@@ -971,11 +971,15 @@ namespace Bimwright.Ipt.Shared.Views.Toast
             _brandRow.Visibility = _showBranding ? Visibility.Hidden : Visibility.Collapsed;
         }
 
-        /// <summary>"ipt-mcp 2027": names the gateway and the Inventor year, so cards from several
-        /// MCP gateways or Inventor years running side by side are told apart.</summary>
-        private string IdentityTitle => string.IsNullOrWhiteSpace(_instanceIdentity)
+        /// <summary>"ipt-mcp 2027 · PID: 1234": names the gateway, the Inventor year and this Inventor's
+        /// process id (family contract FC-TST-02), so the user can match a card to the pid:&lt;n&gt; an agent
+        /// uses when several Inventor sessions run side by side.</summary>
+        private string IdentityTitle => (string.IsNullOrWhiteSpace(_instanceIdentity)
             ? BrandAssets.ProductName
-            : _instanceIdentity;
+            : _instanceIdentity) + " · PID: " + HostProcessId;
+
+        // This window runs inside Inventor; never take the PID from a gateway or report payload.
+        private static readonly int HostProcessId = Process.GetCurrentProcess().Id;
 
         private void CancelBrandRevealTimer()
         {
