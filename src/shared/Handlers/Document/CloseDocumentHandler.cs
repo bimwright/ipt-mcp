@@ -30,17 +30,28 @@ public sealed class CloseDocumentHandler : HandlerBase, IInventorCommand
 
         bool save = p["save"]?.Type == JTokenType.Boolean && (bool)p["save"]!;
         string title = doc.DisplayName;
+        string? noChanges = null;
+        if (save)
+        {
+            // The save policy of save_document; a refused save leaves the document open with its changes.
+            var allowUpgrade = p["allow_format_upgrade"]?.Type == JTokenType.Boolean && (bool)p["allow_format_upgrade"]!;
+            var reason = DocumentSaveSupport.InPlace(app, doc, allowUpgrade, out var mode);
+            if (reason == DocumentSavePolicy.NoChanges) noChanges = reason;
+            else if (reason != null)
+                return CheckpointSupport.Refuse(ctx, InventorErrorCodes.INVALID_ARGUMENT, reason,
+                    DocumentSaveSupport.Message(reason, doc, ctx.InventorYear) + " The document was not closed.",
+                    new JObject { ["mode"] = mode, ["closed"] = false });
+        }
 
         var silent = SilentOperationScope.Enter(app, p);
         try
         {
-            if (save)
+            if (save && noChanges == null)
             {
-                string? existing = null;
-                try { existing = doc.FullFileName; } catch { /* never saved */ }
-                if (string.IsNullOrEmpty(existing))
-                    return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT,
-                        "cannot save on close: document has never been saved (no path)");
+#if INVENTOR2027
+                if (doc is DrawingDocument drawing) drawing.Save2(false);
+                else
+#endif
                 doc.Save();
                 doc.Close(true);   // SkipSave: already saved
             }
@@ -58,7 +69,9 @@ public sealed class CloseDocumentHandler : HandlerBase, IInventorCommand
             silent.Dispose();
         }
 
-        return Ok(ctx, new JObject { ["title"] = title, ["closed"] = true, ["saved"] = save, ["silent"] = silent.Applied });
+        var result = new JObject { ["title"] = title, ["closed"] = true, ["saved"] = save && noChanges == null, ["silent"] = silent.Applied };
+        if (noChanges != null) result["reason"] = noChanges;
+        return Ok(ctx, result);
     }
 }
 #endif

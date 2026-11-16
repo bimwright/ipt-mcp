@@ -340,7 +340,12 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                     var after = ActiveDocumentStamp.Read(_app);
                     r.Meta.DocumentId = after.Id;
                     r.Meta.DocumentTitle = after.Title;
-                    if (r.Ok) r.Meta.RepinDocumentId = DocumentTargetPolicy.Repin(command, env.DocumentTarget, before.Id, after.Id);
+                    if (r.Ok)
+                    {
+                        var pinned = env.DocumentTarget?.ExpectedDocumentId;
+                        r.Meta.RepinDocumentId = DocumentTargetPolicy.Repin(command, env.DocumentTarget, before.Id, after.Id,
+                            pinnedDocumentOpen: string.IsNullOrEmpty(pinned) || DocumentIdTable.Shared.IsOpen(pinned!));
+                    }
                     RefreshToastSnapshot();   // still on the STA: cheap HWND/visibility read for toast placement
                     return r;
                 }

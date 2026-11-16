@@ -77,10 +77,16 @@ public static class DocumentTargetPolicy
     /// <summary>
     /// Q-B: when an open/create command activated a new document and the pinned document was active before it,
     /// the pin moves to the new document. A document the user activated in between is never adopted.
+    /// Owner decision 16/11: when the pinned document is no longer open (closed), an open/create command that
+    /// activated a new document also moves the pin to it; nothing confirmed is left to protect, and the command
+    /// itself chose the new document. Save-As (save_document) keeps the first rule only.
     /// </summary>
-    public static string? Repin(string command, DocumentTargetEnvelope? target, string beforeDocumentId, string afterDocumentId) =>
-        (OpensDocument.Contains(command) || command == "save_document") && target?.ExpectedDocumentId is { Length: > 0 } expected
-            && string.Equals(expected, beforeDocumentId, StringComparison.Ordinal)
+    public static string? Repin(string command, DocumentTargetEnvelope? target, string beforeDocumentId, string afterDocumentId,
+        bool pinnedDocumentOpen = true) =>
+        target?.ExpectedDocumentId is { Length: > 0 } expected
             && !string.Equals(beforeDocumentId, afterDocumentId, StringComparison.Ordinal)
+            && afterDocumentId.Length > 0
+            && ((OpensDocument.Contains(command) || command == "save_document") && string.Equals(expected, beforeDocumentId, StringComparison.Ordinal)
+                || OpensDocument.Contains(command) && !pinnedDocumentOpen)
             ? afterDocumentId : null;
 }

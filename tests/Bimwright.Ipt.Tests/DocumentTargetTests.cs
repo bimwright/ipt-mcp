@@ -95,6 +95,31 @@ public sealed class DocumentTargetTests : IDisposable
     }
 
     [Fact]
+    public void Repin_follows_an_opened_document_once_the_pinned_one_is_closed()
+    {
+        // Owner decision 16/11: the confirmed document was closed; the command opened and activated doc-new.
+        Assert.Equal("doc-new", DocumentTargetPolicy.Repin("open_document", Pinned("doc-a"), "doc-b", "doc-new", pinnedDocumentOpen: false));
+        Assert.Equal("doc-new", DocumentTargetPolicy.Repin("new_part", Pinned("doc-a"), "", "doc-new", pinnedDocumentOpen: false));
+        // Still open elsewhere: the user's switch is never adopted.
+        Assert.Null(DocumentTargetPolicy.Repin("open_document", Pinned("doc-a"), "doc-b", "doc-new", pinnedDocumentOpen: true));
+        // Nothing new became active, or the command is not an open/create.
+        Assert.Null(DocumentTargetPolicy.Repin("open_document", Pinned("doc-a"), "doc-b", "doc-b", pinnedDocumentOpen: false));
+        Assert.Null(DocumentTargetPolicy.Repin("save_document", Pinned("doc-a"), "doc-b", "doc-new", pinnedDocumentOpen: false));
+        Assert.Null(DocumentTargetPolicy.Repin("extrude", Pinned("doc-a"), "doc-b", "doc-new", pinnedDocumentOpen: false));
+        Assert.Null(DocumentTargetPolicy.Repin("open_document", Pinned("doc-a"), "doc-b", "", pinnedDocumentOpen: false));
+    }
+
+    [Fact]
+    public void Id_table_knows_which_ids_are_open()
+    {
+        var table = new DocumentIdTable();
+        var id = table.IdFor("{A}|C:\\A.IPT");
+        Assert.True(table.IsOpen(id));
+        table.Forget("{A}|C:\\A.IPT");
+        Assert.False(table.IsOpen(id));
+    }
+
+    [Fact]
     public void Copies_with_the_same_internal_name_get_different_ids()
     {
         // A checkpoint restore or Explorer copy keeps InternalName; live 16/11 both copies were open at once.

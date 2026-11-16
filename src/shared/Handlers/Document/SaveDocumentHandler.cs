@@ -35,7 +35,6 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         string path = (p["path"]?.Type == JTokenType.String) ? (string)p["path"]! : "";
         var allowUpgrade = p["allow_format_upgrade"]?.Type == JTokenType.Boolean && (bool)p["allow_format_upgrade"]!;
         var mode = CheckpointSupport.ModeOf(app, doc, out var current);
-        var isDrawing = doc is DrawingDocument;
 
         if (!string.IsNullOrWhiteSpace(path))
         {
@@ -61,12 +60,7 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         }
         else
         {
-            bool dirty = false, migrating = false;
-            try { dirty = doc.Dirty; } catch { }
-            try { migrating = doc.NeedsMigrating; } catch { }
-            // A part or assembly save also saves its dirty references; a drawing save does not (Save2(false)).
-            var modified = dirty || (!isDrawing && HasDirtyReference(doc));
-            var reason = DocumentSavePolicy.CheckSave(mode, System.IO.File.Exists(current), modified, migrating, allowUpgrade);
+            var reason = DocumentSaveSupport.InPlace(app, doc, allowUpgrade, out mode);
             if (reason == DocumentSavePolicy.NoChanges)
                 return Ok(ctx, new JObject
                 {
@@ -74,12 +68,8 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
                     ["note"] = "Nothing to save: the document and its referenced documents have no unsaved changes.",
                 });
             if (reason != null)
-            {
-                string? savedIn = null;
-                try { savedIn = doc.SoftwareVersionSaved?.DisplayVersion; } catch { }
-                return CheckpointSupport.Refuse(ctx, InventorErrorCodes.INVALID_ARGUMENT, reason, SaveMessage(reason, savedIn, ctx.InventorYear),
-                    new JObject { ["mode"] = mode });
-            }
+                return CheckpointSupport.Refuse(ctx, InventorErrorCodes.INVALID_ARGUMENT, reason,
+                    DocumentSaveSupport.Message(reason, doc, ctx.InventorYear), new JObject { ["mode"] = mode });
         }
 
         var silent = SilentOperationScope.Enter(app, p);
@@ -129,7 +119,38 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         });
     }
 
-    private static bool HasDirtyReference(global::Inventor.Document doc)
+    private static bool IsNetworkDrive(string root)
+    {
+        try { return new DriveInfo(root).DriveType == DriveType.Network; } catch { return false; }
+    }
+
+    private static string SaveAsMessage(string reason, string type) => reason switch
+    {
+        "SAVE_AS_PATH_NOT_LOCAL" => "path must be on a local drive; network paths are not written.",
+        "SAVE_AS_PATH_NOT_ABSOLUTE" => "path must be a full local path that starts with a drive letter.",
+        "SAVE_AS_WRONG_EXTENSION" => $"path must end with {string.Join(" or ", DocumentSavePolicy.ExtensionsFor(type))} for this {type.ToLowerInvariant()} document.",
+        "SAVE_AS_TARGET_EXISTS" => "a file already exists at path and is never overwritten. To save this document in place, omit path; otherwise ask the user for a new file name.",
+        "SAVE_AS_FOLDER_MISSING" => "the folder of path does not exist.",
+        _ => "path was refused.",
+    };
+}
+
+/// <summary>The in-place save policy shared by save_document, close_document(s) with save=true, and save_all.</summary>
+internal static class DocumentSaveSupport
+{
+    /// <summary>Null to save, <see cref="DocumentSavePolicy.NoChanges"/> for a no-op, else the refusal reason.</summary>
+    internal static string? InPlace(Application app, global::Inventor.Document doc, bool allowUpgrade, out string mode)
+    {
+        mode = CheckpointSupport.ModeOf(app, doc, out var path);
+        bool dirty = false, migrating = false;
+        try { dirty = doc.Dirty; } catch { }
+        try { migrating = doc.NeedsMigrating; } catch { }
+        // A part or assembly save also saves its dirty references; a drawing save does not (Save2(false)).
+        var modified = dirty || (doc is not DrawingDocument && HasDirtyReference(doc));
+        return DocumentSavePolicy.CheckSave(mode, System.IO.File.Exists(path), modified, migrating, allowUpgrade);
+    }
+
+    internal static bool HasDirtyReference(global::Inventor.Document doc)
     {
         try
         {
@@ -142,29 +163,19 @@ public sealed class SaveDocumentHandler : HandlerBase, IInventorCommand
         return false;
     }
 
-    private static bool IsNetworkDrive(string root)
+    internal static string Message(string reason, global::Inventor.Document? doc, int year)
     {
-        try { return new DriveInfo(root).DriveType == DriveType.Network; } catch { return false; }
+        string? savedIn = null;
+        try { savedIn = doc?.SoftwareVersionSaved?.DisplayVersion; } catch { }
+        return reason switch
+        {
+            "DOCUMENT_NEVER_SAVED" => "the document has never been saved. Save it with inventor_save_document(path) to a new file the user named; never choose the path yourself.",
+            "TEMPLATE_SAVE_AS_REQUIRED" => "the document is a template file and is not overwritten. Save with inventor_save_document(path) to a new file the user named.",
+            "FILE_READ_ONLY" => "the file is read-only, or Inventor reports it cannot be modified (library or Vault checked-in file). Ask the user.",
+            "FILE_MISSING_ON_DISK" => "the document's file is missing on disk. Ask the user; Save-As with path to a new file the user named.",
+            "FORMAT_UPGRADE_REQUIRES_APPROVAL" => $"saving converts the file from Inventor {savedIn ?? "(older)"} to Inventor {year} format, which older Inventor versions cannot open. Ask the user, then pass allow_format_upgrade=true.",
+            _ => "the save was refused. See inventor_get_document_state.",
+        };
     }
-
-    private static string SaveMessage(string reason, string? savedIn, int year) => reason switch
-    {
-        "DOCUMENT_NEVER_SAVED" => "the document has never been saved. Save it with path set to a new file the user named; never choose the path yourself.",
-        "TEMPLATE_SAVE_AS_REQUIRED" => "the document is a template file and is not overwritten. Save with path set to a new file the user named.",
-        "FILE_READ_ONLY" => "the file is read-only, or Inventor reports it cannot be modified (library or Vault checked-in file). Ask the user.",
-        "FILE_MISSING_ON_DISK" => "the document's file is missing on disk. Ask the user; Save-As with path to a new file the user named.",
-        "FORMAT_UPGRADE_REQUIRES_APPROVAL" => $"saving converts the file from Inventor {savedIn ?? "(older)"} to Inventor {year} format, which older Inventor versions cannot open. Ask the user, then pass allow_format_upgrade=true.",
-        _ => "the save was refused. See inventor_get_document_state.",
-    };
-
-    private static string SaveAsMessage(string reason, string type) => reason switch
-    {
-        "SAVE_AS_PATH_NOT_LOCAL" => "path must be on a local drive; network paths are not written.",
-        "SAVE_AS_PATH_NOT_ABSOLUTE" => "path must be a full local path that starts with a drive letter.",
-        "SAVE_AS_WRONG_EXTENSION" => $"path must end with {string.Join(" or ", DocumentSavePolicy.ExtensionsFor(type))} for this {type.ToLowerInvariant()} document.",
-        "SAVE_AS_TARGET_EXISTS" => "a file already exists at path and is never overwritten. To save this document in place, omit path; otherwise ask the user for a new file name.",
-        "SAVE_AS_FOLDER_MISSING" => "the folder of path does not exist.",
-        _ => "path was refused.",
-    };
 }
 #endif

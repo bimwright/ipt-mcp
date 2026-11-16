@@ -33,6 +33,24 @@ public static class DocumentSavePolicy
         return null;
     }
 
+    /// <summary>
+    /// save_all: the root must be a saved local file (its mode refusals as <see cref="CheckSave"/>), and no document
+    /// that would be saved (the root and its dirty references) may be a template, or an older-format file without
+    /// <paramref name="allowFormatUpgrade"/>. Read-only references are reported, not saved, so they do not refuse.
+    /// </summary>
+    public static string? CheckSaveAll(string rootMode, bool rootExists,
+        System.Collections.Generic.IEnumerable<(string Mode, bool NeedsMigrating)> toSave, bool allowFormatUpgrade)
+    {
+        var root = CheckSave(rootMode, rootExists, modified: true, needsMigrating: false, allowFormatUpgrade: true);
+        if (root != null) return root;
+        foreach (var (mode, migrating) in toSave)
+        {
+            if (mode == DocumentStatePolicy.Template) return "TEMPLATE_SAVE_AS_REQUIRED";
+            if (migrating && !allowFormatUpgrade && mode != DocumentStatePolicy.ReadOnly) return "FORMAT_UPGRADE_REQUIRES_APPROVAL";
+        }
+        return null;
+    }
+
     /// <summary>File extensions Save-As may use for an Inventor document type name (DocumentTypeEnum without the k/Object wrapping).</summary>
     public static string[] ExtensionsFor(string documentType) => documentType switch
     {

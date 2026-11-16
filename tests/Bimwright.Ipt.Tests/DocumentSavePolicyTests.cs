@@ -31,6 +31,25 @@ public sealed class DocumentSavePolicyTests
         Assert.Empty(DocumentSavePolicy.ExtensionsFor("Unknown"));
     }
 
+    [Fact]
+    public void Save_all_checks_the_root_and_everything_it_would_save()
+    {
+        var local = (DocumentStatePolicy.LocalFile, false);
+        Assert.Null(DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.LocalFile, true, new[] { local, local }, false));
+        Assert.Equal("TEMPLATE_SAVE_AS_REQUIRED", DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.Template, true, new[] { local }, false));
+        Assert.Equal("FILE_READ_ONLY", DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.ReadOnly, true, new[] { local }, false));
+        Assert.Equal("DOCUMENT_NEVER_SAVED", DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.Unsaved, false, new[] { local }, false));
+        Assert.Equal("FILE_MISSING_ON_DISK", DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.LocalFile, false, new[] { local }, false));
+        // A dirty reference that is a template, or would be converted from an older format.
+        Assert.Equal("TEMPLATE_SAVE_AS_REQUIRED",
+            DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.LocalFile, true, new[] { local, (DocumentStatePolicy.Template, false) }, true));
+        Assert.Equal("FORMAT_UPGRADE_REQUIRES_APPROVAL",
+            DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.LocalFile, true, new[] { local, (DocumentStatePolicy.LocalFile, true) }, false));
+        Assert.Null(DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.LocalFile, true, new[] { (DocumentStatePolicy.LocalFile, true) }, true));
+        // Read-only references are reported, not saved.
+        Assert.Null(DocumentSavePolicy.CheckSaveAll(DocumentStatePolicy.LocalFile, true, new[] { (DocumentStatePolicy.ReadOnly, true) }, false));
+    }
+
     private static string? SaveAs(string? target, string[]? ext = null, bool exists = false, bool folder = true, bool network = false)
         => DocumentSavePolicy.CheckSaveAsPath(target, ext ?? new[] { ".ipt" }, _ => exists, _ => folder, _ => network);
 

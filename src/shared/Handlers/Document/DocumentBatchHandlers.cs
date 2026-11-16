@@ -28,11 +28,9 @@ public sealed class SaveAllHandler : HandlerBase, IInventorCommand
         if (root is null) return Fail(ctx, InventorErrorCodes.NO_DOCUMENT, "no active Inventor document");
         string? rootPath = null;
         try { rootPath = root.FullFileName; } catch { }
-        if (string.IsNullOrEmpty(rootPath))
-            return Fail(ctx, InventorErrorCodes.INVALID_ARGUMENT, "root document has never been saved; use inventor_save_document with a path first");
-
         var update = p["update"]?.Type != JTokenType.Boolean || (bool)p["update"]!;
         var dryRun = p["dry_run"]?.Type == JTokenType.Boolean && (bool)p["dry_run"]!;
+        var allowUpgrade = p["allow_format_upgrade"]?.Type == JTokenType.Boolean && (bool)p["allow_format_upgrade"]!;
 
         var docs = new List<global::Inventor.Document> { root };
         foreach (global::Inventor.Document d in root.AllReferencedDocuments) docs.Add(d);
@@ -49,6 +47,35 @@ public sealed class SaveAllHandler : HandlerBase, IInventorCommand
             else if (readOnly) row["status"] = "read_only";
             else { row["status"] = dryRun ? "would_save" : "pending"; toSave.Add((d, row)); }
             rows.Add(row);
+        }
+
+        // The save policy of save_document, for the root and every document Save2(true) would write (also on dry_run).
+        var rootMode = CheckpointSupport.ModeOf(app, root, out _);
+        var plan = toSave.Select(t =>
+        {
+            var m = CheckpointSupport.ModeOf(app, t.doc, out _);
+            bool migrating = false;
+            try { migrating = t.doc.NeedsMigrating; } catch { }
+            if (migrating) t.row["needs_migrating"] = true;
+            if (m != DocumentStatePolicy.LocalFile) t.row["mode"] = m;
+            return (m, migrating);
+        }).ToList();
+        var refusal = DocumentSavePolicy.CheckSaveAll(rootMode, rootPath != null && System.IO.File.Exists(rootPath), plan, allowUpgrade);
+        if (refusal != null)
+        {
+            // Name the document that refused: the root, or the first referenced document the rule hit.
+            var culprit = root;
+            for (var i = 0; i < plan.Count; i++)
+            {
+                if ((refusal == "FORMAT_UPGRADE_REQUIRES_APPROVAL" && plan[i].migrating && plan[i].m != DocumentStatePolicy.ReadOnly)
+                    || (refusal == "TEMPLATE_SAVE_AS_REQUIRED" && plan[i].m == DocumentStatePolicy.Template))
+                { culprit = toSave[i].doc; break; }
+            }
+            var culpritName = ReferenceEquals(culprit, root) ? "" : $"{System.IO.Path.GetFileName(Path(culprit) ?? "")}: ";
+            var refused = CheckpointSupport.Refuse(ctx, InventorErrorCodes.INVALID_ARGUMENT, refusal,
+                culpritName + DocumentSaveSupport.Message(refusal, culprit, ctx.InventorYear) + " Nothing was saved.",
+                new JObject { ["mode"] = rootMode, ["dry_run"] = dryRun, ["files"] = new JArray(rows.Where(r => (string?)r["status"] != "clean")) });
+            return refused;
         }
 
         if (!dryRun)
@@ -181,6 +208,7 @@ public sealed class CloseDocumentsHandler : HandlerBase, IInventorCommand
         var all = p["all"]?.Type == JTokenType.Boolean && (bool)p["all"]!;
         var keepActive = p["keep_active"]?.Type != JTokenType.Boolean || (bool)p["keep_active"]!;
         var save = p["save"]?.Type == JTokenType.Boolean && (bool)p["save"]!;
+        var allowUpgrade = p["allow_format_upgrade"]?.Type == JTokenType.Boolean && (bool)p["allow_format_upgrade"]!;
 
         var targets = new List<global::Inventor.Document>();
         if (all)
@@ -212,15 +240,32 @@ public sealed class CloseDocumentsHandler : HandlerBase, IInventorCommand
                 var row = new JObject { ["path"] = SaveAllHandler.Path(d) };
                 try
                 {
+                    var saved = false;
                     if (save)
                     {
-                        string? f = null;
-                        try { f = d.FullFileName; } catch { }
-                        if (string.IsNullOrEmpty(f)) throw new InvalidOperationException("never saved (no path); save it with a path first");
-                        d.Save();
+                        // The save policy of save_document; a refused file stays open with its changes.
+                        var reason = DocumentSaveSupport.InPlace(app, d, allowUpgrade, out var mode);
+                        if (reason != null && reason != DocumentSavePolicy.NoChanges)
+                        {
+                            row["status"] = "refused";
+                            row["reason"] = reason;
+                            row["mode"] = mode;
+                            row["error"] = DocumentSaveSupport.Message(reason, d, ctx.InventorYear) + " The document was not closed.";
+                            rows.Add(row);
+                            continue;
+                        }
+                        if (reason == null)
+                        {
+#if INVENTOR2027
+                            if (d is DrawingDocument drawing) drawing.Save2(false);
+                            else
+#endif
+                            d.Save();
+                            saved = true;
+                        }
                     }
                     d.Close(true);
-                    row["status"] = save ? "saved_closed" : "closed";
+                    row["status"] = saved ? "saved_closed" : "closed";
                 }
                 catch (Exception ex)
                 {
@@ -232,7 +277,8 @@ public sealed class CloseDocumentsHandler : HandlerBase, IInventorCommand
         }
         var data = new JObject
         {
-            ["closed"] = rows.Count(r => (string?)r["status"] != "error"),
+            ["closed"] = rows.Count(r => (string?)r["status"] is "closed" or "saved_closed"),
+            ["refused"] = rows.Count(r => (string?)r["status"] == "refused"),
             ["errors"] = rows.Count(r => (string?)r["status"] == "error"),
         };
         ResponseSpillWriter.AttachResults(Name, data, rows, ResponseSpillWriterFactory.ForContext(ctx));

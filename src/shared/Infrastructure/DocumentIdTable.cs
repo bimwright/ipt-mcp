@@ -33,6 +33,12 @@ public sealed class DocumentIdTable
         }
     }
 
+    /// <summary>True while the document that got <paramref name="id"/> is open (its id is dropped on close).</summary>
+    public bool IsOpen(string id)
+    {
+        lock (_gate) return _ids.ContainsValue(id);
+    }
+
     public void Forget(string key)
     {
         lock (_gate) _ids.Remove(key);
