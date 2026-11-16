@@ -19,7 +19,8 @@ namespace Bimwright.Ipt.Shared.Transport;
 /// the expected token is supplied to the constructor (it lives in the TargetDescriptor),
 /// not discovered from a global file. Validates each envelope's <c>auth_token</c> field,
 /// bounds each line to 1 MiB, rate-limits to 20 req / 10 s per connection, and waits up to
-/// 60 s for the STA dispatch to complete.
+/// 60 s for the STA dispatch to complete. Serves up to <see cref="MaxConnections"/> clients at once,
+/// each on its own thread, so a long call never holds back health or the next call.
 /// </summary>
 public sealed class TcpTransportServer : ITransportServer
 {
@@ -29,16 +30,20 @@ public sealed class TcpTransportServer : ITransportServer
     private volatile bool _running;
     private Action<string, TaskCompletionSource<string>>? _onRequest;
     private int _port;
-    private volatile bool _clientConnected;
+    private int _authenticatedClients;
     private readonly object _lifecycle = new();
     private readonly object _clientGate = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly CancellationToken _stopping;
-    private TcpClient? _activeClient;
+    private readonly HashSet<TcpClient> _clients = new();
+    private readonly SemaphoreSlim _slots = new(MaxConnections, MaxConnections);
     private bool _started;
     private bool _stopped;
 
     private const int MaxLineBytes = 1024 * 1024; // 1 MiB
+
+    /// <summary>Clients served at once; further connects wait in the listen backlog.</summary>
+    internal const int MaxConnections = 4;
 
     /// <param name="authToken">
     /// The token the add-in wrote into its TargetDescriptor. Every incoming envelope's
@@ -53,7 +58,7 @@ public sealed class TcpTransportServer : ITransportServer
     public bool IsRunning => _running;
     public CancellationToken Stopping => _stopping;
     public int Port => _port;
-    public bool IsClientConnected => _clientConnected;
+    public bool IsClientConnected => Volatile.Read(ref _authenticatedClients) > 0;
     public DateTime? LastCommandTime { get; private set; }
     public string ConnectionInfo => $"TCP:{_port}";
 
@@ -93,7 +98,7 @@ public sealed class TcpTransportServer : ITransportServer
             _running = false;
             if (!_stopped) { _stopped = true; _stop.Cancel(); }
             try { _listener?.Stop(); } catch { }
-            lock (_clientGate) { try { _activeClient?.Close(); } catch { } }
+            lock (_clientGate) { foreach (var client in _clients) { try { client.Close(); } catch { } } }
             thread = _listenThread;
         }
         if (thread != null && thread.IsAlive && Thread.CurrentThread != thread && !thread.Join(2000))
@@ -109,15 +114,18 @@ public sealed class TcpTransportServer : ITransportServer
             TcpClient? client = null;
             try
             {
-                client = _listener!.AcceptTcpClient();
+                _slots.Wait(_stopping);   // a free slot first; Stop cancels the wait
+                try { client = _listener!.AcceptTcpClient(); }
+                catch { _slots.Release(); throw; }
                 lock (_clientGate)
                 {
-                    if (!_running) { client.Close(); break; }
-                    _activeClient = client;
+                    if (!_running) { client.Close(); _slots.Release(); break; }
+                    _clients.Add(client);
                 }
-                HandleClient(client);
+                var accepted = client;
+                new Thread(() => ServeClient(accepted)) { IsBackground = true, Name = "BimwrightInventor.TcpClient" }.Start();
             }
-            catch (SocketException) when (!_running)
+            catch (Exception) when (!_running)
             {
                 break; // clean shutdown
             }
@@ -126,21 +134,28 @@ public sealed class TcpTransportServer : ITransportServer
                 // A broken listener ends this lifetime; never retry a permanent accept error in a tight loop.
                 break;
             }
-            finally
-            {
-                try { client?.Close(); } catch { }
-                lock (_clientGate) { if (ReferenceEquals(_activeClient, client)) _activeClient = null; }
-            }
         }
         _running = false;
-        _clientConnected = false;
         try { _stop.Cancel(); } catch { }
+    }
+
+    private void ServeClient(TcpClient client)
+    {
+        try { HandleClient(client); }
+        catch { /* client disconnect or IO error */ }
+        finally
+        {
+            try { client.Close(); } catch { }
+            lock (_clientGate) _clients.Remove(client);
+            _slots.Release();
+        }
     }
 
     private void HandleClient(TcpClient client)
     {
         client.ReceiveTimeout = 120000;
         client.SendTimeout = 5000;
+        var authenticated = false;
         try
         {
             var stream = client.GetStream();
@@ -186,7 +201,7 @@ public sealed class TcpTransportServer : ITransportServer
                     TryWrite(writer, ErrorJson(id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token."));
                     break; // drop the connection on auth failure
                 }
-                _clientConnected = true;   // authenticated attach — ConnectionWatch fires on this edge
+                if (!authenticated) { authenticated = true; Interlocked.Increment(ref _authenticatedClients); }   // ConnectionWatch fires on this edge
 
                 var now = DateTime.UtcNow;
                 while (requestTimestamps.Count > 0 && (now - requestTimestamps.Peek()) > rateLimitWindow)
@@ -217,7 +232,7 @@ public sealed class TcpTransportServer : ITransportServer
         }
         finally
         {
-            _clientConnected = false;
+            if (authenticated) Interlocked.Decrement(ref _authenticatedClients);
         }
     }
 

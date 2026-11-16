@@ -5,6 +5,7 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -275,6 +276,22 @@ public sealed class PluginClient
             "(it may be writing a crash report or showing a dialog). Call inventor_health before retrying; do not automatically resend mutations.");
     }
 
+    private static bool IsPipe(TargetDescriptor target) => string.Equals(target.Transport, "pipe", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when at least one instance of the pipe exists, busy or not. WaitNamedPipe with a 1 ms wait
+    /// fails with ERROR_FILE_NOT_FOUND only when no instance exists; it never takes an instance.
+    /// </summary>
+    private static bool PipeExists(string? name)
+    {
+        if (string.IsNullOrEmpty(name) || !OperatingSystem.IsWindows()) return true;
+        if (WaitNamedPipe(@"\\.\pipe\" + name, 1)) return true;
+        return Marshal.GetLastWin32Error() != 2;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "WaitNamedPipeW")]
+    private static extern bool WaitNamedPipe(string name, uint timeoutMs);
+
     private async Task<string> SendLineAsync(TargetDescriptor target, string line, CancellationToken ct, int timeoutMs)
     {
         if (!await _sendSlots.WaitAsync(0, ct))
@@ -288,7 +305,7 @@ public sealed class PluginClient
         try
         {
             Stream stream;
-            if (string.Equals(target.Transport, "pipe", StringComparison.OrdinalIgnoreCase))
+            if (IsPipe(target))
             {
                 var pipe = new NamedPipeClientStream(".", target.PipeName ?? "", PipeDirection.InOut, PipeOptions.Asynchronous);
                 owner = pipe;
@@ -317,12 +334,32 @@ public sealed class PluginClient
             throw await ClassifyClosedConnectionAsync(target, _binding.Probe, CrashProbeMs, budget.Token);
         }
         catch (Exception) when (ct.IsCancellationRequested) { ct.ThrowIfCancellationRequested(); throw; }
+        catch (Exception) when (budget.IsCancellationRequested && stage == "connect" && IsPipe(target) && !PipeExists(target.PipeName))
+        {
+            throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE,
+                $"The add-in pipe of {target.TargetId} does not exist (the add-in is not listening). Nothing was sent, so the command did not run. " +
+                "Call inventor_health or inventor_list_available_targets before retrying.");
+        }
+        catch (Exception) when (budget.IsCancellationRequested && stage == "connect")
+        {
+            // Nothing was written: the add-in is alive but did not accept a connection (an older add-in
+            // serves one call at a time, so a long call holds the only connection).
+            throw new InventorGatewayException(InventorErrorCodes.TARGET_BUSY,
+                $"Target {target.TargetId} did not accept the connection in time. Nothing was sent, so the command did not run. " +
+                "The add-in may still be serving a long call (an add-in older than this gateway serves one call at a time). " +
+                "Wait for that call to finish or ask the user, then retry; check inventor_health first.");
+        }
         catch (Exception) when (budget.IsCancellationRequested)
         {
             throw new InventorGatewayException(InventorErrorCodes.TIMEOUT,
                 $"Target {target.TargetId} {stage} timed out. A transmitted operation may still complete; inspect its outcome before retrying mutations.");
         }
         catch (InventorGatewayException) { throw; }
+        catch (Exception ex) when (stage == "connect")
+        {
+            throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE,
+                $"Cannot reach target {target.TargetId}: {ex.Message}. Nothing was sent, so the command did not run.");
+        }
         catch (Exception ex)
         {
             throw new InventorGatewayException(InventorErrorCodes.TARGET_UNAVAILABLE,

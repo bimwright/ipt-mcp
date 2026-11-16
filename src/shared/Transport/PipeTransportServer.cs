@@ -21,6 +21,9 @@ namespace Bimwright.Ipt.Shared.Transport;
 /// constructor (they live in the TargetDescriptor written by the add-in). Validates each envelope's
 /// <c>auth_token</c> field, bounds each line to 1 MiB, rate-limits to 20 req / 10 s per connection,
 /// and waits up to 60 s for the STA dispatch to complete.
+/// Serves up to <see cref="MaxConnections"/> clients at once, each on its own thread: a call that holds
+/// its connection for minutes (a long send_code) must not stop health or the next call from connecting
+/// (13/11 log: every later call failed with "connect timed out" until the script ended).
 /// </summary>
 public sealed class PipeTransportServer : ITransportServer
 {
@@ -29,12 +32,14 @@ public sealed class PipeTransportServer : ITransportServer
     private Thread? _listenThread;
     private volatile bool _running;
     private Action<string, TaskCompletionSource<string>>? _onRequest;
-    private volatile bool _clientConnected;
+    private int _authenticatedClients;
     private readonly object _lifecycle = new();
     private readonly object _clientGate = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly CancellationToken _stopping;
-    private NamedPipeServerStream? _activePipe;
+    private NamedPipeServerStream? _activePipe;   // the instance waiting for the next client
+    private readonly HashSet<NamedPipeServerStream> _connected = new();
+    private readonly SemaphoreSlim _instances = new(MaxConnections, MaxConnections);
     private bool _started;
     private bool _stopped;
 
@@ -42,6 +47,9 @@ public sealed class PipeTransportServer : ITransportServer
     private static extern bool CancelIoEx(SafePipeHandle handle, IntPtr overlapped);
 
     private const int MaxLineBytes = 1024 * 1024; // 1 MiB
+
+    /// <summary>Pipe instances (connected clients plus the one waiting to accept).</summary>
+    internal const int MaxConnections = 4;
 
     /// <param name="pipeName">The pipe name the add-in wrote into its TargetDescriptor.</param>
     /// <param name="authToken">
@@ -58,7 +66,7 @@ public sealed class PipeTransportServer : ITransportServer
     public bool IsRunning => _running;
     public CancellationToken Stopping => _stopping;
     public string PipeName => _pipeName;
-    public bool IsClientConnected => _clientConnected;
+    public bool IsClientConnected => Volatile.Read(ref _authenticatedClients) > 0;
     public DateTime? LastCommandTime { get; private set; }
     public string ConnectionInfo => $"Pipe:{_pipeName}";
 
@@ -71,6 +79,7 @@ public sealed class PipeTransportServer : ITransportServer
             _started = true;
             try
             {
+                _instances.Wait();
                 _activePipe = CreatePipe(); // Reserve the endpoint before returning success or publishing discovery.
                 _onRequest = onRequest;
                 _running = true;
@@ -96,16 +105,20 @@ public sealed class PipeTransportServer : ITransportServer
         {
             _running = false;
             if (!_stopped) { _stopped = true; _stop.Cancel(); }
-            lock (_clientGate) ClosePipe(_activePipe);
+            lock (_clientGate)
+            {
+                ClosePipe(_activePipe);
+                foreach (var pipe in _connected) ClosePipe(pipe);
+            }
             thread = _listenThread;
         }
         if (thread != null && thread.IsAlive && Thread.CurrentThread != thread && !thread.Join(2000))
             throw new TimeoutException("The Inventor pipe listener has not stopped; do not replace its lifetime.");
     }
 
-    public void Dispose() { Stop(); _stop.Dispose(); }
+    public void Dispose() { Stop(); _stop.Dispose(); }   // _instances is not disposed: a late client thread still releases its slot
 
-    private NamedPipeServerStream CreatePipe() => new(_pipeName, PipeDirection.InOut, 1,
+    private NamedPipeServerStream CreatePipe() => new(_pipeName, PipeDirection.InOut, MaxConnections,
         PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 
     private static void ClosePipe(NamedPipeServerStream? pipe)
@@ -126,33 +139,55 @@ public sealed class PipeTransportServer : ITransportServer
                 try
                 {
                     pipe!.WaitForConnection();
-                    if (!_running) break;
-                    HandleClient(pipe);
                 }
-                catch when (!_running) { break; }
-                finally
+                catch
                 {
                     ClosePipe(pipe);
                     lock (_clientGate) { if (ReferenceEquals(_activePipe, pipe)) _activePipe = null; }
+                    _instances.Release();
+                    throw;
                 }
                 lock (_clientGate)
                 {
-                    if (_running) _activePipe = CreatePipe();
+                    if (ReferenceEquals(_activePipe, pipe)) _activePipe = null;
+                    if (!_running) { ClosePipe(pipe); _instances.Release(); break; }
+                    _connected.Add(pipe);
+                }
+                new Thread(() => ServeClient(pipe)) { IsBackground = true, Name = "BimwrightInventor.PipeClient" }.Start();
+
+                // The next instance needs a free slot; Stop cancels the wait.
+                _instances.Wait(_stopping);
+                lock (_clientGate)
+                {
+                    if (!_running) { _instances.Release(); break; }
+                    _activePipe = CreatePipe();
                 }
             }
         }
-        catch { /* A failed rebind ends this lifetime instead of spinning on a busy endpoint. */ }
+        catch { /* Stop, or a failed rebind: end this lifetime instead of spinning on a busy endpoint. */ }
         finally
         {
             _running = false;
-            _clientConnected = false;
             try { _stop.Cancel(); } catch { }
             lock (_clientGate) { ClosePipe(_activePipe); _activePipe = null; }
         }
     }
 
+    private void ServeClient(NamedPipeServerStream pipe)
+    {
+        try { HandleClient(pipe); }
+        catch { /* client disconnect or IO error */ }
+        finally
+        {
+            ClosePipe(pipe);
+            lock (_clientGate) _connected.Remove(pipe);
+            _instances.Release();
+        }
+    }
+
     private void HandleClient(NamedPipeServerStream pipe)
     {
+        var authenticated = false;
         try
         {
             var reader = new StreamReader(pipe, Encoding.UTF8);
@@ -177,7 +212,7 @@ public sealed class PipeTransportServer : ITransportServer
                     line = NdjsonLineReader.ReadLineBounded(reader, MaxLineBytes, out bool overflow);
                     if (overflow)
                     {
-                        TryWrite(writer, ErrorJson(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, "Request exceeded 1 MiB size limit."));
+                        TryWrite(pipe, writer, ErrorJson(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, "Request exceeded 1 MiB size limit."));
                         break;
                     }
                     if (line == null) break; // client disconnected
@@ -202,17 +237,17 @@ public sealed class PipeTransportServer : ITransportServer
                 var token = request.Value<string>("auth_token");
                 if (!AuthToken.Verify(_authToken, token))
                 {
-                    TryWrite(writer, ErrorJson(id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token."));
+                    TryWrite(pipe, writer, ErrorJson(id, InventorErrorCodes.UNAUTHORIZED, "Invalid or missing authorization token."));
                     break; // drop the connection on auth failure
                 }
-                _clientConnected = true;   // authenticated attach — ConnectionWatch fires on this edge
+                if (!authenticated) { authenticated = true; Interlocked.Increment(ref _authenticatedClients); }   // ConnectionWatch fires on this edge
 
                 var now = DateTime.UtcNow;
                 while (requestTimestamps.Count > 0 && (now - requestTimestamps.Peek()) > rateLimitWindow)
                     requestTimestamps.Dequeue();
                 if (requestTimestamps.Count >= RateLimitMax)
                 {
-                    TryWrite(writer, ErrorJson(id, InventorErrorCodes.API_ERROR, "Rate limit: 20 requests / 10 seconds per connection."));
+                    TryWrite(pipe, writer, ErrorJson(id, InventorErrorCodes.API_ERROR, "Rate limit: 20 requests / 10 seconds per connection."));
                     break;
                 }
                 requestTimestamps.Enqueue(now);
@@ -226,7 +261,7 @@ public sealed class PipeTransportServer : ITransportServer
                     string response;
                     if (tcs.Task.Wait(60000, Stopping)) response = tcs.Task.Result;
                     else response = ErrorJson(id, InventorErrorCodes.TIMEOUT, "Request timed out (60s). Inventor may be in a modal dialog or busy.");
-                    if (!TryWrite(writer, response)) break;
+                    if (!TryWrite(pipe, writer, response)) break;
                 }
                 finally { Interlocked.Exchange(ref activity, Stopwatch.GetTimestamp()); Interlocked.Exchange(ref inFlight, 0); }
             }
@@ -237,18 +272,16 @@ public sealed class PipeTransportServer : ITransportServer
         }
         finally
         {
-            _clientConnected = false;
+            if (authenticated) Interlocked.Decrement(ref _authenticatedClients);
         }
     }
 
     private static Guid ParseId(JObject request)
         => Guid.TryParse(request.Value<string>("id"), out var g) ? g : Guid.Empty;
 
-    private bool TryWrite(StreamWriter writer, string text)
+    private static bool TryWrite(NamedPipeServerStream peer, StreamWriter writer, string text)
     {
-        // A peer that stops reading must not retain the sole listener indefinitely.
-        NamedPipeServerStream? peer;
-        lock (_clientGate) peer = _activePipe;
+        // A peer that stops reading must not retain its pipe instance indefinitely.
         using var deadline = new Timer(_ => ClosePipe(peer), null, 5000, Timeout.Infinite);
         try { writer.WriteLine(text); return true; }
         catch { return false; }

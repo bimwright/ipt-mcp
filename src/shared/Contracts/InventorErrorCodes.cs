@@ -8,6 +8,8 @@ public static class InventorErrorCodes
 {
     public const string NO_TARGET = "NO_TARGET";
     public const string TARGET_UNAVAILABLE = "TARGET_UNAVAILABLE";
+    /// <summary>The add-in endpoint exists but did not accept the connection in time; nothing was sent (family contract error table).</summary>
+    public const string TARGET_BUSY = "TARGET_BUSY";
     /// <summary>Several live Inventor sessions match and none is selected; the gateway will not guess.</summary>
     public const string AMBIGUOUS_TARGET = "AMBIGUOUS_TARGET";
     /// <summary>The selected Inventor session exited or its pid was reused; it is never replaced implicitly.</summary>

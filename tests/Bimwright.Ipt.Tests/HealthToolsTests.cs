@@ -130,7 +130,7 @@ public sealed class HealthToolsTests : IDisposable
         var result = JObject.Parse(await _tools.Health());
         Assert.False(result.Value<bool>("ok"));
         Assert.False(result.Value<bool>("host_connected"));
-        Assert.Equal("TIMEOUT", (string?)result["error"]?["code"]);
+        Assert.Equal("TARGET_UNAVAILABLE", (string?)result["error"]?["code"]);   // no pipe instance: nothing was sent
         Assert.Equal(Program.ServerVersion, (string?)result["mcp"]?["server_version"]);
     }
 

@@ -50,6 +50,8 @@ public static class ServerInstructions
         "HOST_BUSY means Inventor could not start the command (a modal dialog waits for the user, or earlier work kept it busy): " +
         "it was not started and will not run later; ask the user to answer the dialog, check inventor_health host_busy, then send it again. " +
         "TIMEOUT means the command started and its outcome is unknown: inspect before retrying a write. " +
+        "TARGET_BUSY means the add-in did not accept the connection (nothing was sent): wait for the long call to finish, then retry. " +
+        "Documents: call inventor_get_document_state before saving and follow its policy (never choose a save path yourself; ask before a save that migrates the file format). " +
         "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +
         "read-only mode hides write tools but keeps query, target switching, and read-only baked tool inspection. " +

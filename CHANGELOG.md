@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- The add-in serves up to four connections at once (pipe and TCP), each on its own thread. A long call (for example a `send_code` with a long `timeout_ms`) held the only connection, so every later call, health included, failed with "connect timed out" until it ended; now health answers with `host_busy` and other calls queue or return `HOST_BUSY`.
+
 - A DLL loaded in Inventor whose metadata the C# compiler cannot read (for example a protected assembly from another add-in) no longer makes every `inventor_send_code` compile, and so every script baked tool, fail with `CS0009`. The file is left out of the compile references; the response then includes `skipped_references` (`name`, `reason`) and compile errors list the skipped names. Same fix as rvt-mcp [#38](https://github.com/bimwright/rvt-mcp/issues/38).
 - `inventor_export_drawing` to PDF of every sheet in document order (none excluded from printing) translates the source drawing directly instead of copying each sheet into a hidden template drawing with `Sheet.CopyTo`, which killed Inventor 2027 on a 5-sheet drawing. Subsets, reordered sheets and per-sheet DWG still use the sheet copy. Each file row reports `export_strategy` (`direct`, `copy_sheets` or `save_as`).
 - The gateway call log keeps the error code and message of tools answered by the server alone (for example an export path refused by the output-root policy); they were logged with `error_code: null` and the result's `error.code` hashed like a script body.
@@ -21,6 +23,9 @@ All notable changes to this project are documented here. The format is based on
 - Sketch, feature and sheet fabrication tool errors forward the handler's response data, so restored/unknown mutation receipts from dimension, revolve, batch and thickness calls reach the client.
 
 ### Added
+
+- `inventor_get_document_state` (rvt-mcp `revit_get_document_state` parity, read-only): for the active document, a named `document` or `scope=all`, reports `mode` (`local_file`, `unsaved`, `template`, `read_only`), `is_modified`, `dirty_references`, `modifiable`, `is_read_only`, `exists_on_disk`, `saved_in_version`, `needs_migrating`, `file_save_counter` and `document_id`, plus a save `policy {mode, rules, allowed}` and the active project's `old_versions_to_keep`. The policy never lets the agent choose a save path, and asks for the user's consent before a save that migrates the file format. 147 tools by default, 141 with send-code off, 39 read-only.
+- `TARGET_BUSY`: when the add-in does not accept the connection in time, the call returns `TARGET_BUSY` and says nothing was sent, instead of `TIMEOUT` with "a transmitted operation may still complete". A pipe that does not exist returns `TARGET_UNAVAILABLE`, also saying nothing was sent.
 
 - `HOST_BUSY` (bimwright family contract FC-BUSY): while a modal dialog is open in Inventor, every command except health is refused at once with `HOST_BUSY` and the dialog's caption, instead of queueing behind the dialog until `TIMEOUT`. The add-in checks again on Inventor's main thread, so a dialog's message loop cannot run a queued command. A full command queue (was `API_ERROR`) and a command that expired before it started (was `TIMEOUT`) also return `HOST_BUSY`. Each says the command was not started and will not run later. `TIMEOUT` now only means a started command whose outcome is unknown. `inventor_health` adds `host_busy` and `busy_reason`.
 - `inventor_new_drawing`, `inventor_add_sheet` and `inventor_set_title_block` run under `Application.SilentOperation`, so a template whose title block has prompted entries no longer blocks `new_drawing` on the "Prompted Texts" dialog until `TIMEOUT`.

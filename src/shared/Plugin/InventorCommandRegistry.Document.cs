@@ -15,6 +15,7 @@ public static partial class InventorCommandRegistry
     static partial void AddDocument(Dictionary<string, IInventorCommand> d, Action<IInventorCommand> add)
     {
         add(new ListOpenDocumentsHandler());
+        add(new GetDocumentStateHandler());
         add(new NewPartHandler());
         add(new NewAssemblyHandler());
         add(new OpenDocumentHandler());

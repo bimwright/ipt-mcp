@@ -19,6 +19,7 @@ public sealed class DocumentToolsTests
         "inventor_health",
         "inventor_report_task_result",
         "inventor_list_open_documents",
+        "inventor_get_document_state",
         "inventor_get_document_info",
         "inventor_list_bodies",
         "inventor_list_features",

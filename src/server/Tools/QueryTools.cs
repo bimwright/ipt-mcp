@@ -62,6 +62,11 @@ public sealed class QueryTools
     public Task<string> ListOpenDocuments(string? filter = null, bool dirty_only = false, CancellationToken ct = default)
         => Call("list_open_documents", new JObject { ["filter"] = filter, ["dirty_only"] = dirty_only }, ct);
 
+    [McpServerTool(Name = "inventor_get_document_state", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
+     Description("Check a document before saving or ending work (rvt-mcp revit_get_document_state parity): mode (local_file, unsaved, template, read_only), is_modified, dirty_references (dirty documents a save would or would not include), modifiable, is_read_only, exists_on_disk, saved_in_version, needs_migrating (saving upgrades the file format), file_save_counter, document_id, plus the save policy {mode, rules, allowed} to follow and the active project's old_versions_to_keep. Default: the active document; document = full path or name of an open/loaded document (never opened automatically); scope=all lists every open document (policy stays for the active one). Works with no document open. Example: inventor_get_document_state() before inventor_save_document.")]
+    public Task<string> GetDocumentState(string? document = null, string scope = "active", CancellationToken ct = default)
+        => Call("get_document_state", new JObject { ["document"] = document, ["scope"] = scope }, ct);
+
     [McpServerTool(Name = "inventor_get_document_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Get a document's title, full path, document type and dirty flag — the active document, or document (full path or name of an open/loaded document; never opened automatically). references=true adds the direct file references [{path, missing}] (Document.File.ReferencedFileDescriptors).")]
     public Task<string> GetDocumentInfo(string? document = null, bool references = false, CancellationToken ct = default)

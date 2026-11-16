@@ -25,7 +25,7 @@ public sealed class ReleaseContractTests
     {
         var types = Program.ResolveToolTypesForRegistration(new InventorMcpConfig { Toolsets = { "all" } });
         var catalog = ToolCatalog.Build(types);
-        Assert.Equal(146, catalog.Count);
+        Assert.Equal(147, catalog.Count);
         foreach (var method in types.SelectMany(t => t.GetMethods()))
         {
             var attr = method.GetCustomAttribute<McpServerToolAttribute>();

@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-The development checkout exposes **146 tools** by default (`--toolsets all`); `--disable-send-code` exposes **140 tools**, and `--read-only` exposes **38 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+The development checkout exposes **147 tools** by default (`--toolsets all`); `--disable-send-code` exposes **141 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -142,7 +142,7 @@ All length inputs are in **mm**, angles in **degrees**; the add-in converts to I
 
 **Dialogs.** Save, open, close, export, the batch document tools and the drawing tools that place a title block (`new_drawing`, `add_sheet`, `set_title_block`) run under `Application.SilentOperation` by default (`silent=true`), so Inventor answers its own prompts with their defaults instead of opening a hidden modal dialog that blocks the call. A template whose title block has prompted entries no longer stops `new_drawing` on the "Prompted Texts" dialog; fill the entries with `inventor_set_title_block`. Inventor has no event for answering one specific dialog with a chosen button (Revit's `DialogBoxShowing`), so there is no per-dialog answer rule.
 
-**Host busy.** While a modal dialog is open in Inventor, every command except health returns `HOST_BUSY` at once instead of queueing behind the dialog. `HOST_BUSY` is also returned when the command queue is full or when earlier work kept Inventor busy until the deadline. In each case the command was not started and will not run later, so it is safe to send again once Inventor is free. `TIMEOUT` now means the command started and did not finish in time: its outcome is unknown, so inspect the document before retrying a write. `inventor_health` reports `host_busy`, `busy_reason` (`modal_dialog` or `sta_busy`) and `modal_dialog {open, title}`, probed without touching Inventor's main thread.
+**Host busy.** While a modal dialog is open in Inventor, every command except health returns `HOST_BUSY` at once instead of queueing behind the dialog. `HOST_BUSY` is also returned when the command queue is full or when earlier work kept Inventor busy until the deadline. In each case the command was not started and will not run later, so it is safe to send again once Inventor is free. `TIMEOUT` now means the command started and did not finish in time: its outcome is unknown, so inspect the document before retrying a write. `inventor_health` reports `host_busy`, `busy_reason` (`modal_dialog` or `sta_busy`) and `modal_dialog {open, title}`, probed without touching Inventor's main thread. The add-in serves up to four connections at once, so health and the next call still connect while a long call runs. When an add-in does not accept the connection in time (for example an older add-in that serves one call at a time), the call returns `TARGET_BUSY`; when its pipe does not exist it returns `TARGET_UNAVAILABLE`. Both say nothing was sent, so the command did not run.
 
 
 ### drawing_query (2) / drawing (20) — Inventor 2027
@@ -230,6 +230,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_health` | Call with `check_updates=true` once at session start to discover releases and notify the user when `update.notification` is present. Routine probes stay offline by default. Reports host state and loaded server/plugin identities. |
 | `inventor_report_task_result` | Explicit agent-reported task outcome: `task_id`, `outcome` (`completed`/`failed`/`cancelled`), single-line `summary`. No model changes. |
 | `inventor_list_open_documents` | List documents in memory: title, path, type, is_active, dirty, visible; optional `filter` / `dirty_only`. |
+| `inventor_get_document_state` | Check before saving or ending work: `mode` (`local_file`, `unsaved`, `template`, `read_only`), `is_modified`, `dirty_references`, `modifiable`, `is_read_only`, `exists_on_disk`, `saved_in_version`, `needs_migrating`, `file_save_counter`, `document_id`, plus the save `policy {mode, rules, allowed}` and the project's `old_versions_to_keep`. Active document, `document`, or `scope=all`; works with no document open. |
 | `inventor_get_document_info` | Title, full path, type and dirty flag of the active or a targeted document; `references=true` adds its file references (with missing flags). |
 | `inventor_list_bodies` | List the part's solid bodies: id (`body:N`), name, volume_mm3, bbox_mm, face_count, created_by feature, visible. |
 | `inventor_list_features` | List the part's features in tree order: name, type, health, suppressed, body_names. |
@@ -509,6 +510,7 @@ The allow list below is generated from the 28 read-only annotations and checked 
       "mcp__ipt-mcp__inventor_get_assembly_bom",
       "mcp__ipt-mcp__inventor_get_current_target",
       "mcp__ipt-mcp__inventor_get_document_info",
+      "mcp__ipt-mcp__inventor_get_document_state",
       "mcp__ipt-mcp__inventor_get_drawing_info",
       "mcp__ipt-mcp__inventor_get_ipart_info",
       "mcp__ipt-mcp__inventor_get_iproperty",

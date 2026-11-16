@@ -39,8 +39,8 @@ public sealed class McpProtocolSmokeTests
     }
 
     [Theory]
-    [InlineData(false, 146)]
-    [InlineData(true, 38)]
+    [InlineData(false, 147)]
+    [InlineData(true, 39)]
     public async Task Combined_excel_and_point_dimension_catalog_preserves_both_surfaces(bool readOnly, int count)
     {
         var responses = await RunProtocolHandshake(readOnly: readOnly);
