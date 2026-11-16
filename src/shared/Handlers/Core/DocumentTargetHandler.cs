@@ -23,10 +23,14 @@ public static class ActiveDocumentStamp
         catch { return (DocumentTargetPolicy.NoDocument, null, null); }
     }
 
-    /// <summary>The table key: InternalName names one document even across SaveAs; reopening gets a new id via Forget.</summary>
+    /// <summary>The table key (InternalName + path, see <see cref="DocumentIdTable.Key"/>); reopening gets a new id via Forget.</summary>
     public static string? KeyOf(global::Inventor.Document doc)
     {
-        try { return doc.InternalName; } catch { return null; }
+        string internalName;
+        try { internalName = doc.InternalName; } catch { return null; }
+        string? path = null;
+        try { path = doc.FullFileName; } catch { }
+        return DocumentIdTable.Key(internalName, path);
     }
 }
 

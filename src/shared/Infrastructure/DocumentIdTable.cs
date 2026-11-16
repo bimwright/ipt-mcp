@@ -5,7 +5,8 @@ namespace Bimwright.Ipt.Shared.Infrastructure;
 
 /// <summary>
 /// Lifetime ids for open Inventor documents (family contract FC-DOC-01). The key is the document's
-/// InternalName; <see cref="Forget"/> runs when Inventor closes it, so reopening the file gets a new id.
+/// InternalName plus its full file name (<see cref="Key"/>); <see cref="Forget"/> runs when Inventor
+/// closes it, so reopening the file gets a new id.
 /// </summary>
 public sealed class DocumentIdTable
 {
@@ -13,6 +14,14 @@ public sealed class DocumentIdTable
 
     private readonly object _gate = new();
     private readonly Dictionary<string, string> _ids = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// InternalName alone is not unique: a file copied outside Inventor (a checkpoint restore, an Explorer copy)
+    /// keeps it, and both copies can be open at once. The path tells them apart. Save-As changes the key, so
+    /// save_document repins (DocumentTargetPolicy.Repin).
+    /// </summary>
+    public static string Key(string internalName, string? fullFileName)
+        => internalName + "|" + (fullFileName ?? "").ToUpperInvariant();
 
     public string IdFor(string key)
     {

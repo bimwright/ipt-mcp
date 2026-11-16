@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Document confirmation (`document_target_v1`): two open files that share an InternalName (a checkpoint restore or a file copied in Explorer) got the same document id, so switching from the confirmed file to its copy did not stop the next write. Ids now include the file path; a Save-As through `inventor_save_document` moves the confirmation to the new file.
+
 - The add-in serves up to four connections at once (pipe and TCP), each on its own thread. A long call (for example a `send_code` with a long `timeout_ms`) held the only connection, so every later call, health included, failed with "connect timed out" until it ended; now health answers with `host_busy` and other calls queue or return `HOST_BUSY`.
 
 - A DLL loaded in Inventor whose metadata the C# compiler cannot read (for example a protected assembly from another add-in) no longer makes every `inventor_send_code` compile, and so every script baked tool, fail with `CS0009`. The file is left out of the compile references; the response then includes `skipped_references` (`name`, `reason`) and compile errors list the skipped names. Same fix as rvt-mcp [#38](https://github.com/bimwright/rvt-mcp/issues/38).

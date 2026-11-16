@@ -79,7 +79,7 @@ public static class DocumentTargetPolicy
     /// the pin moves to the new document. A document the user activated in between is never adopted.
     /// </summary>
     public static string? Repin(string command, DocumentTargetEnvelope? target, string beforeDocumentId, string afterDocumentId) =>
-        OpensDocument.Contains(command) && target?.ExpectedDocumentId is { Length: > 0 } expected
+        (OpensDocument.Contains(command) || command == "save_document") && target?.ExpectedDocumentId is { Length: > 0 } expected
             && string.Equals(expected, beforeDocumentId, StringComparison.Ordinal)
             && !string.Equals(beforeDocumentId, afterDocumentId, StringComparison.Ordinal)
             ? afterDocumentId : null;

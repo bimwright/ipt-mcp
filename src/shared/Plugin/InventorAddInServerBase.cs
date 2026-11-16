@@ -596,7 +596,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     {
         handling = InvApi.HandlingCodeEnum.kEventNotHandled;
         if (timing != InvApi.EventTimingEnum.kBefore) return;
-        try { DocumentIdTable.Shared.Forget(document.InternalName); } catch { }
+        try { if (Bimwright.Ipt.Shared.Handlers.Core.ActiveDocumentStamp.KeyOf((InvApi.Document)document) is { } key) DocumentIdTable.Shared.Forget(key); } catch { }
     }
 
     /// <summary>A different view means a different anchor.</summary>

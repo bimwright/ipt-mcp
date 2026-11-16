@@ -89,6 +89,21 @@ public sealed class DocumentTargetTests : IDisposable
         // Ordinary writes never move the pin.
         Assert.Null(DocumentTargetPolicy.Repin("extrude", Pinned("doc-a"), "doc-a", "doc-new"));
         Assert.Null(DocumentTargetPolicy.Repin("new_part", Pinned(null), "doc-a", "doc-new"));
+        // Save-As changes the active document's path, and so its id: the pin follows it.
+        Assert.Equal("doc-saved", DocumentTargetPolicy.Repin("save_document", Pinned("doc-a"), "doc-a", "doc-saved"));
+        Assert.Null(DocumentTargetPolicy.Repin("save_document", Pinned("doc-a"), "doc-b", "doc-saved"));
+    }
+
+    [Fact]
+    public void Copies_with_the_same_internal_name_get_different_ids()
+    {
+        // A checkpoint restore or Explorer copy keeps InternalName; live 16/11 both copies were open at once.
+        var table = new DocumentIdTable();
+        var working = table.IdFor(DocumentIdTable.Key("{C9CF0122}", @"C:\w\INLET-TUBE.ipt"));
+        var restored = table.IdFor(DocumentIdTable.Key("{C9CF0122}", @"C:\w\INLET-TUBE-restored-1.ipt"));
+        Assert.NotEqual(working, restored);
+        Assert.Equal(working, table.IdFor(DocumentIdTable.Key("{C9CF0122}", @"c:\W\inlet-tube.IPT")));
+        Assert.NotEqual(working, table.IdFor(DocumentIdTable.Key("{C9CF0122}", null)));   // unsaved vs saved
     }
 
     [Fact]
