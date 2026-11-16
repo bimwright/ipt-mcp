@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies (same set as the rvt-mcp dependency trial). The MCP server and its tests run on .NET 10 (.NET 8 reached end of support on 10 November 2026); the release ZIP still ships a self-contained server, so client machines need no .NET install. The add-ins keep the runtime each Inventor year uses (net48 for 2022-2024, .NET 8 for 2025/2026, .NET 10 for 2027). ModelContextProtocol 1.1.0 to 1.4.2 and Microsoft.Extensions.Hosting 8.0.1 to 10.0.7 (the abstractions MCP 1.4 uses); Microsoft.Data.Sqlite 8.0.11 to 8.0.34 with native SQLite pinned through SQLitePCLRaw.lib.e_sqlite3 2.1.14 (SQLite 3.54); Roslyn for `send_code` 4.8.0 to 4.13.0, the last version whose .NET 8 build uses the System.Collections.Immutable and System.Reflection.Metadata 8.0 that Inventor 2025/2026 provide; test packages xunit 2.9.3, Microsoft.NET.Test.Sdk 17.14.2, xunit.runner.visualstudio 2.8.2. Newtonsoft.Json stays 13.0.3 because of regressions reported against 13.0.4. The 2022-2024 add-ins now ship System.Collections.Immutable and System.Reflection.Metadata 8.0 (was 7.0) for Roslyn; they share Inventor's AppDomain with other add-ins, so report any `send_code` load error there.
+
 ### Fixed
 
 - Document confirmation (`document_target_v1`): two open files that share an InternalName (a checkpoint restore or a file copied in Explorer) got the same document id, so switching from the confirmed file to its copy did not stop the next write. Ids now include the file path; a Save-As through `inventor_save_document` moves the confirmation to the new file.

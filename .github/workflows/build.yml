@@ -25,8 +25,9 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      # The MCP server and unit tests are net8.0 and need no Inventor SDK,
-      # so they build and run on this Windows runner without Inventor installed.
+      # The MCP server and unit tests are net10.0 and need no Inventor SDK, so they build and run
+      # on this Windows runner without Inventor installed. .NET 8 stays for the net8 toast host
+      # tests (the Inventor 2025/2026 add-in runtime).
       # Per-version add-ins require Inventor interop and are built on a prepared Windows box.
       - name: Build server
         run: dotnet build src/server -c Release
@@ -36,7 +37,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Test every MCP tool over isolated stdio
-        run: python tests/stdio/release-contract.py --server src/server/bin/Release/net8.0/Bimwright.Ipt.Server.dll --output artifacts/stdio
+        run: python tests/stdio/release-contract.py --server src/server/bin/Release/net10.0/Bimwright.Ipt.Server.dll --output artifacts/stdio
       # The host-free toast model tests are part of Bimwright.Ipt.Tests above. Two WPF checks follow:
       # the card regression harness shared with rvt-mcp and dwg-mcp (a console app, exit code 0 = pass),
       # and the Inventor toast host tests on net48, net8 and net10. windows-latest supplies

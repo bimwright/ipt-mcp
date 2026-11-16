@@ -44,7 +44,7 @@ integration end to end.
 4. **Start the MCP server**
    In a separate terminal, start the stdio MCP server:
    ```powershell
-   .\src\server\bin\Debug\net8.0\Bimwright.Ipt.Server.exe
+   .\src\server\bin\Debug\net10.0\Bimwright.Ipt.Server.exe
    ```
    **Expected:** the server boots and waits on stdio (register it with your MCP client per
    `.mcp.json.example`).

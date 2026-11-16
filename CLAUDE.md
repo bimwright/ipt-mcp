@@ -7,7 +7,7 @@ Open-source (Apache-2.0) MCP gateway that lets Claude Code (and any MCP-capable 
 Full C# stack. No TypeScript. Single language, single build system. Multi-version: one in-process add-in per Inventor 2022-2027, all compiled from the same `src/shared/**` source glob.
 
 ```
-MCP client (Claude Code / Cursor / Cline / …) → stdio → C# MCP Server (.NET 8 console)
+MCP client (Claude Code / Cursor / Cline / …) → stdio → C# MCP Server (.NET 10 console)
    → TCP (2022-2024) or Named Pipe (2025-2027) → per-version Inventor add-in → Inventor API
 ```
 
@@ -47,7 +47,7 @@ Save policy (`src/shared/Infrastructure/DocumentSavePolicy.cs`, host-free, rvt-m
 ```
 src/
 ├── IptMcp.sln                 # Solution (server + tests; 6 add-ins added in Phase 2)
-├── server/                         # MCP server (console, net8.0). NO Inventor reference.
+├── server/                         # MCP server (console, net10.0). NO Inventor reference.
 │   ├── Bimwright.Ipt.Server.csproj   # explicit-includes shared/Contracts + Security (+ ToolBaker)
 │   ├── Program.cs                  # boot + ResolveToolTypesForRegistration → WithTools(...)
 │   ├── InventorMcpConfig.cs        # CLI/env/JSON config (toolsets, read-only, send-code, …)
@@ -72,7 +72,7 @@ src/
 ├── plugin-inv22/ inv23/ inv24/     # net48, TCP transport
 ├── plugin-inv25/ inv26/            # net8.0-windows7.0, Named Pipe
 └── plugin-inv27/                   # net10.0-windows7.0, Named Pipe
-tests/Bimwright.Ipt.Tests/     # net8.0, xUnit. Server-only — no Inventor needed.
+tests/Bimwright.Ipt.Tests/     # net10.0, xUnit. Server-only — no Inventor needed.
 ```
 
 The **server** compiles only `shared/Contracts/*` + `shared/Security/*` (and ToolBaker) explicitly, so it builds with no Inventor SDK present. Each **add-in** uses `<Compile Include="..\shared\**\*.cs" />` to pull in everything, including the API-touching `Infrastructure`/`Plugin`/`Handlers`.
@@ -89,7 +89,7 @@ Run `pwsh -NoProfile -File scripts/check-public-tree.ps1` before publishing chan
 ## Build & Test
 
 ```bash
-# Server + tests (server-only; no Inventor required, works on any machine with the .NET 8 SDK):
+# Server + tests (server-only; no Inventor required, works on any machine with the .NET 10 SDK):
 dotnet build src/IptMcp.sln -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 

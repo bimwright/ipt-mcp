@@ -44,7 +44,7 @@ This is a human-reviewed presentation example, **not a fabrication release or a 
 
 Two processes, one local pipe:
 
-- **`Bimwright.Ipt.Server.exe`** — a .NET 8 MCP stdio server launched by Claude Code, Cursor, Cline, Codex, or another stdio MCP client. It has **no Inventor reference** and can be built/tested on Windows without Inventor installed. The gateway runtime requires Windows for its user identity and setup lifecycle; server-only describes independence from the Inventor SDK, not cross-platform runtime support.
+- **`Bimwright.Ipt.Server.exe`** — a .NET 10 MCP stdio server launched by Claude Code, Cursor, Cline, Codex, or another stdio MCP client. It has **no Inventor reference** and can be built/tested on Windows without Inventor installed. The gateway runtime requires Windows for its user identity and setup lifecycle; server-only describes independence from the Inventor SDK, not cross-platform runtime support.
 - **`Bimwright.Ipt.Plugin.InvNN.dll`** — an `ApplicationAddInServer` add-in that loads inside `Inventor.exe`, runs a TCP or Named-Pipe listener, and executes commands on Inventor's main UI (STA) thread. One thin shell per Inventor year, all compiled from the same `src/shared/**` source glob.
 
 Unlike Revit, Inventor has **no `ExternalEvent`** equivalent. The add-in marshals work onto the STA thread through a hidden message-only WinForms control (`InventorStaDispatcher`). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
@@ -104,10 +104,10 @@ Writes run only on a confirmed document. Check the active document with the user
 
 ## Build & Develop
 
-Autodesk Inventor binaries and the Inventor SDK are **not redistributed** in this repo (see [Not Redistributed](#not-redistributed)). Building and running the **server and tests** requires Windows and the .NET 8 SDK, with no Inventor installation required; building a **per-version add-in** needs the matching SDK plus the Inventor interop reference assembly.
+Autodesk Inventor binaries and the Inventor SDK are **not redistributed** in this repo (see [Not Redistributed](#not-redistributed)). Building and running the **server and tests** requires Windows and the .NET 10 SDK, with no Inventor installation required; building a **per-version add-in** needs the matching SDK plus the Inventor interop reference assembly.
 
 ```powershell
-# Server + tests on Windows (server-only; .NET 8 SDK, no Inventor installation required):
+# Server + tests on Windows (server-only; .NET 10 SDK, no Inventor installation required):
 dotnet build src/server -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 

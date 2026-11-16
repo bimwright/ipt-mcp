@@ -16,7 +16,7 @@ This file is machine-readable install instructions for AI coding agents (Claude 
 
 - Install Inventor, manage Inventor licensing, or launch Inventor for the first time. If Inventor 2022–2027 is not installed, stop and tell the user.
 - Install from unpublished/old tags or source builds for a client machine unless the user explicitly asks for a developer setup.
-- Install the .NET 8 SDK, clone the repo, or restore NuGet packages for a **client** install. Use the GitHub Release ZIP only.
+- Install a .NET SDK, clone the repo, or restore NuGet packages for a **client** install. Use the GitHub Release ZIP only.
 
 ---
 

@@ -15,7 +15,7 @@
   pwsh -NoProfile -Command '& .\scripts\mcp-smoke.ps1 -ServerExe "$env:TEMP\ipt_f1_out\Bimwright.Ipt.Server.exe" -ToolCalls @(@{ name = "inventor_list_available_targets"; arguments = @{} })'
 #>
 param(
-    [string]$ServerExe = (Join-Path $PSScriptRoot '..\src\server\bin\Debug\net8.0\Bimwright.Ipt.Server.exe'),
+    [string]$ServerExe = (Join-Path $PSScriptRoot '..\src\server\bin\Debug\net10.0\Bimwright.Ipt.Server.exe'),
     [string]$LogPath = (Join-Path $env:TEMP 'ipt-mcp-smoke-calls.jsonl'),
     [switch]$EnableSendCode,
     [int]$TimeoutMs = 60000,

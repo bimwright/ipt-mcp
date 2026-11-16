@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "ipt-mcp": {
-      "command": "<ABSOLUTE_PATH_TO_REPO>/src/server/bin/Debug/net8.0/Bimwright.Ipt.Server.exe",
+      "command": "<ABSOLUTE_PATH_TO_REPO>/src/server/bin/Debug/net10.0/Bimwright.Ipt.Server.exe",
       "args": [],
       "env": {
         "BIMWRIGHT_INVENTOR_READ_ONLY": "false"

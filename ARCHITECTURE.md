@@ -8,7 +8,7 @@
 MCP client (Claude Code / Cursor / Cline / …)
         │  stdio (MCP)
         ▼
-Bimwright.Ipt.Server        (.NET 8 console, NO Inventor reference)
+Bimwright.Ipt.Server        (.NET 10 console, NO Inventor reference)
         │  TCP (2022-2024)  OR  Named Pipe (2025-2027) — NDJSON + token auth
         ▼
 Bimwright.Ipt.Plugin.InvNN  (ApplicationAddInServer add-in, one per Inventor year)
@@ -17,7 +17,7 @@ Bimwright.Ipt.Plugin.InvNN  (ApplicationAddInServer add-in, one per Inventor yea
 Inventor API  (Inventor.Application / Document)
 ```
 
-- **Server** is an MCP stdio server. It translates each `tools/call` into a JSON command envelope and forwards it over a local transport to whichever Inventor add-in is running. It holds **no Inventor reference** — it compiles only the API-agnostic contract files, so it builds and runs (and its tests pass) on any machine with the .NET 8 SDK.
+- **Server** is an MCP stdio server. It translates each `tools/call` into a JSON command envelope and forwards it over a local transport to whichever Inventor add-in is running. It holds **no Inventor reference** — it compiles only the API-agnostic contract files, so it builds and runs (and its tests pass) on any machine with the .NET 10 SDK.
 - **Add-in** is an in-process `ApplicationAddInServer` loaded by Inventor. It runs a transport listener on a background thread, enqueues requests, and marshals each one onto Inventor's main STA thread. One thin shell per Inventor year (`src/plugin-invNN/`), all compiling the same `src/shared/**` source glob.
 
 The version split is explicit at the edge. The server is version-agnostic; all Inventor-API coupling lives in the add-in.
