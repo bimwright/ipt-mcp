@@ -40,6 +40,8 @@ Target binding (`src/server/TargetBinding.cs`, rvt-mcp #19 parity): with no sele
 
 Document target (`document_target_v1`, family contract FC-DOC/FC-PAIR; `src/shared/Contracts/DocumentTarget.cs`): `inventor_switch_target(verify=true)` pins the active document's lifetime id (add-in `DocumentIdTable`, keyed by InternalName + full path because copies made outside Inventor keep the InternalName, dropped on close; Save-As via `save_document` repins). The gateway refuses writes before that (`TARGET_UNCONFIRMED`) or to an add-in without the capability (`PAIRING_REQUIRED`); the add-in checks on the STA right before the handler (`DOCUMENT_UNCONFIRMED`, `DOCUMENT_CHANGED`, `PAIRING_REQUIRED` for an old gateway). Writes with an explicit `document` parameter skip the active-document check; open/create commands are exempt and move the pin to the document they activate (`repin_document_id`); `send_code` compile_only and `apply_bake` are not document writes.
 
+Save policy (`src/shared/Infrastructure/DocumentSavePolicy.cs`, host-free, rvt-mcp parity): `save_document` enforces the `get_document_state` policy. In place it refuses unsaved/template/read-only documents and missing files, returns `no_changes` when nothing is dirty (part/assembly: document or a referenced document), and needs `allow_format_upgrade` for an older-format file; Save-As needs a new local file of the document's type in an existing folder and never overwrites. Refusals are `INVALID_ARGUMENT` + `data.reason`/`data.mode`. `save_all` and `close_document(save=true)` do not apply this policy yet.
+
 ## Project Structure
 
 ```

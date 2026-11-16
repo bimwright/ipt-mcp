@@ -244,7 +244,7 @@ After reconnect/restart, the **client** must record a new `initialize` and a fre
 | `inventor_new_part` | Create a new part document (.ipt); optional template path. |
 | `inventor_new_assembly` | Create a new assembly document (.iam); optional template path. |
 | `inventor_open_document` | Open an existing document from a full path and make it active. |
-| `inventor_save_document` | Save the active document, or Save-As to a given path. |
+| `inventor_save_document` | Save the active document (or `document`) following the `inventor_get_document_state` policy, which it enforces. In place: refused for a never-saved document, a template, a read-only file or a file missing on disk (`data.reason`); `saved=false`, `reason=no_changes` when nothing changed; an older-format file needs `allow_format_upgrade=true` after the user approved. With `path`: Save-As to a new local file of the document's type in an existing folder; an existing file is never overwritten. |
 | `inventor_close_document` | Close the active document; `save=true` saves first. |
 | `inventor_set_units` | Set the active document's length unit (mm, cm, m, in, ft). |
 | `inventor_set_material` | Assign a material to the active part by name. |

@@ -51,7 +51,7 @@ public static class ServerInstructions
         "it was not started and will not run later; ask the user to answer the dialog, check inventor_health host_busy, then send it again. " +
         "TIMEOUT means the command started and its outcome is unknown: inspect before retrying a write. " +
         "TARGET_BUSY means the add-in did not accept the connection (nothing was sent): wait for the long call to finish, then retry. " +
-        "Documents: call inventor_get_document_state before saving and follow its policy (never choose a save path yourself; ask before a save that migrates the file format). " +
+        "Documents: call inventor_get_document_state before saving and follow its policy (never choose a save path yourself; ask before a save that migrates the file format); inventor_save_document enforces it: refusals carry data.reason and save nothing, and Save-As never overwrites a file. " +
         "Checkpoints: inventor_save_checkpoint only with user approval before risky work; prune or restore with inventor_manage_checkpoints (prune needs the previewed plan_hash). " +
         "Versions are 4-digit years (2022..2027). " +
         "ToolBaker: inventor_list_baked_tools and inventor_run_baked_tool govern reusable baked tools; " +

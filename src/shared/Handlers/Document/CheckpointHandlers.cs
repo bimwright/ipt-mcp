@@ -34,12 +34,7 @@ internal static class CheckpointSupport
             refusal = Refuse(ctx, InventorErrorCodes.NO_DOCUMENT, "NO_ACTIVE_DOCUMENT", "no active Inventor document.");
             return null;
         }
-        try { path = doc.FullFileName ?? ""; } catch { }
-        bool? readOnly = null, modifiable = null;
-        try { if (System.IO.File.Exists(path)) readOnly = new FileInfo(path).IsReadOnly; } catch { }
-        try { modifiable = doc.IsModifiable; } catch { }
-        var roots = new[] { Safe(() => app.FileOptions.TemplatesPath), Safe(() => app.DesignProjectManager.ActiveDesignProject.TemplatesPath) };
-        var mode = DocumentStatePolicy.Mode(path, readOnly, modifiable, roots);
+        var mode = ModeOf(app, doc, out path);
         if (mode != DocumentStatePolicy.LocalFile)
         {
             refusal = Refuse(ctx, InventorErrorCodes.INVALID_ARGUMENT, mode == DocumentStatePolicy.Unsaved ? "DOCUMENT_NEVER_SAVED" : "CHECKPOINT_UNSUPPORTED_MODE",
@@ -60,6 +55,18 @@ internal static class CheckpointSupport
     }
 
     internal static string? Safe(Func<string?> read) { try { return read(); } catch { return null; } }
+
+    /// <summary>The document's <see cref="DocumentStatePolicy"/> mode, read the way get_document_state reads it.</summary>
+    internal static string ModeOf(Application app, global::Inventor.Document doc, out string path)
+    {
+        path = "";
+        try { path = doc.FullFileName ?? ""; } catch { }
+        bool? readOnly = null, modifiable = null;
+        try { if (System.IO.File.Exists(path)) readOnly = new FileInfo(path).IsReadOnly; } catch { }
+        try { modifiable = doc.IsModifiable; } catch { }
+        var roots = new[] { Safe(() => app.FileOptions.TemplatesPath), Safe(() => app.DesignProjectManager.ActiveDesignProject.TemplatesPath) };
+        return DocumentStatePolicy.Mode(path, readOnly, modifiable, roots);
+    }
 
     internal static int ReferencesNotCaptured(global::Inventor.Document doc)
     {
