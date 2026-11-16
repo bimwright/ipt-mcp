@@ -383,6 +383,7 @@ Allow list dưới đây được sinh từ 28 annotation read-only và có test
       "mcp__ipt-mcp__inventor_get_assembly_bom",
       "mcp__ipt-mcp__inventor_get_current_target",
       "mcp__ipt-mcp__inventor_get_document_info",
+      "mcp__ipt-mcp__inventor_get_document_state",
       "mcp__ipt-mcp__inventor_get_drawing_info",
       "mcp__ipt-mcp__inventor_get_ipart_info",
       "mcp__ipt-mcp__inventor_get_iproperty",

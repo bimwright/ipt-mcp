@@ -8,6 +8,7 @@
     "inventor_get_assembly_bom",
     "inventor_get_current_target",
     "inventor_get_document_info",
+    "inventor_get_document_state",
     "inventor_get_drawing_info",
     "inventor_get_ipart_info",
     "inventor_get_iproperty",
