@@ -76,6 +76,7 @@ public sealed class SendCodeHandler : IInventorCommand
 
         var compileOnly = p["compile_only"]?.Type == JTokenType.Boolean && (bool)p["compile_only"]!;
         var silent = p["silent"]?.Type == JTokenType.Boolean && (bool)p["silent"]!;
+        var rawNumbers = p["raw_numbers"]?.Type == JTokenType.Boolean && (bool)p["raw_numbers"]!;
         var code = (string?)p["code"] ?? "";
         if (string.IsNullOrWhiteSpace(code) && !compileOnly)
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, "code parameter is required", meta);
@@ -108,7 +109,8 @@ public sealed class SendCodeHandler : IInventorCommand
             sourceParts = new List<SendCodeSource.Part> { new(DataSource, DataPrelude) };
             sourceParts.AddRange(modules);
         }
-        var source = SendCodeSource.Build(sourceParts, code);
+        // Every loop body starts with an IptGuard.Check (same line, so line numbers hold): loops stop at the time budget.
+        var source = ScriptLoopGuard.Instrument(SendCodeSource.Build(sourceParts, code));
 
         var originalOut = Console.Out;
         var captured = new StringWriter();
@@ -142,8 +144,8 @@ public sealed class SendCodeHandler : IInventorCommand
             }
 
             // Debug info makes runtime stack frames carry the #line source + line (S1.4).
-            var imports = new List<string> { "System", "System.Collections.Generic", "System.Linq", "Newtonsoft.Json.Linq", "Inventor" };
-            if (contract == SendCodeTask.TaskV1) imports.Add(SendCodeTask.ScriptNamespace);
+            // Bimwright.Ipt.Scripting brings the Ipt helpers and McpTaskResult into every script (script_helpers_v1).
+            var imports = new List<string> { "System", "System.Collections.Generic", "System.Linq", "Newtonsoft.Json.Linq", "Inventor", SendCodeTask.ScriptNamespace };
             var options = ScriptOptions.Default
                 .WithReferences(refs)
                 .WithImports(imports)
@@ -187,6 +189,8 @@ public sealed class SendCodeHandler : IInventorCommand
             messages = app.ErrorManager.StartMessageSection();
             var document = app.ActiveDocument;
             if (document != null) transaction = app.TransactionManager.StartTransaction(document, "MCP: send_code");
+            global::Bimwright.Ipt.Scripting.Ipt.App = app;
+            global::Bimwright.Ipt.Scripting.IptGuard.Begin(SendCodeHelpers.BudgetMs(ctx.DeadlineUtc, DateTime.UtcNow));
             var state = script.RunAsync(globals: new Globals { app = app, doc = document, __data_json = dataJson }).GetAwaiter().GetResult();
             hostWarnings = messages.HasWarnings;
             if (hostWarnings || messages.HasErrors) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages);
@@ -212,6 +216,8 @@ public sealed class SendCodeHandler : IInventorCommand
                 var token = ScriptResultToken.ToResultToken(returnValue, out var resultError);
                 if (resultError is null)
                 {
+                    if (!rawNumbers) token = ScriptNumbers.Clean(token);
+                    ok["numbers"] = rawNumbers ? "raw" : ScriptNumbers.Mode;
                     ResponseSpillWriter.AttachResult("send_code", ok, token, ResponseSpillWriterFactory.ForContext(ctx));
                 }
                 else
@@ -268,6 +274,8 @@ public sealed class SendCodeHandler : IInventorCommand
         }
         finally
         {
+            global::Bimwright.Ipt.Scripting.IptGuard.End();
+            global::Bimwright.Ipt.Scripting.Ipt.Detach();
             try { transaction?.Abort(); } catch { }
             try { messages?.ClearMessages(); } catch { }
             if (silentApplied)

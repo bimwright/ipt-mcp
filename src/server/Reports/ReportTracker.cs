@@ -13,7 +13,7 @@ namespace Bimwright.Ipt.Server.Reports;
 internal sealed class ReportTracker
 {
     internal const string Text = "This job changed an Inventor model. Before your final answer, call inventor_report_task_result once: "
-        + "outcome completed, failed or cancelled, a one-line summary and an optional Markdown body. Not after each tool.";
+        + "task_id (unique, 1-80 chars), outcome completed, failed or cancelled, a one-line summary of at most 120 characters and an optional Markdown body. Not after each tool.";
     internal const string ShortText = "Report still due: call inventor_report_task_result once before your final answer.";
     internal const string ScriptText = "If this script changed the model, call inventor_report_task_result once before your final answer. Not after each tool.";
     internal const int MaxCalls = 256;

@@ -51,7 +51,7 @@ public static class DrawingInput
         if (!Commands.Contains(command)) throw new ArgumentException("Unknown drawing command.");
         var fields = command switch
         {
-            "get_drawing_info" => "document sheet timeout_ms include max_items offset references",
+            "get_drawing_info" => "document sheet timeout_ms include max_items offset references styles",
             "new_drawing" => "timeout_ms name template projection annotation_defaults visible",
             "add_sheet" => "document timeout_ms name code size orientation width_mm height_mm border title_block prompts",
             "set_title_block" => "document sheet timeout_ms title_block prompts iproperties",

@@ -35,7 +35,9 @@ public static class ReportLimits
         if (SingleLine(taskId, TaskIdLength) == null) return "task_id must be a single-line string of 1-80 characters.";
         var o = SingleLine(outcome, 20);
         if (o != "completed" && o != "failed" && o != "cancelled") return "outcome must be completed, failed or cancelled.";
-        if (SingleLine(summary, SummaryLength) == null) return "summary must be a single-line string of 1-120 characters.";
+        if (SingleLine(summary, SummaryLength) == null)
+            return "summary must be a single-line string of 1-120 characters" +
+                   (summary?.Type == JTokenType.String ? $" (got {((string)summary!).Length}); put detail in body." : ".");
         if (body != null && Encoding.UTF8.GetByteCount(body) > BodyBytes) return "body must not exceed 32768 UTF-8 bytes.";
         return null;
     }

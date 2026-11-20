@@ -68,9 +68,12 @@ public sealed class DrawingQueryTools
     public DrawingQueryTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_get_drawing_info", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Inspect an already-loaded drawing without changing it. include=summary returns sheets, views, definitions and annotation counts; items returns bounded annotation locators. max_items (1..1000) and offset apply to each collection. Sheet coordinates and sizes are mm from the lower-left. Omit document/sheet for the active drawing/sheet. Inventor 2027 first; other hosts report UNSUPPORTED_HOST.")]
-    public Task<string> GetDrawingInfo(string? document = null, string? sheet = null, string include = "summary", int max_items = 200, int offset = 0, bool references = true, int? timeout_ms = null, CancellationToken ct = default)
-        => DrawingWire.Call(_client, "get_drawing_info", new { document, sheet, include, max_items, offset, references }, timeout_ms, ct);
+     Description("Inspect an already-loaded drawing without changing it. include=summary returns sheets, views, definitions and annotation counts; items returns bounded annotation locators. max_items (1..1000) and offset apply to each collection. For a compact answer pass sheet, references=false and styles=false (the reference and style lists are the largest part of a summary). Sketched content inside views and sheet sketches (sketched balloons, tags, text boxes) is not listed; read it with send_code Ipt.Texts(sheet). Sheet coordinates and sizes are mm from the lower-left. Omit document/sheet for the active drawing/sheet. Inventor 2027 first; other hosts report UNSUPPORTED_HOST.")]
+    public Task<string> GetDrawingInfo(string? document = null, string? sheet = null, string include = "summary", int max_items = 200, int offset = 0, bool references = true, bool styles = true, int? timeout_ms = null, CancellationToken ct = default)
+        // styles is sent only when false, so older add-ins (which reject unknown keys) keep working with the default.
+        => DrawingWire.Call(_client, "get_drawing_info", styles
+            ? new { document, sheet, include, max_items, offset, references }
+            : (object)new { document, sheet, include, max_items, offset, references, styles }, timeout_ms, ct);
 
     [McpServerTool(Name = "inventor_find_view_geometry", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Inspect geometry in one loaded drawing view (up to 50000 curves). Supply one model_point_mm [x,y,z], model_edge, region_mm={min,max}, or occurrence_path alone. occurrence_path can also narrow a model/region selector. Model points use the existing endpoint/mid/center intent resolver. kind=line|arc|circle|all; visible_only=true, tolerance_mm=0.5, max_items=100 (1..1000), offset=0. Return sheet-mm geometry, model references where available, geometry_id and view revision. Use both geometry_id+revision in dimension/leader/symbol intents. Every call reads fresh native geometry; cache_hit=false, refresh is accepted. No document/selection/UI changes. Inventor 2027.")]

@@ -36,4 +36,11 @@ public sealed class InventorCommandContext
     /// <c>health</c> use this to report <c>sta_busy</c> / <c>pending_commands</c>; null in tests.
     /// </summary>
     public StaQueueStats? StaQueue { get; init; }
+
+    /// <summary>
+    /// When the caller stops waiting for this command (UTC): request arrival + <c>timeout_ms</c>. <c>send_code</c>
+    /// stops its loops a little before it, so a long loop ends with a clear error instead of running on after TIMEOUT.
+    /// Null = no deadline.
+    /// </summary>
+    public System.DateTime? DeadlineUtc { get; init; }
 }
