@@ -11,7 +11,7 @@ public static class DrawingPhase2Input
         "add_drawing_symbol" => "document sheet timeout_ms name kind definition position_mm prompts rotation_deg scale view intent style layer",
         "edit_drawing_annotation" => "document sheet timeout_ms items rebuild",
         "delete_drawing_items" => "document sheet timeout_ms selector items dry_run",
-        "edit_drawing_table" => "document sheet timeout_ms name changes rebuild",
+        "edit_drawing_table" => "document sheet timeout_ms name locator changes rebuild",
         "set_drawing_styles" => "document sheet timeout_ms changes",
         "edit_sheet" => "document sheet timeout_ms changes contents",
         _ => null
@@ -57,6 +57,14 @@ public static class DrawingPhase2Input
             try { if (Convert.FromBase64String(key).Length == 0) throw new ArgumentException("Empty reference key."); }
             catch (FormatException) { throw new ArgumentException("Locator reference key must be base64."); }
         }
+    }
+    /// <summary>edit_drawing_table's table target: {kind:"table"} plus exactly one of its name / locator.</summary>
+    public static JObject TableTarget(JObject p)
+    {
+        var target = new JObject { ["kind"] = "table" };
+        foreach (var key in new[] { "name", "locator" }) if (DrawingInput.Present(p, key)) target[key] = p[key]!.DeepClone();
+        Target(target);
+        return target;
     }
     public static JArray Targets(JObject p, string key)
     {
@@ -125,7 +133,7 @@ public static class DrawingPhase2Input
                 else { if (DrawingInput.Present(p, "selector")) throw new ArgumentException("Execution requires exact items, not a selector."); var items = Targets(p, "items"); if (items.Count == 0) throw new ArgumentException("Execution requires at least one exact target."); foreach (JObject item in items) { Keys(item, "kind name locator"); DrawingInput.Choice(item, "kind", "view", "dimension", "balloon", "note", "symbol", "centermark", "table"); } }
                 break;
             case "edit_drawing_table":
-                DrawingInput.Required(p, "name"); var table = Object(p, "changes"); Keys(table, "cells insert_rows delete_rows column_widths_mm row_heights_mm title position_mm style header_height_mm");
+                TableTarget(p); var table = Object(p, "changes"); Keys(table, "cells insert_rows delete_rows column_widths_mm row_heights_mm title position_mm style header_height_mm");
                 DrawingInput.Any(table, "cells", "insert_rows", "delete_rows", "column_widths_mm", "row_heights_mm", "title", "position_mm", "style", "header_height_mm"); Name(table, "style");
                 if (DrawingInput.Present(table, "title") && table["title"]!.Type != JTokenType.String) throw new ArgumentException("title must be a string.");
                 if (DrawingInput.Present(table, "position_mm")) DrawingInput.Point(table["position_mm"], 2);

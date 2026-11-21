@@ -15,6 +15,7 @@ public sealed class DrawingPhase2LifecycleTests
     [InlineData("delete_drawing_items", "{document:'D',sheet:'S',selector:{kind:'all'}}")]
     [InlineData("delete_drawing_items", "{document:'D',sheet:'S',dry_run:false,items:[{kind:'view',name:'V'}]}")]
     [InlineData("edit_drawing_table", "{name:'T',changes:{insert_rows:[{index:1,rows:[['A','B']]}]}}")]
+    [InlineData("edit_drawing_table", "{locator:{document_id:'D',sheet_id:'S',kind:'table',reference_key:'AQ=='},changes:{title:'X'}}")]
     [InlineData("set_drawing_styles", "{changes:{text_styles:[{name:'T',bold:true}],layers:[{name:'L',color_rgb:[12,34,56]}],dimension_styles:[{name:'D',units:'inch',display_format:'fractional'}],object_defaults:[{kind:'general_note',style:'T'}]}}")]
     [InlineData("edit_sheet", "{document:'D',sheet:'S',changes:{delete:true},contents:[]}")]
     public void Supported_contracts_validate(string command, string input) => DrawingInput.Validate(command, DrawingInput.Normalize(command, JObject.Parse(input)));
@@ -36,6 +37,11 @@ public sealed class DrawingPhase2LifecycleTests
     [InlineData("delete_drawing_items", "{document:'D',sheet:'S',selector:{kind:'note',names:[null]}}")]
     [InlineData("delete_drawing_items", "{document:'D',sheet:'S',selector:{kind:'note',names:['N','N']}}")]
     [InlineData("delete_drawing_items", "{document:'D',sheet:'S',selector:{kind:'all',region_mm:{min:[0,0],max:[0,1]}}}")]
+    [InlineData("edit_drawing_table", "{changes:{title:'X'}}")]
+    [InlineData("edit_drawing_table", "{name:'T',locator:{document_id:'D',sheet_id:'S',kind:'table',reference_key:'AQ=='},changes:{title:'X'}}")]
+    [InlineData("edit_drawing_table", "{locator:{document_id:'D',sheet_id:'S',kind:'note',reference_key:'AQ=='},changes:{title:'X'}}")]
+    [InlineData("edit_drawing_table", "{locator:{document_id:'D',sheet_id:'S',kind:'table',reference_key:'bad'},changes:{title:'X'}}")]
+    [InlineData("edit_drawing_table", "{locator:'T',changes:{title:'X'}}")]
     [InlineData("edit_drawing_table", "{name:'T',changes:{header_height_mm:10}}")]
     [InlineData("edit_drawing_table", "{name:'T',changes:{delete_rows:[null]}}")]
     [InlineData("edit_drawing_table", "{name:'T',changes:{delete_rows:[1,1]}}")]
@@ -54,6 +60,24 @@ public sealed class DrawingPhase2LifecycleTests
     [InlineData("edit_sheet", "{sheet:'S',changes:{active:false}}")]
     [InlineData("edit_sheet", "{sheet:'S',changes:{delete:true},contents:[]}")]
     public void Ambiguous_or_unsupported_contracts_fail_before_host(string command, string input) => Assert.Throws<ArgumentException>(() => DrawingInput.Validate(command, DrawingInput.Normalize(command, JObject.Parse(input))));
+
+    [Theory]
+    [InlineData("{changes:{title:'X'}}")]
+    [InlineData("{name:'T',locator:{document_id:'D',sheet_id:'S',kind:'table',reference_key:'AQ=='},changes:{title:'X'}}")]
+    public void Edit_table_needs_exactly_one_name_or_locator(string input)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => DrawingInput.Validate("edit_drawing_table", DrawingInput.Normalize("edit_drawing_table", JObject.Parse(input))));
+        Assert.Equal("Specify exactly one name or locator.", ex.Message);
+    }
+
+    [Fact]
+    public void Edit_table_target_carries_the_locator_as_a_table_target()
+    {
+        var locator = JObject.Parse("{document_id:'D',sheet_id:'S',kind:'table',reference_key:'AQ=='}");
+        var target = DrawingPhase2Input.TableTarget(new JObject { ["locator"] = locator, ["changes"] = new JObject() });
+        Assert.True(JToken.DeepEquals(new JObject { ["kind"] = "table", ["locator"] = locator }, target));
+        Assert.True(JToken.DeepEquals(new JObject { ["kind"] = "table", ["name"] = "T" }, DrawingPhase2Input.TableTarget(new JObject { ["name"] = "T", ["locator"] = null })));
+    }
 
     [Fact]
     public void Document_selector_accepts_a_loaded_path_longer_than_an_item_name()

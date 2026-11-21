@@ -101,7 +101,7 @@ public sealed class DrawingTests : IDisposable
             "add_drawing_symbol" => tools.AddDrawingSymbol("Level", "symbol", definition: "Level", position_mm: [80, 80], timeout_ms: timeout),
             "edit_drawing_annotation" => tools.EditDrawingAnnotation([JsonDocument.Parse("{\"kind\":\"note\",\"name\":\"Note\",\"changes\":{\"text_override\":\"Updated\"}}").RootElement.Clone()], timeout_ms: timeout),
             "delete_drawing_items" => tools.DeleteDrawingItems("D.idw", "S", selector: JsonDocument.Parse("{\"kind\":\"all\"}").RootElement.Clone(), timeout_ms: timeout),
-            "edit_drawing_table" => tools.EditDrawingTable("Table", JsonDocument.Parse("{\"title\":\"Updated\"}").RootElement.Clone(), timeout_ms: timeout),
+            "edit_drawing_table" => tools.EditDrawingTable(JsonDocument.Parse("{\"title\":\"Updated\"}").RootElement.Clone(), name: "Table", timeout_ms: timeout),
             "set_drawing_styles" => tools.SetDrawingStyles(JsonDocument.Parse("{\"text_styles\":[{\"name\":\"Text\",\"bold\":true}]}").RootElement.Clone(), timeout_ms: timeout),
             "edit_sheet" => tools.EditSheet("S", JsonDocument.Parse("{\"active\":true}").RootElement.Clone(), timeout_ms: timeout),
             "capture_sheet" => tools.CaptureSheet("D.idw", "Sheet2", timeout_ms: timeout),
@@ -116,6 +116,27 @@ public sealed class DrawingTests : IDisposable
         Assert.Equal("inventor_" + command, (string?)envelope["tool"]?["name"]);
         Assert.Equal(command == "create_design_view" ? "assembly" : command == "get_drawing_info" || command == "find_view_geometry" ? "drawing_query" : "drawing", (string?)envelope["tool"]?["toolset"]);
         Assert.Equal(timeout, (int)envelope["tool"]!["timeout_ms"]!);
+    }
+    [Fact]
+    public async Task Edit_table_sends_locator_only_when_given()
+    {
+        var tools = new DrawingTools(_client); var changes = JsonDocument.Parse("{\"title\":\"Updated\"}").RootElement.Clone();
+        var locator = JsonDocument.Parse("{\"document_id\":\"D\",\"sheet_id\":\"S\",\"kind\":\"table\",\"reference_key\":\"AQ==\"}").RootElement.Clone();
+        async Task<JObject> Send(Func<Task<string>> call)
+        {
+            using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var receive = Receive(server, cancellation.Token); await call(); return (JObject)(await receive)["params"]!;
+        }
+        // name only: exactly today's keys, so older add-ins (which reject unknown keys) keep working
+        var byName = await Send(() => tools.EditDrawingTable(changes, name: "Table"));
+        Assert.Equal(new[] { "name", "changes", "document", "sheet", "rebuild" }, byName.Properties().Select(x => x.Name));
+        var byJsonNull = await Send(() => tools.EditDrawingTable(changes, name: "Table", locator: JsonDocument.Parse("null").RootElement.Clone()));
+        Assert.Null(byJsonNull.Property("locator"));
+        var byLocator = await Send(() => tools.EditDrawingTable(changes, locator: locator));
+        Assert.Equal("AQ==", (string?)byLocator["locator"]!["reference_key"]); Assert.Equal(JTokenType.Null, byLocator["name"]!.Type);
+        var p = typeof(DrawingTools).GetMethod(nameof(DrawingTools.EditDrawingTable))!.GetParameters();
+        Assert.True(p.Single(x => x.Name == "name").HasDefaultValue); Assert.True(p.Single(x => x.Name == "locator").HasDefaultValue);
     }
     private static async Task<JObject> Receive(NamedPipeServerStream server, CancellationToken ct)
     {

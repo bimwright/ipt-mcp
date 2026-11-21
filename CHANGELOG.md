@@ -27,6 +27,7 @@ All notable changes to this project are documented here. The format is based on
 - iLogic rule source is redacted like `send_code` bodies: journals and History record only its hash and length (unless body caching is opted in), and History disables re-run for redacted iLogic entries.
 - When restoring the sheet thickness fails, `set_sheet_fabrication_thickness` returns `rollback_failed` with an unknown mutation state, so `batch_execute` with `continue_on_error=true` stops instead of committing an uncertain step.
 - Sketch, feature and sheet fabrication tool errors forward the handler's response data, so restored/unknown mutation receipts from dimension, revolve, batch and thickness calls reach the client.
+- `inventor_edit_drawing_table` can edit tables made outside the typed tools: `name` also matches a table's title (case-insensitive) when no managed name does, and a new `locator` (from `inventor_get_drawing_info` `include=items`) replaces `name` for an untitled or same-titled table. `locator` is sent only when given, so name-only calls still work with older add-ins. Deleting and annotation edits still match only the exact managed name or a locator. A target that does not resolve lists the candidates on the sheet.
 
 ### Added
 

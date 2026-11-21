@@ -67,7 +67,7 @@ internal static partial class DrawingOperations
     }
     private static InventorCommandResult EditTable(InventorCommandContext ctx, DrawingDocument d, Sheet s, JObject p)
     {
-        var item = ResolveItem(d, s, Inventory(s), new JObject { ["kind"] = "table", ["name"] = p["name"]!.DeepClone() }); var original = (CustomTable)item.Entity;
+        var item = ResolveItem(d, s, Inventory(s), DrawingPhase2Input.TableTarget(p), matchTableTitle: true); var original = (CustomTable)item.Entity;
         if (original.TableSource != TableSourceTypeEnum.kNoTableSource) throw new NotSupportedException("Only unlinked custom tables can be edited; linked/BOM tables are unavailable.");
         var c = (JObject)p["changes"]!; var before = TableInfo(original);
         var expectedRows = DrawingTableEditPlan.Apply((JArray)before["rows"]!, original.Columns.Count, c);

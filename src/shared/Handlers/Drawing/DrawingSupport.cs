@@ -30,9 +30,8 @@ internal static class DrawingSupport
     {
         var name = (string?)p["sheet"];
         if (string.IsNullOrWhiteSpace(name)) return d.ActiveSheet;
-        var found = d.Sheets.Cast<Sheet>().Where(s => s.Name == name || Read(s.AttributeSets, "code") == name).ToArray();
-        if (found.Length != 1) throw new ArgumentException("Sheet must resolve uniquely: " + name);
-        return found[0];
+        var sheets = d.Sheets.Cast<Sheet>().ToArray();
+        return sheets[DrawingNameResolver.Sheet(sheets.Select(s => (s.Name, Read(s.AttributeSets, "code"))).ToArray(), name!)];
     }
     internal static DrawingView View(Sheet sheet, string? name)
     {
