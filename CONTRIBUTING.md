@@ -100,7 +100,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the conceptual model. Quick reference
   New public document paths require an explicit review of the script's allowlist.
 - One logical change per commit. Commit messages start with a short scope prefix
   (e.g. `handlers:`, `transport:`, `docs:`).
-- Open a PR against `main`. CI (server-only build + tests) must be green.
+- Open a PR against `master`. CI (server-only build + tests) must be green.
 - Include a "Tested with" line: which Inventor year(s) you smoke-tested, if any.
 
 ## Code of Conduct
