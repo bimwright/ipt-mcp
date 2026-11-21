@@ -14,7 +14,16 @@ public static class SendCodeHelperHints
     /// <summary>Descriptor capability: the add-in imports <c>Ipt</c>, guards loops and cleans returned numbers.</summary>
     public const string Capability = "script_helpers_v1";
 
+    /// <summary>
+    /// Descriptor capability of add-ins that also have <c>Ipt.Api</c>, <c>Ipt.Box(Point, Point)</c> and
+    /// <c>Bbox.ToArray()</c> / a <c>(double[])</c> cast of a <c>Bbox</c>. They report v1 as well; the gateway names these helpers only to a target that reports v2.
+    /// </summary>
+    public const string CapabilityV2 = "script_helpers_v2";
+
     internal const int MaxSuggestions = 3;
+
+    // JsonElement.GetProperty("x") is ordinary code, so only the calls that list members count as probing the API.
+    private static readonly Regex Reflection = new(@"\.Get(Properties|Methods|Members)\s*\(|\bSystem\.Reflection\b", RegexOptions.Compiled);
 
     private static readonly (Regex Pattern, string Use)[] Rules =
     {
@@ -39,10 +48,12 @@ public static class SendCodeHelperHints
     private static readonly Regex Rounding = new(@"\bMath\.Round\s*\(", RegexOptions.Compiled);
 
     /// <summary>Null when the script hand-writes none of the known lookups.</summary>
-    public static string? Match(string? code, bool rawNumbers = false)
+    public static string? Match(string? code, bool rawNumbers = false, bool v2 = false)
     {
         if (string.IsNullOrEmpty(code)) return null;
         var uses = new List<string>();
+        if (v2 && Reflection.IsMatch(code!))
+            uses.Add("Ipt.Api(\"TypeName\", \"filter\") lists a type's real members and signatures instead of reflection (which is blocked)");
         foreach (var (pattern, use) in Rules)
             if (pattern.IsMatch(code!)) uses.Add(use);
         if (!rawNumbers && Rounding.IsMatch(code!))

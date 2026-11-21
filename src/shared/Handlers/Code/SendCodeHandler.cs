@@ -123,6 +123,7 @@ public sealed class SendCodeHandler : IInventorCommand
         string? hostMessages = null;
         var hostWarnings = false;
         var skipped = Array.Empty<SkippedScriptReference>();
+        Script<object>? script = null;
 
         try
         {
@@ -152,7 +153,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 .WithEmitDebugInformation(true)
                 .WithFileEncoding(Encoding.UTF8);
 
-            var script = CSharpScript.Create(source, options, typeof(Globals), loader);
+            script = CSharpScript.Create(source, options, typeof(Globals), loader);
 
             if (compileOnly)
             {
@@ -165,7 +166,7 @@ public sealed class SendCodeHandler : IInventorCommand
                     ["compile_only"] = true,
                     ["modules"] = moduleEcho,
                 };
-                if (diags.Length > 0) AttachDiagnostics(data, diags);
+                if (diags.Length > 0) AttachDiagnostics(data, diags, script.GetCompilation());
                 else data["signatures"] = Signatures(modules);
                 AttachSkipped(data, skipped);
                 SendCodeTask.Apply(data, contract, completed: false, null);
@@ -241,7 +242,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["ok"] = false,
                 ["error"] = ErrorSanitizer.Sanitize(CompileErrorText(errors.Length > 0 ? errors : ex.Diagnostics.ToArray()) + SkippedNote(skipped))
             };
-            AttachDiagnostics(data, errors);
+            AttachDiagnostics(data, errors, script?.GetCompilation());
             ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
             SendCodeTask.Apply(data, contract, completed: false, null);
             Echo(data, moduleEcho, silent);
@@ -342,7 +343,7 @@ public sealed class SendCodeHandler : IInventorCommand
         => "compile error: " + string.Join("\n", diags.Take(MaxDiagnostics));
 
     /// <summary>Structured diagnostics with the #line-mapped source + line and a repair hint when one matches.</summary>
-    private static void AttachDiagnostics(JObject data, IReadOnlyList<Diagnostic> diags)
+    private static void AttachDiagnostics(JObject data, IReadOnlyList<Diagnostic> diags, Compilation? compilation)
     {
         var arr = new JArray();
         string? firstHint = null;
@@ -359,15 +360,48 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["code"] = d.Id,
                 ["message"] = message,
             };
-            if (rule != null)
+            var hint = ComputedHint(d, message, rule != null, compilation);
+            if (rule != null) hint = hint is null ? rule.Hint : hint + " " + rule.Hint;
+            if (hint != null)
             {
-                item["hint"] = rule.Hint;
-                firstHint ??= rule.Hint;
+                item["hint"] = hint;
+                firstHint ??= hint;
             }
             arr.Add(item);
         }
         data["diagnostics"] = arr;
         if (firstHint != null) data["hint"] = firstHint;
+    }
+
+    /// <summary>The Inventor interop types and the Ipt helpers, for hints computed from what the add-in actually loads.</summary>
+    internal static readonly Lazy<IReadOnlyList<Type>> ApiTypes = new(() =>
+        typeof(InvApi.Application).Assembly.GetExportedTypes().Where(t => t.Namespace == "Inventor")
+            .Concat(new[] { typeof(global::Bimwright.Ipt.Scripting.Ipt) })
+            .Concat(typeof(global::Bimwright.Ipt.Scripting.Ipt).GetNestedTypes().Where(t => t.IsPublic || t.IsNestedPublic))
+            .ToArray());
+
+    /// <summary>
+    /// A missing member lists the members that exist (and related types that have it); an argument/ref error shows the
+    /// called member's real signature. Advisory: a curated rule for a missing member wins, and any failure yields no hint.
+    /// </summary>
+    private static string? ComputedHint(Diagnostic d, string message, bool hasRule, Compilation? compilation)
+    {
+        try
+        {
+            switch (d.Id)
+            {
+                case "CS1061" or "CS0117":
+                    return hasRule ? null : ApiMemberHints.ForMissingMember(d.Id, message, ApiTypes.Value);
+                case "CS1620" or "CS1503" or "CS1615" or "CS1501" or "CS7036":
+                    return compilation is null ? null : ScriptSignatureHints.ForDiagnostic(d, compilation);
+                default:
+                    return null;
+            }
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void AttachRuntimeLocation(JObject data, Exception ex, IReadOnlyDictionary<string, string> parts)

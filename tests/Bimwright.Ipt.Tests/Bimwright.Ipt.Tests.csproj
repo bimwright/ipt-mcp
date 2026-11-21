@@ -63,6 +63,7 @@
     <Compile Include="..\..\src\shared\Handlers\Code\SendCodeTask.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Handlers\Code\IptGuard.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Handlers\Code\ScriptLoopGuard.cs" LinkBase="Shared\Handlers\Code" />
+    <Compile Include="..\..\src\shared\Handlers\Code\ScriptSignatureHints.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Handlers\Code\SendCodeHelpers.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Logging\*.cs" Exclude="..\..\src\shared\Logging\BoundedLogFile.cs" LinkBase="Shared\Logging" />
     <Compile Include="..\..\src\shared\Update\UpdateCheck.cs" Link="Shared\Update\UpdateCheck.cs" />
