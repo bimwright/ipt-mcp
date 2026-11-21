@@ -8,9 +8,16 @@ namespace Bimwright.Ipt.Scripting;
 
 public static partial class Ipt
 {
-    /// <summary>An axis-aligned box in mm (cleaned to 1e-6 mm). Serializes as plain numbers when returned.</summary>
+    /// <summary>
+    /// An axis-aligned box in mm (cleaned to 1e-6 mm). Serializes as an object (MinX..MaxZ, Min, Max, Center,
+    /// SizeX..SizeZ) when returned. Not enumerable: ToArray() or a (double[]) cast gives
+    /// [minX, minY, minZ, maxX, maxY, maxZ]; Min/Max are [x,y,z] arrays.
+    /// </summary>
     public sealed class Bbox
     {
+        public double[] ToArray() => new[] { MinX, MinY, MinZ, MaxX, MaxY, MaxZ };
+        public static explicit operator double[](Bbox box) => box.ToArray();
+
         public double MinX { get; internal set; }
         public double MinY { get; internal set; }
         public double MinZ { get; internal set; }

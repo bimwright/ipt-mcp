@@ -106,6 +106,15 @@ public static partial class Ipt
         .OrderBy(s => s, StringComparer.Ordinal)
         .ToArray();
 
+    /// <summary>
+    /// Real members of an Inventor API type (or an Ipt type) with signatures, read from the interop this add-in loaded;
+    /// an enum lists its values. <paramref name="filter"/> keeps the lines containing it (case-insensitive). Look a member
+    /// up here instead of guessing it: <c>return Ipt.Api("DrawingCurve", "color");</c>
+    /// </summary>
+    public static string[] Api(string type, string? filter = null) =>
+        global::Bimwright.Ipt.Shared.Contracts.ApiMemberHints.Describe(type, filter,
+            global::Bimwright.Ipt.Shared.Handlers.Code.SendCodeHandler.ApiTypes.Value);
+
     private static string Signature(MethodInfo m) =>
         $"{TypeName(m.ReturnType)} Ipt.{m.Name}{(m.IsGenericMethod ? "<" + string.Join(", ", m.GetGenericArguments().Select(a => a.Name)) + ">" : "")}(" +
         string.Join(", ", m.GetParameters().Select(p =>

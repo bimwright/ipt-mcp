@@ -109,7 +109,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _server = server;
         _descriptor = descriptor;
         _descriptor.SetupIdentity = setupIdentity;
-        _descriptor.Capabilities = new[] { DocumentTargetPolicy.Protocol, Bimwright.Ipt.Shared.Handlers.Code.SendCodeHelpers.Capability };
+        _descriptor.Capabilities = new[] { DocumentTargetPolicy.Protocol, Bimwright.Ipt.Shared.Handlers.Code.SendCodeHelpers.Capability, Bimwright.Ipt.Shared.Handlers.Code.SendCodeHelpers.CapabilityV2 };
         try { using var self = System.Diagnostics.Process.GetCurrentProcess(); _descriptor.ProcessStartUtc = self.StartTime.ToUniversalTime(); } catch { }
         server.Start((line, tcs) => HandleLine(line, dispatcher, options, descriptor, tcs, server.Stopping));
         if (server is TcpTransportServer tcp) descriptor.Port = tcp.Port;

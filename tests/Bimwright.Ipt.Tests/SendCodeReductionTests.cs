@@ -87,6 +87,10 @@ public sealed class SendCodeReductionTests
     [InlineData("CS0019", "Operator '*' cannot be applied to operands of type 'object' and 'int'", "object-operator")]
     [InlineData("CS0856", "Indexed property 'SurfaceBody.Volume' has non-optional arguments which must be provided", "indexed-property-needs-args")]
     [InlineData("CS1955", "Non-invocable member 'ComponentOccurrences.ItemByName[string]' cannot be used like a method.", "indexed-property-call")]
+    // With System.Linq imported, b.Max() on a non-enumerable type is CS1929 (best extension overload), not CS1955.
+    [InlineData("CS1929", "'Ipt.Bbox' does not contain a definition for 'Max' and the best extension method overload 'Enumerable.Max(IEnumerable<int>)' requires a receiver of type 'System.Collections.Generic.IEnumerable<int>'", "ipt-bbox-min-max")]
+    [InlineData("CS1929", "'Bimwright.Ipt.Scripting.Ipt.Bbox' does not contain a definition for 'Min' and the best extension method overload", "ipt-bbox-min-max")]
+    [InlineData("CS1955", "Non-invocable member 'Ipt.Bbox.MaxZ' cannot be used like a method.", "ipt-bbox-property-call")]
     [InlineData("CS1545", "Property, indexer, or event 'Parameter.Units' is not supported by the language; try directly calling accessor method", "accessor-method")]
     [InlineData("CS0117", "'HealthStatusEnum' does not contain a definition for 'kUpToDateHealthStatus'", "health-enum")]
     [InlineData("CS1061", "'Asset' does not contain a definition for 'CopyToDocument'", "asset-copyto")]

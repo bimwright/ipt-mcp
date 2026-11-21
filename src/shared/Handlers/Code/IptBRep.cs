@@ -17,6 +17,10 @@ public static partial class Ipt
         return Box(cornerA[0], cornerA[1], cornerA[2], cornerB[0], cornerB[1], cornerB[2]);
     }
 
+    /// <summary>A solid box between two Inventor points, for example from <see cref="Pt"/> (any two opposite corners).</summary>
+    public static SurfaceBody Box(Point cornerA, Point cornerB) =>
+        Box(cornerA.X * 10, cornerA.Y * 10, cornerA.Z * 10, cornerB.X * 10, cornerB.Y * 10, cornerB.Z * 10);
+
     /// <summary>A solid box between (x0,y0,z0) and (x1,y1,z1) mm.</summary>
     public static SurfaceBody Box(double x0, double y0, double z0, double x1, double y1, double z1)
     {

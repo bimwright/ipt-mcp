@@ -158,7 +158,7 @@ public sealed class CodeTools
     {
         var target = _client.CurrentTarget();
         if (target?.Capabilities?.Contains(SendCodeHelperHints.Capability, StringComparer.Ordinal) != true) return null;
-        return SendCodeHelperHints.Match(code, rawNumbers);
+        return SendCodeHelperHints.Match(code, rawNumbers, target.Capabilities.Contains(SendCodeHelperHints.CapabilityV2, StringComparer.Ordinal));
     }
 
     internal const int MaxDataBytes = 512 * 1024;
