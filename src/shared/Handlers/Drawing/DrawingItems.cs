@@ -80,7 +80,8 @@ internal static partial class DrawingOperations
         if (layout) { if (s.Border != null) items.Add(new DrawingItem(s.Border, "border")); if (s.TitleBlock != null) items.Add(new DrawingItem(s.TitleBlock, "title_block")); }
         return items.ToArray();
     }
-    private static DrawingItem ResolveItem(DrawingDocument d, Sheet s, DrawingItem[] inventory, JObject target)
+    /// <summary><paramref name="matchTableTitle"/>: edit_drawing_table only — an unmanaged table may be named by its title.</summary>
+    private static DrawingItem ResolveItem(DrawingDocument d, Sheet s, DrawingItem[] inventory, JObject target, bool matchTableTitle = false)
     {
         DrawingPhase2Input.Target(target);
         var candidates = inventory.Where(x => x.Kind == target.Value<string>("kind")).ToArray();
@@ -93,7 +94,12 @@ internal static partial class DrawingOperations
             catch (Exception ex) { throw new ArgumentException("Stale or invalid drawing locator: " + ex.Message); }
             candidates = candidates.Where(x => x.Entity.Equals(bound) && Convert.ToBase64String(x.ReferenceKey()) == locator.Value<string>("reference_key")).ToArray();
         }
-        else candidates = candidates.Where(x => x.Name == target.Value<string>("name")).ToArray();
+        else
+        {
+            var kind = target.Value<string>("kind")!;
+            Func<int, string?>? title = matchTableTitle && kind == "table" ? i => (candidates[i].Entity as CustomTable)?.Title : null;
+            return candidates[DrawingNameResolver.Item(candidates.Select(x => x.Name).ToArray(), kind, target.Value<string>("name")!, title)];
+        }
         if (candidates.Length != 1) throw new ArgumentException("Drawing target must resolve uniquely on the selected sheet.");
         return candidates[0];
     }

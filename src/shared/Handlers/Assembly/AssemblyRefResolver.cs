@@ -145,7 +145,7 @@ public static class AssemblyRefResolver
     // def is passed as object because Inventor interop does NOT model inheritance between
     // ComponentDefinition and Part/AssemblyComponentDefinition (assignment fails), yet COM QueryInterface
     // via `is` pattern-matching works — so we accept object and type-test.
-    private static object ResolveRef(object def, Inv.ComponentOccurrence? occ, string refName)
+    internal static object ResolveRef(object def, Inv.ComponentOccurrence? occ, string refName)
     {
         if (string.IsNullOrWhiteSpace(refName))
         {

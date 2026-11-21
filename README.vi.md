@@ -44,7 +44,7 @@ Sheet chi tiết lắp ráp và lắp đặt cơ khí này được dựng và h
 
 Hai tiến trình, một kênh local:
 
-- **`Bimwright.Ipt.Server.exe`** — MCP stdio server .NET 8, được Claude Code, Cursor, Cline, Codex hoặc MCP client stdio khác launch. Nó **không tham chiếu Inventor** và có thể build/test trên Windows khi chưa cài Inventor. Runtime của gateway cần Windows cho user identity và vòng đời setup; "server-only" nghĩa là không phụ thuộc Inventor SDK, không có nghĩa là runtime chạy được đa nền tảng.
+- **`Bimwright.Ipt.Server.exe`** — MCP stdio server .NET 10, được Claude Code, Cursor, Cline, Codex hoặc MCP client stdio khác launch. Nó **không tham chiếu Inventor** và có thể build/test trên Windows khi chưa cài Inventor. Runtime của gateway cần Windows cho user identity và vòng đời setup; "server-only" nghĩa là không phụ thuộc Inventor SDK, không có nghĩa là runtime chạy được đa nền tảng.
 - **`Bimwright.Ipt.Plugin.InvNN.dll`** — add-in `ApplicationAddInServer` load bên trong `Inventor.exe`, chạy listener TCP hoặc Named Pipe, và thực thi lệnh trên luồng UI (STA) chính của Inventor. Mỗi năm Inventor có một shell mỏng riêng, tất cả compile từ cùng source glob `src/shared/**`.
 
 Khác với Revit, Inventor **không có** thứ tương đương `ExternalEvent`. Add-in đẩy công việc lên luồng STA thông qua một WinForms control message-only ẩn (`InventorStaDispatcher`). Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết thiết kế đầy đủ.
@@ -104,10 +104,10 @@ Write chỉ chạy trên document đã xác nhận. Kiểm tra document đang ac
 
 ## Build & phát triển
 
-Binaries của Autodesk Inventor và Inventor SDK **không được phân phối lại** trong repo này (xem [Không phân phối lại](#không-phân-phối-lại)). Build và chạy **server và tests** cần Windows và .NET 8 SDK, không cần cài Inventor; build **add-in theo từng phiên bản** cần SDK tương ứng cùng với interop reference assembly của Inventor.
+Binaries của Autodesk Inventor và Inventor SDK **không được phân phối lại** trong repo này (xem [Không phân phối lại](#không-phân-phối-lại)). Build và chạy **server và tests** cần Windows và .NET 10 SDK, không cần cài Inventor; build **add-in theo từng phiên bản** cần SDK tương ứng cùng với interop reference assembly của Inventor.
 
 ```powershell
-# Server + tests on Windows (server-only; .NET 8 SDK, no Inventor installation required):
+# Server + tests on Windows (server-only; .NET 10 SDK, no Inventor installation required):
 dotnet build src/server -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 

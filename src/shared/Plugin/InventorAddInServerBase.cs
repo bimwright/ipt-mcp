@@ -109,7 +109,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _server = server;
         _descriptor = descriptor;
         _descriptor.SetupIdentity = setupIdentity;
-        _descriptor.Capabilities = new[] { DocumentTargetPolicy.Protocol };
+        _descriptor.Capabilities = new[] { DocumentTargetPolicy.Protocol, Bimwright.Ipt.Shared.Handlers.Code.SendCodeHelpers.Capability, Bimwright.Ipt.Shared.Handlers.Code.SendCodeHelpers.CapabilityV2 };
         try { using var self = System.Diagnostics.Process.GetCurrentProcess(); _descriptor.ProcessStartUtc = self.StartTime.ToUniversalTime(); } catch { }
         server.Start((line, tcs) => HandleLine(line, dispatcher, options, descriptor, tcs, server.Stopping));
         if (server is TcpTransportServer tcp) descriptor.Port = tcp.Port;
@@ -315,6 +315,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 Application = _app,
                 Commands = dispatcher.Commands,
                 StaQueue = _sta!.Stats,
+                DeadlineUtc = DateTime.UtcNow.AddMilliseconds(Math.Max(0, env.TimeoutMs - clock.ElapsedMilliseconds)),
             };
 
             // STA-independent commands (report_task_result) touch no Inventor API: dispatch them on
@@ -546,6 +547,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
             Application = _app,
             Commands = _dispatcher?.Commands,
             StaQueue = _sta?.Stats,
+            DeadlineUtc = DateTime.UtcNow.AddMilliseconds(env.TimeoutMs),
         };
         return await _sta!.InvokeAsync(() => _dispatcher!.Dispatch(ctx, env));
     }

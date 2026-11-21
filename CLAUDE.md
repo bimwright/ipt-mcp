@@ -7,12 +7,12 @@ Open-source (Apache-2.0) MCP gateway that lets Claude Code (and any MCP-capable 
 Full C# stack. No TypeScript. Single language, single build system. Multi-version: one in-process add-in per Inventor 2022-2027, all compiled from the same `src/shared/**` source glob.
 
 ```
-MCP client (Claude Code / Cursor / Cline / …) → stdio → C# MCP Server (.NET 8 console)
+MCP client (Claude Code / Cursor / Cline / …) → stdio → C# MCP Server (.NET 10 console)
    → TCP (2022-2024) or Named Pipe (2025-2027) → per-version Inventor add-in → Inventor API
 ```
 
 Two processes:
-- **Bimwright.Ipt.Server.exe** — MCP server, separate process, stdio transport (`ModelContextProtocol` 1.1.0). Has NO Inventor reference; it only compiles the API-agnostic contract files.
+- **Bimwright.Ipt.Server.exe** — MCP server, separate process, stdio transport (`ModelContextProtocol` NuGet). Has NO Inventor reference; it only compiles the API-agnostic contract files.
 - **Bimwright.Ipt.Plugin.InvNN.dll** — `ApplicationAddInServer` add-in, loads inside `Inventor.exe`, runs a TCP or Named-Pipe listener and marshals every command onto Inventor's STA thread.
 
 Communication: newline-delimited JSON (NDJSON). Per-version discovery files are written to `%LOCALAPPDATA%\Bimwright\ipt-mcp\inventor-<year>-<pid>.json`.
@@ -23,6 +23,7 @@ Discovery / target descriptor (`TargetDescriptor`):
   "target_id": "inventor-2025-12345",
   "inventor_year": 2025,
   "process_id": 12345,
+  "process_start_utc": "2026-05-29T11:40:00Z",
   "host_app": "Inventor",
   "transport": "pipe",
   "port": 0,
@@ -46,33 +47,41 @@ Save policy (`src/shared/Infrastructure/DocumentSavePolicy.cs`, host-free, rvt-m
 
 ```
 src/
-├── IptMcp.sln                 # Solution (server + tests; 6 add-ins added in Phase 2)
-├── server/                         # MCP server (console, net8.0). NO Inventor reference.
+├── IptMcp.sln                 # Solution (server, 6 add-ins, test projects)
+├── server/                         # MCP server (console, net10.0). NO Inventor reference.
 │   ├── Bimwright.Ipt.Server.csproj   # explicit-includes shared/Contracts + Security (+ ToolBaker)
 │   ├── Program.cs                  # boot + ResolveToolTypesForRegistration → WithTools(...)
 │   ├── InventorMcpConfig.cs        # CLI/env/JSON config (toolsets, read-only, send-code, …)
-│   ├── ToolsetFilter.cs            # KnownToolsets / DefaultOn / WriteCapable + Resolve()
+│   ├── ToolsetFilter.cs            # KnownToolsets + Resolve()
 │   ├── PluginClient.cs             # transport client (tcp+pipe)
 │   ├── TargetBinding.cs            # target selection: no fallback, AMBIGUOUS_TARGET / TARGET_LOST
-│   └── Tools/                      # [McpServerToolType] classes, one per domain
-│       ├── MetaTools.cs            # 3 server-side target tools (list/get/switch)
-│       ├── QueryTools.cs  DocumentTools.cs
+│   ├── Bake/  Handlers/            # server-side ToolBaker database and bake-suggestion handlers
+│   ├── Prompts/  Reports/          # MCP prompts; saved agent reports
+│   └── Tools/                      # [McpServerToolType] classes, one per toolset
+│       ├── MetaTools.cs  QueryTools.cs  DocumentTools.cs
 │       ├── ParameterTools.cs  PropertyTools.cs  SketchTools.cs  FeatureTools.cs
 │       ├── ExportTools.cs  CodeTools.cs  ToolBakerTools.cs  ToolBakerWriteTools.cs
+│       ├── AssemblyTools.cs  AssemblyQueryTools.cs  DrawingTools.cs
+│       └── SheetFabricationTools.cs  SheetFabricationQueryTools.cs  ILogicTools.cs  IPartTools.cs
 ├── shared/
 │   ├── Contracts/                  # API-AGNOSTIC — server explicit-includes; add-ins glob too
 │   │   ├── InventorCommandEnvelope.cs  InventorCommandResult.cs  InventorErrorCodes.cs
 │   │   ├── TargetDescriptor.cs  TargetRegistry.cs  ResponseSizeGuard.cs
 │   ├── Security/                   # ErrorSanitizer, SecretMasker
+│   ├── Setup/                      # RuntimeLayout: per-user data and log paths
+│   ├── Logging/                    # host-free call journal and session log
+│   ├── Localization/  Update/      # UI strings; update check
+│   ├── ToolBaker/                  # baked-tool compiler and runtime
 │   ├── Infrastructure/             # PLUGIN-ONLY glob: IInventorCommand, InventorCommandContext,
 │   │                               #   CommandDispatcher, IsExternalInit polyfill (net48)
 │   ├── Transport/                  # ITransportServer, TcpTransportServer, PipeTransportServer, AuthToken
 │   ├── Plugin/                     # InventorAddInServer, InventorStaDispatcher, registry, descriptor writer
-│   └── Handlers/                   # one file per wire command (Phase 2-3)
+│   ├── Views/                      # History window, toast, update notice
+│   └── Handlers/                   # one file per wire command
 ├── plugin-inv22/ inv23/ inv24/     # net48, TCP transport
 ├── plugin-inv25/ inv26/            # net8.0-windows7.0, Named Pipe
 └── plugin-inv27/                   # net10.0-windows7.0, Named Pipe
-tests/Bimwright.Ipt.Tests/     # net8.0, xUnit. Server-only — no Inventor needed.
+tests/Bimwright.Ipt.Tests/     # net10.0, xUnit. Server-only — no Inventor needed.
 ```
 
 The **server** compiles only `shared/Contracts/*` + `shared/Security/*` (and ToolBaker) explicitly, so it builds with no Inventor SDK present. Each **add-in** uses `<Compile Include="..\shared\**\*.cs" />` to pull in everything, including the API-touching `Infrastructure`/`Plugin`/`Handlers`.
@@ -89,7 +98,7 @@ Run `pwsh -NoProfile -File scripts/check-public-tree.ps1` before publishing chan
 ## Build & Test
 
 ```bash
-# Server + tests (server-only; no Inventor required, works on any machine with the .NET 8 SDK):
+# Server + tests (server-only; no Inventor required, works on any machine with the .NET 10 SDK):
 dotnet build src/IptMcp.sln -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 
@@ -153,13 +162,13 @@ Inventor has **no `ExternalEvent`** (unlike Revit). The add-in marshals every co
 - `ServerInstructions.Text` is keyword-dense (part/sketch/extrude/parameter/iproperty/export) so MCP Tool Search can discover the surface.
 
 ### Read-only and execution switches
-- `code` is on by default. `--disable-send-code` hides all four code tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` is the host kill switch. `--read-only` keeps only annotated read tools (39), with no script execution. Treat send_code as full local host trust.
-- `--read-only` removes every `WriteCapable` toolset (`document, parameters, properties, sketch, feature, export, assembly, code, toolbaker_write, drawing`) but keeps `meta` + `query` + `assembly_query` + `drawing_query` + read-only `toolbaker`, and DROPS `inventor_switch_target` (family contract FC-SRV-08: a read-only gateway uses `--target`, or the only live session). The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
+- `code` is on by default. `--disable-send-code` hides the code-execution tools; `BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1` is the host kill switch. `--read-only` keeps only annotated read tools, with no script execution. Treat send_code as full local host trust. Tool counts are not repeated here: the README quotes them.
+- `--read-only` registers only tools annotated `ReadOnly = true`, in every toolset (`Program.RegisterToolsets`), so write tools disappear tool by tool rather than by toolset. It also DROPS `inventor_switch_target` (family contract FC-SRV-08: a read-only gateway uses `--target`, or the only live session). The server also sends read-only state in each envelope; the add-in can be hard-locked with `BIMWRIGHT_INVENTOR_PLUGIN_READ_ONLY=1` / `BIMWRIGHT_INVENTOR_READ_ONLY=1`.
 - `CommandDispatcher` is the second line of defense: write command under read-only → `READ_ONLY`; `send_code` without the gate → `SEND_CODE_DISABLED`; unknown command → `INVALID_ARGUMENT`; oversized response → `RESPONSE_TOO_LARGE`; handler throw or handler-returned error → sanitized `API_ERROR`.
 
 ### Config precedence
 `InventorMcpConfig.Load(args)`: JSON file (`--config`) < environment (`BIMWRIGHT_INVENTOR_*`) < CLI flags. Descriptor dir defaults to `%LOCALAPPDATA%\Bimwright\ipt-mcp`.
-The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; default `%LOCALAPPDATA%\Bimwright\ipt-mcp-calls.jsonl`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
+The call journal path is **env-only**: `BIMWRIGHT_INVENTOR_CALL_LOG` (full file path; the default is `ipt-mcp-calls.jsonl` at the path `RuntimeLayout.GatewayLogPath` resolves, `src/shared/Setup/RuntimeLayout.cs`) — `ServerLogger` is static and initializes before config loads, so there is no CLI/JSON equivalent.
 
 Agent reports (family contract FC-RPT-04/05, `src/server/Reports/`): `inventor_report_task_result` shows the toast through the add-in and the server saves the report (`ReportStore`, one JSON file per report in `<data>\reports\`, newest 500 kept, a resent `task_id` replaces its report) with the write calls `ReportTracker` recorded since the last report; it saves even when the add-in is unreachable. `inventor_get_report_history` is read-only and server-only. `PluginClient.SendAsync` adds `_report` to successful model writes (classified by the tool's `ReadOnly` annotation; open/close/save/checkpoint commands, `export_*` and `send_code` compile_only excluded; `send_code` gets one conditional reminder).
 
@@ -178,6 +187,7 @@ Update notice (`src/shared/Update/UpdateCheck.cs` host-free + `Views/UpdateNotic
 - **Internal centimetres** — Inventor's API length unit is cm; convert at the handler boundary.
 - **Server has no Inventor reference** — keeps the gateway buildable / testable on any machine; the API-agnostic contract files are the only shared source the server compiles.
 - **Per-version unique ClientId GUID** on each `InventorAddInServer` (matches the `.addin`), so only the matching year loads.
-```
 
-Drawing Phase 1 adds 11 tools (99 all-enabled / 95 code-off / 20 read-only). The drawing implementation uses shared wire validation, registry/STA dispatch, persistent AttributeSets, atomic batches, per-call timeout, metadata catalog and truthful compact write responses. Inventor 2027 is the first host; older add-ins return UNSUPPORTED_HOST. See docs/testing/drawing-phase1.md for acceptance gaps and the disposable live fixture.
+## Drawing tools
+
+The drawing implementation uses shared wire validation, registry/STA dispatch, persistent AttributeSets, atomic batches, per-call timeout, metadata catalog and truthful compact write responses. Inventor 2027 is the first host; older add-ins return UNSUPPORTED_HOST. See docs/testing/drawing-phase1.md for acceptance gaps and the disposable live fixture.

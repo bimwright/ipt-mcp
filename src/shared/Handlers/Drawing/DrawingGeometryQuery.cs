@@ -112,7 +112,14 @@ internal static partial class DrawingGeometry
         if (!snapshot.Rows[index].Value<bool>("intent_supported")) throw new NotSupportedException("This curve has no resolvable model edge reference for an attached intent.");
         var curve = snapshot.Curves[index]; var pointIntent = locator.Value<string>("point_intent") ?? (curve.ProjectedCurveType == Curve2dTypeEnum.kCircleCurve2d ? "center" : "mid");
         var point = pointIntent switch { "start" => curve.StartPoint, "end" => curve.EndPoint, "center" => curve.CenterPoint, _ => curve.MidPoint };
-        if (point == null) throw new ArgumentException("Requested point intent is unavailable on this geometry; circular curves require center.");
+        if (point == null)
+        {
+            Point2d? Probe(Func<Point2d> get) { try { return get(); } catch { return null; } }
+            var available = new[] { ("start", Probe(() => curve.StartPoint)), ("end", Probe(() => curve.EndPoint)), ("center", Probe(() => curve.CenterPoint)), ("mid", Probe(() => curve.MidPoint)) }
+                .Where(x => x.Item2 != null).Select(x => x.Item1).ToArray();
+            throw new ArgumentException("point_intent '" + pointIntent + "' is unavailable on " + locator.Value<string>("geometry_id") + " (" + curve.ProjectedCurveType + "). Available: " +
+                (available.Length == 0 ? "none" : string.Join(", ", available)) + ".");
+        }
         var intent = pointIntent switch { "start" => PointIntentEnum.kStartPointIntent, "end" => PointIntentEnum.kEndPointIntent, "center" => PointIntentEnum.kCenterPointIntent, _ => PointIntentEnum.kMidPointIntent };
         return new DrawingIntent { Curve = curve, Point = point, Intent = sheet.CreateGeometryIntent(curve, intent), Locator = (JObject)locator.DeepClone() };
     }

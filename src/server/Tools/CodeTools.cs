@@ -44,7 +44,8 @@ public sealed class CodeTools
     }
 
     [McpServerTool(Name = "inventor_send_code"),
-     Description("Execute a C# script in-process within the Inventor add-in against Inventor.Application (global `app`) for workflows not covered by typed tools — prefer typed tools first. Enabled by default; --disable-send-code or the add-in kill switch disables it. Globals: app (Inventor.Application), doc (active Document, null when none is open). Pass a C# script body with statements and return, with optional class/helper declarations. Imports: System, System.Collections.Generic, System.Linq, Inventor. The active document is wrapped in one undoable transaction; runtime/host errors abort that transaction and host warnings are returned. Keep mutations within doc; document creation/closing, other documents and external file writes are outside that transaction and cannot be rolled back by it. Do not manage the wrapper transaction yourself.  Banned APIs (file/process/network/environment/dynamic-invocation) are rejected; typeof/GetType and fully-qualified System.IO.Path.{GetFileName,GetFileNameWithoutExtension,GetExtension,GetDirectoryName,Combine,ChangeExtension}(…) are allowed. File writes made through the Inventor API (SaveAs, SaveCopyAs, translators) are NOT restricted by the export-root policy. " +
+     Description("Before writing a script, reuse the Ipt.* helpers listed below (Ipt.Doc, Ipt.Occs, Ipt.BboxMm, Ipt.Sheet, Ipt.View, Ipt.Table, Ipt.Texts …; return Ipt.Help() lists every signature) instead of hand-written search loops; a response carries helper_hint when the script hand-writes one. " +
+                 "Execute a C# script in-process within the Inventor add-in against Inventor.Application (global `app`) for workflows not covered by typed tools — prefer typed tools first. Enabled by default; --disable-send-code or the add-in kill switch disables it. Globals: app (Inventor.Application), doc (active Document, null when none is open). Pass a C# script body with statements and return, with optional class/helper declarations. Imports: System, System.Collections.Generic, System.Linq, Inventor. The active document is wrapped in one undoable transaction; runtime/host errors abort that transaction and host warnings are returned. Keep mutations within doc; document creation/closing, other documents and external file writes are outside that transaction and cannot be rolled back by it. Do not manage the wrapper transaction yourself.  Banned APIs (file/process/network/environment/dynamic-invocation) are rejected; typeof/GetType and fully-qualified System.IO.Path.{GetFileName,GetFileNameWithoutExtension,GetExtension,GetDirectoryName,Combine,ChangeExtension}(…) are allowed. File writes made through the Inventor API (SaveAs, SaveCopyAs, translators) are NOT restricted by the export-root policy. " +
         "Some Inventor calls have killed the whole Inventor process (try/catch cannot help; unsaved edits are lost, the call returns HOST_CRASHED): " +
         "reading DrawingViewAnnotation.SecondFormattedText on a detail view (section views are fine), and " +
         "MeasureTools.GetMinimumDistance between a TransientBRep body and an occurrence body (copy both with TransientBRep.Copy first; " +
@@ -54,24 +55,27 @@ public sealed class CodeTools
                  "Errors carry diagnostics[{source: script|module:<name>, line, code, message, hint}] or, at runtime, location{source, line, text} + hint. " +
                  "result_contract=\"task_v1\" (default \"legacy\"): the script must return McpTaskResult.Pass(value) or McpTaskResult.Fail(code, message, details?) (imported automatically); the response carries _task{contract, status: passed|failed|not_reported, error{code, message}}, Fail sets ok=false, and no McpTaskResult fails with TASK_RESULT_REQUIRED. Fail does not undo edits the script already made. Use it when the script checks its own work. " +
                  SendCodeTaskGuide.Text +
+                 SendCodeHelperGuide.Text +
                  "COM interop tips: lengths are cm internally (mm/10); collections are 1-based and COM items come back as object — type the loop variable (foreach (Document d in app.Documents)) or cast; look up by name with the indexed property occs.ItemByName[\"Part:1\"] (brackets); indexed properties take brackets or get_X(): body.Volume[0.0001]; UnitVector↔Vector via AsVector()/AsUnitVector(); PartDocument→Document via (Document)(object)part; Matrix has no operators (PostMultiplyBy).")]
     public Task<string> SendCode(string code, string[]? modules = null, int? timeout_ms = null, bool silent = false,
         [Description("JSON input; the script sees it as the variable `data` (JToken).")] System.Text.Json.JsonElement? data = null,
         bool compile_only = false,
         [Description("\"legacy\" (default) or \"task_v1\": return McpTaskResult.Pass/Fail and read _task.")] string result_contract = "legacy",
         [Description("\"project\" for real project work, \"test\" when testing or developing ipt-mcp itself, \"unknown\" (default). Recorded in the call journal only; does not change how the script runs.")] string usage_context = "unknown",
+        [Description("true keeps returned doubles exactly as computed; default false cleans floating-point noise (12 significant digits, |x| < 1e-9 -> 0; response numbers: clean_v1).")] bool raw_numbers = false,
         CancellationToken ct = default)
         => result_contract is not ("legacy" or "task_v1")
             ? Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, "result_contract must be \"legacy\" or \"task_v1\""))
             : usage_context is not ("project" or "test" or "unknown")
             ? Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, "usage_context must be \"project\", \"test\" or \"unknown\""))
             : JsonArg.TryData(data, out var input, out var dataError)
-            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct, result_contract, usage_context)
+            ? SendCodeCore(code, modules, timeout_ms, silent, input, compile_only, observeBake: true, ct, result_contract, usage_context, raw_numbers)
             : Task.FromResult(ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, dataError!));
 
     /// <summary>send_code with a Newtonsoft data token; <paramref name="observeBake"/> is off when a baked script tool runs.</summary>
     internal async Task<string> SendCodeCore(string code, string[]? modules, int? timeout_ms, bool silent, JToken? input,
-        bool compile_only, bool observeBake, CancellationToken ct, string resultContract = "legacy", string usageContext = "unknown")
+        bool compile_only, bool observeBake, CancellationToken ct, string resultContract = "legacy", string usageContext = "unknown",
+        bool rawNumbers = false)
     {
         var p = new JObject { ["code"] = code };
         var log = new JObject { ["code"] = code };
@@ -94,6 +98,12 @@ public sealed class CodeTools
         {
             p["silent"] = true;
             log["silent"] = true;
+        }
+        if (rawNumbers)
+        {
+            // Only sent when set, so a default request keeps its wire shape for older add-ins.
+            p["raw_numbers"] = true;
+            log["raw_numbers"] = true;
         }
         if (compile_only)
         {
@@ -128,17 +138,27 @@ public sealed class CodeTools
         var response = await Call("send_code", p, ct, timeout_ms, log);
         var hint = SendCodeRouting.Match(code, modules is { Length: > 0 }, _routingTools);
         var sizeHint = SizeHint(code, input is not null, modules is { Length: > 0 });
+        var helperHint = HelperHint(code, rawNumbers);
         JObject? payload = null;
         try { payload = JToken.Parse(response) as JObject; } catch (Newtonsoft.Json.JsonException) { }
         // Baked script tools run as legacy send_code, so a task_v1 script is not observed for baking.
         var bakeHint = observeBake && !taskV1 && input is not null && !compile_only && _config is not null
             ? ScriptBake.Observe(_config, code, modules, input, payload?["ok"]?.Type == JTokenType.Boolean && (bool)payload["ok"]!, started.ElapsedMilliseconds)
             : null;
-        if ((hint is null && sizeHint is null && bakeHint is null) || payload is null) return response;
+        if ((hint is null && sizeHint is null && bakeHint is null && helperHint is null) || payload is null) return response;
         if (hint is not null) payload["routing_hint"] = hint;
         if (sizeHint is not null) payload["size_hint"] = sizeHint;
+        if (helperHint is not null) payload["helper_hint"] = helperHint;
         if (bakeHint is not null) payload["bake_hint"] = bakeHint;
         return ToolResponse.Serialize(payload);
+    }
+
+    /// <summary>Advisory only, and only when the target add-in has the Ipt.* helpers (script_helpers_v1).</summary>
+    private string? HelperHint(string? code, bool rawNumbers)
+    {
+        var target = _client.CurrentTarget();
+        if (target?.Capabilities?.Contains(SendCodeHelperHints.Capability, StringComparer.Ordinal) != true) return null;
+        return SendCodeHelperHints.Match(code, rawNumbers, target.Capabilities.Contains(SendCodeHelperHints.CapabilityV2, StringComparer.Ordinal));
     }
 
     internal const int MaxDataBytes = 512 * 1024;

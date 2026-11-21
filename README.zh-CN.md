@@ -44,7 +44,7 @@ Agent 通过 stdio 说 MCP。Server 通过一个本地、经过认证的 transpo
 
 两个进程，一条本地管道：
 
-- **`Bimwright.Ipt.Server.exe`** —— 一个 .NET 8 MCP stdio server，由 Claude Code、Cursor、Cline、Codex 或其他 stdio MCP client 启动。它**没有 Inventor 引用**，可以在未安装 Inventor 的 Windows 上 build 和测试。Gateway 运行时需要 Windows，用于用户身份和安装生命周期；“仅 server” 指的是不依赖 Inventor SDK，而不是支持跨平台运行。
+- **`Bimwright.Ipt.Server.exe`** —— 一个 .NET 10 MCP stdio server，由 Claude Code、Cursor、Cline、Codex 或其他 stdio MCP client 启动。它**没有 Inventor 引用**，可以在未安装 Inventor 的 Windows 上 build 和测试。Gateway 运行时需要 Windows，用于用户身份和安装生命周期；“仅 server” 指的是不依赖 Inventor SDK，而不是支持跨平台运行。
 - **`Bimwright.Ipt.Plugin.InvNN.dll`** —— 一个 `ApplicationAddInServer` add-in，加载在 `Inventor.exe` 内部，运行一个 TCP 或 Named-Pipe listener，并在 Inventor 主 UI（STA）thread 上执行命令。每个 Inventor 年份一个薄 shell，全部从同一份 `src/shared/**` source glob compile。
 
 与 Revit 不同，Inventor **没有 `ExternalEvent`** 等价物。Add-in 通过一个隐藏的、仅消息的 WinForms control（`InventorStaDispatcher`）把工作 marshals 到 STA thread 上。完整设计见 [ARCHITECTURE.md](ARCHITECTURE.md)。
@@ -104,10 +104,10 @@ Add-in 发现是自动的：每个运行中的 add-in 写入 `%LOCALAPPDATA%\Bim
 
 ## 构建与开发
 
-Autodesk Inventor 二进制文件和 Inventor SDK 在本仓库中**不重新分发**（见 [不重新分发](#不重新分发)）。Build 和运行 **server 与 tests** 需要 Windows 和 .NET 8 SDK，不需要安装 Inventor；build 一个**按版本的 add-in** 需要匹配的 SDK 加上 Inventor interop reference assembly。
+Autodesk Inventor 二进制文件和 Inventor SDK 在本仓库中**不重新分发**（见 [不重新分发](#不重新分发)）。Build 和运行 **server 与 tests** 需要 Windows 和 .NET 10 SDK，不需要安装 Inventor；build 一个**按版本的 add-in** 需要匹配的 SDK 加上 Inventor interop reference assembly。
 
 ```powershell
-# Server + tests on Windows (server-only; .NET 8 SDK, no Inventor installation required):
+# Server + tests on Windows (server-only; .NET 10 SDK, no Inventor installation required):
 dotnet build src/server -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 

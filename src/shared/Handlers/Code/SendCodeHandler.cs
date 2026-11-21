@@ -76,6 +76,7 @@ public sealed class SendCodeHandler : IInventorCommand
 
         var compileOnly = p["compile_only"]?.Type == JTokenType.Boolean && (bool)p["compile_only"]!;
         var silent = p["silent"]?.Type == JTokenType.Boolean && (bool)p["silent"]!;
+        var rawNumbers = p["raw_numbers"]?.Type == JTokenType.Boolean && (bool)p["raw_numbers"]!;
         var code = (string?)p["code"] ?? "";
         if (string.IsNullOrWhiteSpace(code) && !compileOnly)
             return InventorCommandResult.Fail(Guid.Empty, InventorErrorCodes.INVALID_ARGUMENT, "code parameter is required", meta);
@@ -108,7 +109,8 @@ public sealed class SendCodeHandler : IInventorCommand
             sourceParts = new List<SendCodeSource.Part> { new(DataSource, DataPrelude) };
             sourceParts.AddRange(modules);
         }
-        var source = SendCodeSource.Build(sourceParts, code);
+        // Every loop body starts with an IptGuard.Check (same line, so line numbers hold): loops stop at the time budget.
+        var source = ScriptLoopGuard.Instrument(SendCodeSource.Build(sourceParts, code));
 
         var originalOut = Console.Out;
         var captured = new StringWriter();
@@ -121,6 +123,7 @@ public sealed class SendCodeHandler : IInventorCommand
         string? hostMessages = null;
         var hostWarnings = false;
         var skipped = Array.Empty<SkippedScriptReference>();
+        Script<object>? script = null;
 
         try
         {
@@ -142,15 +145,15 @@ public sealed class SendCodeHandler : IInventorCommand
             }
 
             // Debug info makes runtime stack frames carry the #line source + line (S1.4).
-            var imports = new List<string> { "System", "System.Collections.Generic", "System.Linq", "Newtonsoft.Json.Linq", "Inventor" };
-            if (contract == SendCodeTask.TaskV1) imports.Add(SendCodeTask.ScriptNamespace);
+            // Bimwright.Ipt.Scripting brings the Ipt helpers and McpTaskResult into every script (script_helpers_v1).
+            var imports = new List<string> { "System", "System.Collections.Generic", "System.Linq", "Newtonsoft.Json.Linq", "Inventor", SendCodeTask.ScriptNamespace };
             var options = ScriptOptions.Default
                 .WithReferences(refs)
                 .WithImports(imports)
                 .WithEmitDebugInformation(true)
                 .WithFileEncoding(Encoding.UTF8);
 
-            var script = CSharpScript.Create(source, options, typeof(Globals), loader);
+            script = CSharpScript.Create(source, options, typeof(Globals), loader);
 
             if (compileOnly)
             {
@@ -163,7 +166,7 @@ public sealed class SendCodeHandler : IInventorCommand
                     ["compile_only"] = true,
                     ["modules"] = moduleEcho,
                 };
-                if (diags.Length > 0) AttachDiagnostics(data, diags);
+                if (diags.Length > 0) AttachDiagnostics(data, diags, script.GetCompilation());
                 else data["signatures"] = Signatures(modules);
                 AttachSkipped(data, skipped);
                 SendCodeTask.Apply(data, contract, completed: false, null);
@@ -187,7 +190,11 @@ public sealed class SendCodeHandler : IInventorCommand
             messages = app.ErrorManager.StartMessageSection();
             var document = app.ActiveDocument;
             if (document != null) transaction = app.TransactionManager.StartTransaction(document, "MCP: send_code");
+            global::Bimwright.Ipt.Scripting.Ipt.App = app;
+            global::Bimwright.Ipt.Scripting.IptGuard.Begin(SendCodeHelpers.BudgetMs(ctx.DeadlineUtc, DateTime.UtcNow));
             var state = script.RunAsync(globals: new Globals { app = app, doc = document, __data_json = dataJson }).GetAwaiter().GetResult();
+            // A script that caught the guard's stop still ran out of time: roll back and report it like an uncaught stop.
+            global::Bimwright.Ipt.Scripting.IptGuard.ThrowIfTripped();
             hostWarnings = messages.HasWarnings;
             if (hostWarnings || messages.HasErrors) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages);
             if (messages.HasErrors)
@@ -212,6 +219,8 @@ public sealed class SendCodeHandler : IInventorCommand
                 var token = ScriptResultToken.ToResultToken(returnValue, out var resultError);
                 if (resultError is null)
                 {
+                    if (!rawNumbers) token = ScriptNumbers.Clean(token);
+                    ok["numbers"] = rawNumbers ? "raw" : ScriptNumbers.Mode;
                     ResponseSpillWriter.AttachResult("send_code", ok, token, ResponseSpillWriterFactory.ForContext(ctx));
                 }
                 else
@@ -233,7 +242,7 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["ok"] = false,
                 ["error"] = ErrorSanitizer.Sanitize(CompileErrorText(errors.Length > 0 ? errors : ex.Diagnostics.ToArray()) + SkippedNote(skipped))
             };
-            AttachDiagnostics(data, errors);
+            AttachDiagnostics(data, errors, script?.GetCompilation());
             ResponseSpillWriter.AttachStdout("send_code", data, captured.ToString(), ResponseSpillWriterFactory.ForContext(ctx));
             SendCodeTask.Apply(data, contract, completed: false, null);
             Echo(data, moduleEcho, silent);
@@ -248,7 +257,8 @@ public sealed class SendCodeHandler : IInventorCommand
                 try { transaction.Abort(); rolledBack = true; } catch { }
                 transaction = null;
             }
-            var inner = ex.GetBaseException();
+            // Once the guard stopped the run, report that stop even when the script swallowed it and failed otherwise.
+            var inner = (Exception?)global::Bimwright.Ipt.Scripting.IptGuard.Tripped ?? ex.GetBaseException();
             var text = $"{inner.GetType().Name}: {inner.Message}";
             var data = new JObject
             {
@@ -268,6 +278,8 @@ public sealed class SendCodeHandler : IInventorCommand
         }
         finally
         {
+            global::Bimwright.Ipt.Scripting.IptGuard.End();
+            global::Bimwright.Ipt.Scripting.Ipt.Detach();
             try { transaction?.Abort(); } catch { }
             try { messages?.ClearMessages(); } catch { }
             if (silentApplied)
@@ -331,7 +343,7 @@ public sealed class SendCodeHandler : IInventorCommand
         => "compile error: " + string.Join("\n", diags.Take(MaxDiagnostics));
 
     /// <summary>Structured diagnostics with the #line-mapped source + line and a repair hint when one matches.</summary>
-    private static void AttachDiagnostics(JObject data, IReadOnlyList<Diagnostic> diags)
+    private static void AttachDiagnostics(JObject data, IReadOnlyList<Diagnostic> diags, Compilation? compilation)
     {
         var arr = new JArray();
         string? firstHint = null;
@@ -348,15 +360,48 @@ public sealed class SendCodeHandler : IInventorCommand
                 ["code"] = d.Id,
                 ["message"] = message,
             };
-            if (rule != null)
+            var hint = ComputedHint(d, message, rule != null, compilation);
+            if (rule != null) hint = hint is null ? rule.Hint : hint + " " + rule.Hint;
+            if (hint != null)
             {
-                item["hint"] = rule.Hint;
-                firstHint ??= rule.Hint;
+                item["hint"] = hint;
+                firstHint ??= hint;
             }
             arr.Add(item);
         }
         data["diagnostics"] = arr;
         if (firstHint != null) data["hint"] = firstHint;
+    }
+
+    /// <summary>The Inventor interop types and the Ipt helpers, for hints computed from what the add-in actually loads.</summary>
+    internal static readonly Lazy<IReadOnlyList<Type>> ApiTypes = new(() =>
+        typeof(InvApi.Application).Assembly.GetExportedTypes().Where(t => t.Namespace == "Inventor")
+            .Concat(new[] { typeof(global::Bimwright.Ipt.Scripting.Ipt) })
+            .Concat(typeof(global::Bimwright.Ipt.Scripting.Ipt).GetNestedTypes().Where(t => t.IsPublic || t.IsNestedPublic))
+            .ToArray());
+
+    /// <summary>
+    /// A missing member lists the members that exist (and related types that have it); an argument/ref error shows the
+    /// called member's real signature. Advisory: a curated rule for a missing member wins, and any failure yields no hint.
+    /// </summary>
+    private static string? ComputedHint(Diagnostic d, string message, bool hasRule, Compilation? compilation)
+    {
+        try
+        {
+            switch (d.Id)
+            {
+                case "CS1061" or "CS0117":
+                    return hasRule ? null : ApiMemberHints.ForMissingMember(d.Id, message, ApiTypes.Value);
+                case "CS1620" or "CS1503" or "CS1615" or "CS1501" or "CS7036":
+                    return compilation is null ? null : ScriptSignatureHints.ForDiagnostic(d, compilation);
+                default:
+                    return null;
+            }
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void AttachRuntimeLocation(JObject data, Exception ex, IReadOnlyDictionary<string, string> parts)

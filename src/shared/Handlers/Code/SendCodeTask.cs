@@ -46,7 +46,7 @@ public static class SendCodeTask
     {
         if (contract != TaskV1)
         {
-            if (completed) AttachLegacyHint(data);
+            if (completed) AttachLegacyHint(data, returned);
             return;
         }
 
@@ -83,8 +83,14 @@ public static class SendCodeTask
         if (!hadError) data["error"] = code + ": " + message;
     }
 
-    private static void AttachLegacyHint(JObject data)
+    private static void AttachLegacyHint(JObject data, object? returned)
     {
+        if (returned is McpTaskResult)
+        {
+            data["task_contract_hint"] = "The script returned McpTaskResult without result_contract=\"task_v1\", so it was not read as a task result. " +
+                "Pass result_contract=\"task_v1\" to get _task and ok=false on Fail.";
+            return;
+        }
         if (data["result"] is not JObject value) return;
         foreach (var name in new[] { "passed", "ok", "success" })
         {

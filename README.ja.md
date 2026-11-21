@@ -44,7 +44,7 @@
 
 2 つのプロセス、1 つのローカルパイプ:
 
-- **`Bimwright.Ipt.Server.exe`** — Claude Code、Cursor、Cline、Codex、または他の stdio MCP クライアントによって起動される .NET 8 MCP stdio サーバーです。**Inventor への参照は一切持たず**、Inventor がインストールされていない Windows 上でビルド・テストできます。ゲートウェイの実行には、ユーザー ID とセットアップのライフサイクルのために Windows が必要です。「サーバーのみ」は Inventor SDK に依存しないことを指し、クロスプラットフォームでの実行に対応するという意味ではありません。
+- **`Bimwright.Ipt.Server.exe`** — Claude Code、Cursor、Cline、Codex、または他の stdio MCP クライアントによって起動される .NET 10 MCP stdio サーバーです。**Inventor への参照は一切持たず**、Inventor がインストールされていない Windows 上でビルド・テストできます。ゲートウェイの実行には、ユーザー ID とセットアップのライフサイクルのために Windows が必要です。「サーバーのみ」は Inventor SDK に依存しないことを指し、クロスプラットフォームでの実行に対応するという意味ではありません。
 - **`Bimwright.Ipt.Plugin.InvNN.dll`** — `Inventor.exe` 内部にロードされる `ApplicationAddInServer` アドインで、TCP または Named Pipe のリスナーを実行し、Inventor のメイン UI（STA）スレッド上でコマンドを実行します。Inventor のバージョンごとに 1 つの薄いシェルを持ち、すべて同じ `src/shared/**` のソースグロブからコンパイルされます。
 
 Revit とは異なり、Inventor には **`ExternalEvent` に相当する機能がありません**。アドインは隠しメッセージオンリーの WinForms コントロール（`InventorStaDispatcher`）を介して STA スレッドに処理をマーシャリングします。詳細な設計は [ARCHITECTURE.md](ARCHITECTURE.md) を参照してください。
@@ -104,10 +104,10 @@ powershell -ExecutionPolicy Bypass -File "$dir\install.ps1"
 
 ## ビルドと開発
 
-Autodesk Inventor のバイナリおよび Inventor SDK は、このリポジトリには**再配布されていません**（[再配布しないもの](#再配布しないもの) を参照）。**サーバーとテスト**のビルドと実行には Windows と .NET 8 SDK が必要で、Inventor のインストールは不要です。**バージョン別アドイン**のビルドには、対応する SDK に加えて Inventor の相互運用参照アセンブリが必要です。
+Autodesk Inventor のバイナリおよび Inventor SDK は、このリポジトリには**再配布されていません**（[再配布しないもの](#再配布しないもの) を参照）。**サーバーとテスト**のビルドと実行には Windows と .NET 10 SDK が必要で、Inventor のインストールは不要です。**バージョン別アドイン**のビルドには、対応する SDK に加えて Inventor の相互運用参照アセンブリが必要です。
 
 ```powershell
-# Server + tests on Windows (server-only; .NET 8 SDK, no Inventor installation required):
+# Server + tests on Windows (server-only; .NET 10 SDK, no Inventor installation required):
 dotnet build src/server -c Debug
 dotnet test  tests/Bimwright.Ipt.Tests -c Debug
 

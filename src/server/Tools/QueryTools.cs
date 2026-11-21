@@ -57,7 +57,10 @@ public sealed class QueryTools
                  "Call once after verifying the whole requested job, when it changed a model or found something the user should check; never after each tool, merely because tools went idle, or for a chat-only answer. Responses of model writes carry _report until you do. " +
                  "task_id must be unique per agent/job (1-80 chars; resending it from this session replaces that report); outcome is completed, failed or cancelled; summary is a truthful single-line result (1-120 chars); body is optional Markdown detail, max 32 KiB UTF-8. " +
                  "The report records the write tools this session ran since the last report. Saved even when Inventor is not reachable (toast_shown=false). Agent-reported, not independently verified. Does not change the model.")]
-    public async Task<string> ReportTaskResult(string task_id, string outcome, string summary,
+    public async Task<string> ReportTaskResult(
+        [Description("Unique per agent/job, single line, 1-80 characters.")] string task_id,
+        [Description("completed, failed or cancelled.")] string outcome,
+        [Description("One truthful line, at most 120 characters; details go in body.")] string summary,
         [Description("Optional Markdown detail (what changed, what to check), max 32 KiB UTF-8.")] string? body = null,
         CancellationToken ct = default)
     {

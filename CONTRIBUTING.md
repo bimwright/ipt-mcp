@@ -8,11 +8,10 @@ Autodesk Inventor 2022–2027. Open an issue before a large PR so we can agree o
 ### Prereqs
 
 - Windows 10/11 (Autodesk Inventor is Windows-only).
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — required for the server, tests,
-  and the 2025/2026 add-ins.
 - .NET Framework 4.8 Developer Pack — required to compile the `net48` add-ins (2022–2024).
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — required to compile the 2027
-  add-in (`net10.0-windows7.0`), even for a shape-only check.
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — required for the server, tests and
+  every modern add-in: the 2025/2026 add-ins (`net8.0-windows7.0`) and the 2027 add-in
+  (`net10.0-windows7.0`). The .NET 8 runtime is needed only to run the net8 toast host tests.
 - Visual Studio 2022+ or JetBrains Rider.
 - One or more Autodesk Inventor installations (2022–2027) for add-in compile and runtime testing.
 
@@ -65,7 +64,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the conceptual model. Quick reference
 | `src/shared/ToolBaker/` | Roslyn-based self-evolution engine + safety policy |
 | `src/plugin-inv22..24/` | net48 add-in shells (TCP transport) |
 | `src/plugin-inv25..27/` | net8 / net10 add-in shells (Named Pipe transport) |
-| `tests/Bimwright.Ipt.Tests/` | xUnit tests (pure .NET 8, no Inventor API) |
+| `tests/Bimwright.Ipt.Tests/` | xUnit tests (pure .NET 10, no Inventor API) |
 
 ## Adding a new MCP tool
 
