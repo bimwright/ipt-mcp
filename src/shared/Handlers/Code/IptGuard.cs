@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 
 namespace Bimwright.Ipt.Scripting;
 
@@ -11,19 +12,46 @@ namespace Bimwright.Ipt.Scripting;
 public static class IptGuard
 {
     [ThreadStatic] private static long _deadline;   // Stopwatch timestamp; 0 = no budget
+    [ThreadStatic] private static IptTimeoutException? _tripped;
 
     /// <summary>Starts a budget of <paramref name="budgetMs"/> for scripts run on this thread (≤ 0 = none).</summary>
-    public static void Begin(long budgetMs) =>
+    public static void Begin(long budgetMs)
+    {
         _deadline = budgetMs > 0 ? Stopwatch.GetTimestamp() + budgetMs * Stopwatch.Frequency / 1000 : 0;
+        _tripped = null;
+    }
 
-    public static void End() => _deadline = 0;
+    public static void End()
+    {
+        _deadline = 0;
+        _tripped = null;
+    }
 
-    /// <summary>Throws <see cref="IptTimeoutException"/> when the budget is spent. Cheap enough for every loop iteration.</summary>
+    /// <summary>
+    /// The first stop of this run, kept even when the script caught it: the add-in then still rolls back and reports
+    /// the timeout. Read it before <see cref="End"/>.
+    /// </summary>
+    public static IptTimeoutException? Tripped => _tripped;
+
+    /// <summary>Rethrows <see cref="Tripped"/> with its original stack trace (so the script location survives).</summary>
+    public static void ThrowIfTripped()
+    {
+        if (_tripped is { } tripped) ExceptionDispatchInfo.Capture(tripped).Throw();
+    }
+
+    /// <summary>
+    /// Throws <see cref="IptTimeoutException"/> when the budget is spent. Cheap enough for every loop iteration. The
+    /// deadline stays passed, so every later check of the run throws again.
+    /// </summary>
     public static void Check(string source, int line)
     {
         var deadline = _deadline;
         if (deadline != 0 && Stopwatch.GetTimestamp() > deadline)
-            throw new IptTimeoutException(source, line);
+        {
+            var stop = new IptTimeoutException(source, line);
+            _tripped ??= stop;
+            throw stop;
+        }
     }
 }
 

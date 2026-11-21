@@ -116,6 +116,52 @@ public sealed class SendCodeHelpersTests : IDisposable
     }
 
     [Fact]
+    public void A_stop_the_script_catches_is_still_recorded_and_rethrown_for_the_handler()
+    {
+        const string code =
+            "public static class Swallow\n" +
+            "{\n" +
+            "    public static string Run()\n" +
+            "    {\n" +
+            "        try\n" +
+            "        {\n" +
+            "            var n = 0;\n" +
+            "            while (true) n++;\n" +
+            "        }\n" +
+            "        catch (System.Exception ex) { return \"caught: \" + ex.Message; }\n" +
+            "    }\n" +
+            "}";
+        var run = Load(ScriptLoopGuard.Instrument(code)).GetType("Swallow")!.GetMethod("Run")!;
+        IptGuard.Begin(100);
+        try
+        {
+            Assert.Null(IptGuard.Tripped);
+            var returned = (string)run.Invoke(null, null)!;
+            Assert.StartsWith("caught: script stopped", returned);
+
+            var tripped = IptGuard.Tripped;
+            Assert.NotNull(tripped);
+            Assert.Equal("script", tripped!.Source);
+            Assert.Equal(8, tripped.Line);
+            // The deadline stays passed: any later check in the same run stops again.
+            Assert.Throws<IptTimeoutException>(() => IptGuard.Check("script", 99));
+            Assert.Same(tripped, IptGuard.Tripped);
+
+            // The handler rethrows the recorded stop; its stack trace still names the script frame.
+            var rethrown = Assert.Throws<IptTimeoutException>(IptGuard.ThrowIfTripped);
+            Assert.Same(tripped, rethrown);
+            Assert.Contains("Swallow.Run", rethrown.StackTrace);
+        }
+        finally { IptGuard.End(); }
+        Assert.Null(IptGuard.Tripped);
+        IptGuard.ThrowIfTripped();
+
+        IptGuard.Begin(60000);
+        Assert.Null(IptGuard.Tripped);
+        IptGuard.End();
+    }
+
+    [Fact]
     public void Without_a_budget_the_guard_never_stops_a_loop()
     {
         IptGuard.End();

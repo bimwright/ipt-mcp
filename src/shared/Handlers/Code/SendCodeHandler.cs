@@ -192,6 +192,8 @@ public sealed class SendCodeHandler : IInventorCommand
             global::Bimwright.Ipt.Scripting.Ipt.App = app;
             global::Bimwright.Ipt.Scripting.IptGuard.Begin(SendCodeHelpers.BudgetMs(ctx.DeadlineUtc, DateTime.UtcNow));
             var state = script.RunAsync(globals: new Globals { app = app, doc = document, __data_json = dataJson }).GetAwaiter().GetResult();
+            // A script that caught the guard's stop still ran out of time: roll back and report it like an uncaught stop.
+            global::Bimwright.Ipt.Scripting.IptGuard.ThrowIfTripped();
             hostWarnings = messages.HasWarnings;
             if (hostWarnings || messages.HasErrors) hostMessages = SecretMasker.Mask(app.ErrorManager.AllMessages);
             if (messages.HasErrors)
@@ -254,7 +256,8 @@ public sealed class SendCodeHandler : IInventorCommand
                 try { transaction.Abort(); rolledBack = true; } catch { }
                 transaction = null;
             }
-            var inner = ex.GetBaseException();
+            // Once the guard stopped the run, report that stop even when the script swallowed it and failed otherwise.
+            var inner = (Exception?)global::Bimwright.Ipt.Scripting.IptGuard.Tripped ?? ex.GetBaseException();
             var text = $"{inner.GetType().Name}: {inner.Message}";
             var data = new JObject
             {
