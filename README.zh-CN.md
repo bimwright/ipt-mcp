@@ -543,7 +543,7 @@ Inventor 和 Autodesk 是 Autodesk, Inc. 的注册商标。bimwright 是一个�
 ```
 <!-- END GENERATED READONLY -->
 
-### 运行时设置 (v0.2.1)
+### 运行时设置 (v2.5.1)
 
 | 设置 | 默认值 | CLI / JSON |
 |---|---|---|
