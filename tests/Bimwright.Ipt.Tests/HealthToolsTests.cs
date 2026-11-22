@@ -148,6 +148,9 @@ public sealed class HealthToolsTests : IDisposable
     [Fact]
     public async Task Release_check_compares_the_replying_plugin_not_the_installed_file_or_gateway_version()
     {
+        // The published release must be newer than this server whatever its version, so both components are older.
+        var server = Version.Parse(Program.ServerVersion.Split('+')[0]);
+        _http.Body = $$"""{"tag_name":"v{{server.Major + 1}}.0.0","draft":false,"prerelease":false}""";
         var result = await Probe(new JObject { ["sta_busy"] = false, ["setup_plugin"] = Identity("0.1.0+" + new string('b', 40)) }, checkUpdates: true);
         Assert.Equal(2, _http.Calls);
         Assert.Equal("0.1.0", (string?)result["update"]?["components"]?["plugin"]?["current_version"]);
