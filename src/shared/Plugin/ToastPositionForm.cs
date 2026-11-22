@@ -2,16 +2,18 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using Bimwright.Ipt.Shared.Localization;
 using Bimwright.Ipt.Shared.Views.Toast;
 
 namespace Bimwright.Ipt.Shared.Plugin;
 
-/// <summary>Status and toast preferences. Position applies immediately; duration needs Apply.</summary>
+/// <summary>Status and toast preferences. Position and pause apply immediately; duration needs Apply.</summary>
 internal sealed class ToastPositionForm : Form
 {
     public ToastPositionForm(string status, Func<ToastPositionOptions>? read,
         Func<ToastPositionOptions, bool>? save, Func<int>? readIdleSeconds = null,
-        Func<int, bool>? saveIdleSeconds = null)
+        Func<int, bool>? saveIdleSeconds = null, Func<bool>? readToastEnabled = null,
+        Func<bool>? readPaused = null, Func<bool, bool>? setPaused = null)
     {
         Text = "Bimwright Inventor MCP";
         Size = new Size(540, 500);
@@ -72,6 +74,67 @@ internal sealed class ToastPositionForm : Form
         panel.Controls.Add(new Label { Text = "After Apply, the next result or pointer leave uses this duration.", AutoSize = true, MaximumSize = new Size(475, 0) });
         panel.Controls.Add(applyIdle);
         panel.Controls.Add(idleError);
+
+        var snooze = new CheckBox
+        {
+            Name = "PauseToastsForToday",
+            Text = L.T("settings.toast.snooze"),
+            AutoSize = true,
+            Margin = new Padding(3, 16, 3, 2),
+            Enabled = readToastEnabled?.Invoke() ?? true,
+            Checked = readPaused?.Invoke() ?? false,
+        };
+        var snoozeHelp = new Label
+        {
+            Name = "ToastSnoozeHelp",
+            Text = L.T("settings.toast.snooze.help"),
+            AutoSize = true,
+            MaximumSize = new Size(475, 0),
+        };
+        var snoozeError = new Label
+        {
+            Name = "ToastSnoozeError",
+            AutoSize = true,
+            MaximumSize = new Size(475, 0),
+            ForeColor = Color.Firebrick,
+        };
+        var syncingSnooze = false;
+        void SyncSnooze()
+        {
+            syncingSnooze = true;
+            try
+            {
+                snooze.Enabled = readToastEnabled?.Invoke() ?? true;
+                var paused = readPaused?.Invoke() ?? false;
+                if (snooze.Checked != paused) snooze.Checked = paused;
+            }
+            finally { syncingSnooze = false; }
+        }
+        snooze.CheckedChanged += (_, _) =>
+        {
+            if (syncingSnooze) return;
+            var saved = setPaused?.Invoke(snooze.Checked) ?? false;
+            snoozeError.Text = saved ? "" : L.T("toast.status.saveFailed");
+            SyncSnooze();
+        };
+        Action onSnoozeChanged = () =>
+        {
+            if (IsDisposed || Disposing) return;
+            if (InvokeRequired)
+            {
+                if (!IsHandleCreated) return;
+                try { BeginInvoke(new Action(() => { if (!IsDisposed && !Disposing) SyncSnooze(); })); }
+                catch { }
+            }
+            else SyncSnooze();
+        };
+        ToastSnooze.Changed += onSnoozeChanged;
+        Shown += (_, _) => SyncSnooze();
+        FormClosed += (_, _) => ToastSnooze.Changed -= onSnoozeChanged;
+        panel.Controls.Add(snooze);
+        panel.Controls.Add(snoozeHelp);
+        panel.Controls.Add(snoozeError);
+
         FormClosing += (_, e) =>
         {
             if ((int)idle.SelectedItem != savedIdle)

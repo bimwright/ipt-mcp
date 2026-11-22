@@ -9,8 +9,8 @@ using Bimwright.Ipt.Shared.Views.Toast;
 
 internal static class Program
 {
-    // FC-TST-02: every card title ends with the PID of the process that hosts the toast (Inventor in production).
-    private static readonly string Pid = " · PID: " + System.Diagnostics.Process.GetCurrentProcess().Id;
+    // FC-TST-02: hovering a card reveals the PID of the process that hosts the toast (Inventor in production).
+    private static readonly string Pid = " · PID " + System.Diagnostics.Process.GetCurrentProcess().Id;
 
     [STAThread]
     private static int Main(string[] args)
@@ -42,6 +42,27 @@ internal static class Program
                 PositionVisualTests.Run();
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--position-layout")
+            {
+                PositionVisualTests.Run(includeNativeDrag: false);
+                return 0;
+            }
+            if (args.Length == 1 && args[0] == "--manager")
+            {
+                CheckCompactBody();
+                CheckCloseHover();
+                CheckCompactLayout();
+                ToastVisualTests.Run();
+                CheckNaNSafePlacement();
+                CheckBrandingFollowsPreference();
+                CheckIdentityRow();
+                CheckThumbnailRow();
+                CheckStationaryPointerFiltering();
+                CheckSingleActivityCard();
+                CheckStatusAndClickLifecycle();
+                CheckPauseKeepsTheCard();
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--demo")
                 return ToastPreview.Run();
             if (args.Length == 1 && args[0] == "--activity")
@@ -66,6 +87,7 @@ internal static class Program
             ArrivalVisualTests.Run();
             CheckSingleActivityCard();
             CheckStatusAndClickLifecycle();
+            CheckPauseKeepsTheCard();
             Console.WriteLine("PASS: single-card activity manager and WPF guards");
             return 0;
         }
@@ -138,7 +160,7 @@ internal static class Program
                 var hasProductHeader = false;
                 foreach (var child in header.Children)
                 {
-                    if (child is TextBlock text && text.Text == "ipt-mcp" + Pid)
+                    if (child is TextBlock text && PlainText(text) == "ipt-mcp" + Pid)
                     {
                         hasProductHeader = true;
                         break;
@@ -241,6 +263,11 @@ internal static class Program
             instanceIdentity: "ipt-mcp 2027");
         try
         {
+            var pidBrush = (System.Windows.Media.Brush)typeof(McpToastWindow)
+                .GetField("_pidBrush", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(window);
+            if (Math.Abs(pidBrush.Opacity) > 0.001)
+                throw new Exception("FC-TST-02: PID must start hidden (Opacity = 0) until deliberate hover.");
             if (TitleText(window) != "ipt-mcp 2027" + Pid || ToolText(window) != "List Rooms")
                 throw new Exception("The title must carry the supplied instance identity above the tool.");
             window.SetShowBranding(false);
@@ -317,10 +344,19 @@ internal static class Program
         return tool.Text;
     }
 
+    internal static string PlainText(TextBlock text)
+    {
+        if (text.Inlines.Count == 0) return text.Text;
+        var sb = new System.Text.StringBuilder();
+        foreach (var inline in text.Inlines)
+            if (inline is System.Windows.Documents.Run run) sb.Append(run.Text);
+        return sb.ToString();
+    }
+
     private static string TitleText(McpToastWindow window)
     {
         var title = (TextBlock)typeof(McpToastWindow).GetField("_titleText", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
-        return title.Text;
+        return PlainText(title);
     }
 
     private static Grid BrandRow(McpToastWindow window)
@@ -499,6 +535,55 @@ internal static class Program
         {
             manager.DismissAllImmediate();
         }
+    }
+
+    // FC-TST-04: Pause for today on an expanded card flips to Resume in place without closing or invoking History.
+    private static void CheckPauseKeepsTheCard()
+    {
+        var snapshot = new ActivitySnapshot(1, false, 1, 0, 0, "List Rooms", "Done", true, false,
+            recentEntries: Array.AsReadOnly(new[] { new ToastActivityEntry("List Rooms", "Done", true, 40) }));
+        var paused = false;
+        var cardClicks = 0;
+        var cursor = new Point(10, 10);
+        var window = new McpToastWindow(snapshot, null, null, _ => cardClicks++, null, null,
+            () => cursor, () => false, "ipt-mcp 2027", () => paused, next => { paused = next; return next; });
+        try
+        {
+            window.CapturePointerBaseline();
+            window.Show();
+            cursor = new Point(25, 12);
+            window.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, Environment.TickCount) { RoutedEvent = Mouse.MouseEnterEvent });
+            Pump();
+
+            var snooze = (Border)typeof(McpToastWindow).GetField("_snoozeButton", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
+            var pauseText = (System.Windows.Documents.Run)typeof(McpToastWindow).GetField("_pauseText", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
+            if (snooze.Visibility != Visibility.Visible || pauseText.Text.Trim() != "Pause for today")
+                throw new Exception("Expanded card did not show Pause for today button.");
+
+            snooze.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+            Pump();
+            if (!paused || pauseText.Text.Trim() != "Resume" || cardClicks != 0)
+                throw new Exception("Clicking Pause for today did not keep the card open or flip to Resume.");
+
+            snooze.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+            Pump();
+            if (paused || pauseText.Text.Trim() != "Pause for today" || cardClicks != 0)
+                throw new Exception("Clicking Resume did not unpause in place.");
+        }
+        finally { window.CloseImmediate(); }
+
+        var withoutHandler = new McpToastWindow(snapshot, null, null, null, null, null);
+        try
+        {
+            var snooze = (Border)typeof(McpToastWindow).GetField("_snoozeButton", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(withoutHandler);
+            if (snooze.Visibility != Visibility.Collapsed)
+                throw new Exception("Card without pause handler must collapse the Pause button.");
+        }
+        finally { withoutHandler.CloseImmediate(); }
+
+        Console.WriteLine("PASS: Pause for today on expanded card toggles to Resume without dismissing");
     }
 
     private static McpToastWindow Current(McpToastManager manager)

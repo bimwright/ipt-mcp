@@ -37,6 +37,8 @@ internal sealed class BimwrightRibbon
     private readonly Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions, bool>? _savePosition;
     private readonly Func<int>? _idleSeconds;
     private readonly Func<int, bool>? _saveIdleSeconds;
+    private readonly Func<bool>? _isPaused;
+    private readonly Func<bool, bool>? _setPaused;
     private InvApi.ButtonDefinition? _brand;
     private InvApi.ButtonDefinition? _toggle;
     private InvApi.ButtonDefinition? _status;
@@ -50,7 +52,8 @@ internal sealed class BimwrightRibbon
         Func<bool> isBrandOn, Action<bool> setBrandOn,
         Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions>? position = null,
         Func<Bimwright.Ipt.Shared.Views.Toast.ToastPositionOptions, bool>? savePosition = null,
-        Func<int>? idleSeconds = null, Func<int, bool>? saveIdleSeconds = null)
+        Func<int>? idleSeconds = null, Func<int, bool>? saveIdleSeconds = null,
+        Func<bool>? isPaused = null, Func<bool, bool>? setPaused = null)
     {
         _app = app;
         _clientId = clientId;
@@ -65,6 +68,8 @@ internal sealed class BimwrightRibbon
         _savePosition = savePosition;
         _idleSeconds = idleSeconds;
         _saveIdleSeconds = saveIdleSeconds;
+        _isPaused = isPaused;
+        _setPaused = setPaused;
     }
 
     /// <summary>Idempotent: also used after a ribbon reset.</summary>
@@ -86,7 +91,7 @@ internal sealed class BimwrightRibbon
             _brand = Existing(defs, BrandId) ?? defs.AddButtonDefinition(
                 "Toast Brand", BrandId, InvApi.CommandTypesEnum.kQueryOnlyCmdType, _clientId,
                 "Show the toast wordmark on hover",
-                "Off by default; the choice is remembered after Inventor restarts. Disabled while toasts are off. A real hover reveals the BIMwright wordmark; the card title (ipt-mcp and the Inventor year) stays visible either way.",
+                "Off by default; the choice is remembered after Inventor restarts. Disabled while toasts are off. A real hover reveals the BIMwright wordmark; the card title (ipt-mcp, the Inventor year, and the latest agent; PID on hover) stays visible either way.",
                 RibbonIcons.Letter('B', 16, Color.SeaGreen), RibbonIcons.Letter('B', 32, Color.SeaGreen),
                 InvApi.ButtonDisplayEnum.kAlwaysDisplayText);
             _brand.OnExecute += OnBrand;
@@ -163,6 +168,13 @@ internal sealed class BimwrightRibbon
     {
         try
         {
+            if (_isOn() && _isPaused?.Invoke() == true)
+            {
+                _toggle!.Pressed = true;
+                _setPaused?.Invoke(false);
+                if (_brand != null) _brand.Enabled = true;
+                return;
+            }
             var on = !_toggle!.Pressed;
             _toggle.Pressed = on;
             _setOn(on);
@@ -187,7 +199,7 @@ internal sealed class BimwrightRibbon
         try
         {
             using var dialog = new ToastPositionForm(_statusText(), _position, _savePosition,
-                _idleSeconds, _saveIdleSeconds);
+                _idleSeconds, _saveIdleSeconds, _isOn, _isPaused, _setPaused);
             dialog.ShowDialog(new Win32Owner(new IntPtr(_app.MainFrameHWND)));
         }
         catch { }

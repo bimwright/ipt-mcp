@@ -98,7 +98,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         _toastSettings = ToastConfigStore.Load(_configPath, Environment.GetEnvironmentVariable);
         _toasts = new ToastNotifier(_toastSettings.EnableToast,
             $"{BrandAssets.ProductName} {_year}", ShowOrFocusHistoryWindow,
-            ToastConfigStore.LoadIdleSeconds(_configPath));
+            ToastConfigStore.LoadIdleSeconds(_configPath),
+            _configPath);
         _toasts.ShowBranding = _toastSettings.ShowBranding;
         _toasts.Position = ToastConfigStore.LoadPosition(_configPath);
         _toasts.SavePosition = value => ToastConfigStore.SavePosition(_configPath, value);
@@ -184,7 +185,9 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 () => _toasts?.Position ?? new ToastPositionOptions(),
                 value => _toasts?.SetPosition(value) ?? false,
                 () => _toasts?.IdleSeconds ?? ToastConfigStore.DefaultIdleSeconds,
-                SetToastIdleSeconds);
+                SetToastIdleSeconds,
+                () => _toasts?.IsPaused ?? ToastSnooze.IsActive(_configPath),
+                SetToastPaused);
             _ribbon.Build();
         }
         catch
@@ -224,8 +227,14 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         if (on) RefreshToastWhenReady();
         else StopToastSnapshotTimer();
         var persisted = ToastConfigStore.SaveEnableToast(_configPath, on);
+        if (on && !ToastSnooze.ResumeIfPaused(_configPath)) persisted = false;
         _toasts?.NotifyToggle(persisted);
     }
+
+    private bool SetToastPaused(bool paused) =>
+        _toasts != null
+            ? (paused ? _toasts.PauseForToday() : _toasts.ResumeFromPause())
+            : (paused ? ToastSnooze.PauseForToday(_configPath) : ToastSnooze.Resume(_configPath));
 
     /// <summary>Retry readiness on the Inventor STA, slowing down if startup keeps the frame hidden.</summary>
     private void RefreshToastWhenReady()
@@ -291,6 +300,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
                 return;   // not agent activity: no toast
             }
             authorized = env;
+            _toasts?.SetAgent(env.ClientName);
 
             // Server-only tools report their outcome through the authenticated transport.
             // This is activity metadata, not an Inventor command or a second tool execution.

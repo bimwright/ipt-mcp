@@ -53,6 +53,23 @@ public static class ToastConfigStore
 
     public static bool SaveShowBranding(string path, bool show) => Save(path, "showBranding", show);
 
+    public static string? LoadToastSnoozedDate(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        var value = TryRead(path!, out _)?["toastSnoozedDate"];
+        return value?.Type == JTokenType.String ? (string?)value : null;
+    }
+
+    public static bool SaveToastSnoozedDate(string? path, string? date)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        return Update(path!, root =>
+        {
+            if (date == null) root.Remove("toastSnoozedDate");
+            else root["toastSnoozedDate"] = date;
+        });
+    }
+
     public static int NormalizeIdleSeconds(int seconds)
         => Array.IndexOf(IdleChoices, seconds) >= 0 ? seconds : DefaultIdleSeconds;
 

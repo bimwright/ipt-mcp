@@ -95,4 +95,29 @@ public sealed class EnvelopeTests
         Assert.False(o.ContainsKey("navisworks_year"));
         Assert.Equal(2027, (int)o["inventor_year"]!);
     }
+
+    // FC-TST-03
+    [Fact]
+    public void Client_name_round_trips_when_present_and_is_omitted_when_null()
+    {
+        var withClient = new InventorCommandEnvelope
+        {
+            Id = Guid.NewGuid(),
+            Command = "health",
+            ClientName = "claude-code",
+        };
+        var withJson = JObject.Parse(JsonConvert.SerializeObject(withClient));
+        Assert.Equal("claude-code", (string?)withJson["client_name"]);
+        var back = InventorCommandEnvelope.Parse(withJson.ToString(Formatting.None));
+        Assert.Equal("claude-code", back.ClientName);
+
+        var withoutClient = new InventorCommandEnvelope
+        {
+            Id = Guid.NewGuid(),
+            Command = "health",
+            ClientName = null,
+        };
+        var withoutJson = JObject.Parse(JsonConvert.SerializeObject(withoutClient));
+        Assert.False(withoutJson.ContainsKey("client_name"));
+    }
 }

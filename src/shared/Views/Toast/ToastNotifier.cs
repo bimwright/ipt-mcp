@@ -18,6 +18,8 @@ internal sealed class ToastNotifier : IDisposable
     private volatile int _idleSeconds;
     private readonly string _identity;
     private readonly Action _openHistory;
+    private readonly string? _configPath;
+    private volatile string? _agentName;
     private ToastHost? _host;
     private bool _disposed;
     private volatile bool _enabled;
@@ -39,16 +41,64 @@ internal sealed class ToastNotifier : IDisposable
     private string? _pendingConnection;
 
     public ToastNotifier(bool enabled, string identity, Action openHistory,
-        int idleSeconds = ToastConfigStore.DefaultIdleSeconds)
+        int idleSeconds = ToastConfigStore.DefaultIdleSeconds, string? configPath = null)
     {
         _idleSeconds = ToastConfigStore.NormalizeIdleSeconds(idleSeconds);
         _activity = new ActivityAggregator(() => _idleSeconds);
         _enabled = enabled;
         _identity = identity;
         _openHistory = openHistory;
+        _configPath = configPath;
     }
 
     public int IdleSeconds => _idleSeconds;
+    public bool IsPaused => ToastSnooze.IsActive(_configPath);
+    private bool IsActiveGate => _enabled && !IsPaused;
+
+    /// <summary>
+    /// Agent of the MCP call about to run, from the gateway's clientInfo.name ("claude-code" -> "Claude").
+    /// A gateway that sends no name clears it, so the title never shows a stale agent.
+    /// </summary>
+    public void SetAgent(string? clientName)
+    {
+        var agent = AgentDisplayName.For(clientName);
+        _agentName = agent;
+        _host?.SetAgentName(agent);
+    }
+
+    /// <summary>Status "Pause for today": saved for every Inventor on this machine; the open card closes now.</summary>
+    public bool PauseForToday()
+    {
+        var saved = ToastSnooze.PauseForToday(_configPath);
+        lock (_gate)
+        {
+            if (_disposed) return saved;
+            _pendingConnection = null;
+            if (_activity.Reset()) _host?.RequestRender();
+        }
+        return saved;
+    }
+
+    /// <summary>
+    /// The expanded card's Pause / Resume: saved for every Inventor on this machine. The open card stays, so a
+    /// mis-click can be undone with Resume; while paused, new results do not reach it.
+    /// </summary>
+    private bool SetPausedFromCard(bool paused)
+    {
+        var saved = paused ? ToastSnooze.PauseForToday(_configPath) : ToastSnooze.Resume(_configPath);
+        if (!saved)
+            System.Diagnostics.Trace.WriteLine(
+                $"[ipt-mcp] Toast {(paused ? "pause" : "resume")} could not be saved to '{_configPath}'.");
+        return ToastSnooze.IsActive(_configPath);
+    }
+
+    /// <summary>Ends a pause early (Status checkbox, or ribbon toggle while paused).</summary>
+    public bool ResumeFromPause()
+    {
+        var saved = ToastSnooze.Resume(_configPath);
+        NotifyToggle(saved);
+        return saved;
+    }
 
     // The card reads the setting when a result or pointer leave rearms its deadline.
     public void SetIdleSeconds(int seconds) => _idleSeconds = ToastConfigStore.NormalizeIdleSeconds(seconds);
@@ -97,7 +147,7 @@ internal sealed class ToastNotifier : IDisposable
         {
             lock (_gate)
             {
-                if (!_enabled || _disposed) return false;
+                if (!IsActiveGate || _disposed) return false;
                 if (!CanShowStatus()) { _pendingConnection = connectionInfo; return false; }
                 var host = EnsureHost();
                 var summary = L.T("toast.connected.summary") + " · " + connectionInfo;
@@ -135,12 +185,12 @@ internal sealed class ToastNotifier : IDisposable
     /// </summary>
     public bool Notify(ToastEvent e)
     {
-        if (!_enabled || e.Command == "health") return false;
+        if (!IsActiveGate || e.Command == "health") return false;
         try
         {
             lock (_gate)
             {
-                if (!_enabled || _disposed || !CanCreate()) return false;
+                if (!IsActiveGate || _disposed || !CanCreate()) return false;
                 var model = ToastContentBuilder.Build(e); // includes soft-failure normalization
                 var host = EnsureHost();
                 if (_activity.Record(model, ToastHost.FrameUsable(_ui))) host.RequestRender();
@@ -159,7 +209,10 @@ internal sealed class ToastNotifier : IDisposable
     private ToastHost EnsureHost()
     {
         if (_host != null) return _host;
-        _host = new ToastHost(_ui, _activity, _identity, _openHistory, _showBranding);
+        _host = new ToastHost(_ui, _activity, _identity, _openHistory, _showBranding,
+            agentName: _agentName,
+            isPaused: _configPath == null ? null : () => ToastSnooze.IsActive(_configPath),
+            setPaused: _configPath == null ? null : SetPausedFromCard);
         _host.SetPosition(_position, value => SetPosition(value));
         _host.RequestRender(); // drains a Reset that claimed the render slot before the host existed
         return _host;

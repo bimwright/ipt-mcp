@@ -33,6 +33,7 @@ public sealed class PluginClient
 {
     private static readonly System.Threading.AsyncLocal<System.Runtime.CompilerServices.StrongBox<bool>?> ForwardedCall = new();
     private static readonly AsyncLocal<string?> ActivityCommand = new();
+    internal static volatile string? ClientName;
     internal static System.Runtime.CompilerServices.StrongBox<bool> BeginActivity(string? toolName)
     {
         ActivityCommand.Value = toolName?.StartsWith("inventor_", StringComparison.Ordinal) == true ? toolName.Substring(9) : toolName;
@@ -51,10 +52,12 @@ public sealed class PluginClient
             JToken? data = null;
             try { if (text != null) data = JToken.Parse(text); } catch (JsonReaderException) { }
             if (text?.Length > 10240) data = new JObject { ["summary"] = "Output returned to the MCP client", ["response_bytes"] = Encoding.UTF8.GetByteCount(text) };
+            var clientName = ClientName;
             var envelope = new InventorCommandEnvelope {
                 Id = Guid.NewGuid(), Command = "report_tool_activity", AuthToken = target.AuthToken,
                 TimeoutMs = 300, RecordCalls = _config.EnableCallLog,
                 Tool = ToolCatalog.ForCommand(command, _config.TimeoutMs),
+                ClientName = string.IsNullOrWhiteSpace(clientName) ? null : clientName,
                 Params = new JObject {
                     ["command"] = command, ["ok"] = error == null && result?.IsError != true,
                     ["arguments"] = arguments == null ? null : JToken.FromObject(ServerLogger.MaskParams(arguments)!),
@@ -150,6 +153,7 @@ public sealed class PluginClient
             var pinned = GateWrite(command, @params, target);
 
             var effectiveTimeoutMs = ResolveEffectiveTimeout(_config.TimeoutMs, timeoutMs);
+            var clientName = ClientName;
             var env = new InventorCommandEnvelope
             {
                 Id = new Guid(requestId),
@@ -162,6 +166,7 @@ public sealed class PluginClient
                 SpillRetentionHours = _config.SpillRetentionHours,
                 Tool = ToolCatalog.ForCommand(ActivityCommand.Value ?? command, effectiveTimeoutMs),
                 DocumentTarget = new DocumentTargetEnvelope { ExpectedDocumentId = pinned?.Id },
+                ClientName = string.IsNullOrWhiteSpace(clientName) ? null : clientName,
             };
 
             var line = JsonConvert.SerializeObject(env) + "\n";

@@ -52,37 +52,8 @@ var mcp = builder.Services
             WebsiteUrl = "https://github.com/bimwright/ipt-mcp"
         };
     })
-    .WithStdioServerTransport()
-    .WithRequestFilters(f => f.AddCallToolFilter(next => async (ctx, ct) =>
-    {
-        // Journal v3: stamp the calling client once it is known (initialize has completed by now).
-        if (ServerLogger.ClientName is null && ctx.Server.ClientInfo is { } ci)
-            ServerLogger.SetClient(ci.Name, ci.Version);
-        var journaled = ServerLogger.BeginCall();
-        var forwarded = PluginClient.BeginActivity(ctx.Params?.Name);
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        ModelContextProtocol.Protocol.CallToolResult? result = null;
-        string? thrown = null;
-        try
-        {
-            result = await next(ctx, ct);
-            return result = AgentOutputGuard.Apply(ctx.Params?.Name ?? "?", result, cfg);
-        }
-        catch (Exception ex)
-        {
-            thrown = ex.Message;
-            throw;
-        }
-        finally
-        {
-            // Tools that never reach the add-in (code modules, ToolBaker DB, …) are journaled here.
-            if (!journaled.Value)
-                ServerLogger.LogServerOnlyCall(ctx.Params?.Name ?? "?", ctx.Params?.Arguments, result, thrown, sw.ElapsedMilliseconds);
-            if (!forwarded.Value)
-                await ctx.Services!.GetRequiredService<PluginClient>().ReportServerActivityAsync(
-                    ctx.Params?.Name ?? "?", ctx.Params?.Arguments, result, thrown, sw.ElapsedMilliseconds);
-        }
-    }));
+    .WithStdioServerTransport();
+mcp = Program.RegisterCallToolFilter(mcp, cfg);
 mcp = Program.RegisterToolsets(mcp, Program.ResolveToolTypesForRegistration(cfg), cfg.ReadOnly, pluginClient.GatewayIdentity);
 mcp.WithPrompts<Bimwright.Ipt.Server.Prompts.InventorPrompts>();
 
@@ -96,6 +67,44 @@ internal static partial class Program
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion ?? "0.0.0");
     internal static readonly string ServerVersion = ServerInformationalVersion.Split('+')[0];
+
+    internal static IMcpServerBuilder RegisterCallToolFilter(IMcpServerBuilder mcp, InventorMcpConfig cfg)
+        => mcp.WithRequestFilters(f => f.AddCallToolFilter(next => async (ctx, ct) =>
+        {
+            // Stamp clientInfo.name for every call so the toast title follows the latest caller;
+            // journal v3 stamps its session metadata once.
+            if (ctx.Server.ClientInfo is { } ci)
+            {
+                if (!string.IsNullOrWhiteSpace(ci.Name))
+                    PluginClient.ClientName = ci.Name;
+                if (ServerLogger.ClientName is null)
+                    ServerLogger.SetClient(ci.Name, ci.Version);
+            }
+            var journaled = ServerLogger.BeginCall();
+            var forwarded = PluginClient.BeginActivity(ctx.Params?.Name);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            ModelContextProtocol.Protocol.CallToolResult? result = null;
+            string? thrown = null;
+            try
+            {
+                result = await next(ctx, ct);
+                return result = AgentOutputGuard.Apply(ctx.Params?.Name ?? "?", result, cfg);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex.Message;
+                throw;
+            }
+            finally
+            {
+                // Tools that never reach the add-in (code modules, ToolBaker DB, …) are journaled here.
+                if (!journaled.Value)
+                    ServerLogger.LogServerOnlyCall(ctx.Params?.Name ?? "?", ctx.Params?.Arguments, result, thrown, sw.ElapsedMilliseconds);
+                if (!forwarded.Value)
+                    await ctx.Services!.GetRequiredService<PluginClient>().ReportServerActivityAsync(
+                        ctx.Params?.Name ?? "?", ctx.Params?.Arguments, result, thrown, sw.ElapsedMilliseconds);
+            }
+        }));
 
     internal static IMcpServerBuilder RegisterToolsets(IMcpServerBuilder mcp, IEnumerable<Type> toolTypes, bool readOnly = false,
         Newtonsoft.Json.Linq.JObject? gatewayIdentity = null)

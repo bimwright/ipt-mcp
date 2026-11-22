@@ -22,6 +22,7 @@ internal static class RecentActivityVisualTests
         CheckCompactBorderedCards();
         CheckAllCallsScrollingAndVirtualization();
         CheckScrollbarMotionAndReducedMotion();
+        CheckAgentTitlePidAndPause();
     }
 
     private static ActivitySnapshot Snapshot(string newest = "Hide Items") => new ActivitySnapshot(
@@ -383,6 +384,78 @@ internal static class RecentActivityVisualTests
             finally { window.CloseImmediate(); }
         }
         Console.WriteLine("PASS: RVT-style 160 ms scrollbar fades have intermediate frames, settle at 0.22, respect reduced motion and clean up");
+    }
+
+    // FC-TST-02, FC-TST-03, FC-TST-04: title updates dynamically with agent, PID reveals on deliberate hover only, Pause button stays open.
+    private static void CheckAgentTitlePidAndPause()
+    {
+        var aggregator = new ActivityAggregator();
+        aggregator.RecordResult("Get Document Info", "Done", true, null, true);
+        var identity = "ipt-mcp 2027";
+        var paused = false;
+        var manager = new McpToastManager(Dispatcher.CurrentDispatcher, aggregator,
+            motionEnabled: () => true, instanceIdentity: () => identity,
+            isPaused: () => paused, setPaused: next => { paused = next; return next; });
+        try
+        {
+            manager.Render();
+            Pump(150);
+            var window = Field<McpToastWindow>(manager, "_window");
+            var identityRun = Field<System.Windows.Documents.Run>(window, "_titleIdentityRun");
+            var pidBrush = Field<SolidColorBrush>(window, "_pidBrush");
+            if (identityRun.Text != "ipt-mcp 2027" || Math.Abs(pidBrush.Opacity) > 0.001)
+                throw new Exception("Card must show base identity and keep PID hidden on initial appear.");
+
+            identity = "ipt-mcp 2027 · " + AgentDisplayName.For("claude-code");
+            aggregator.RecordResult("List Parameters", "Done", true, null, true);
+            manager.Render();
+            Pump(50);
+            if (identityRun.Text != "ipt-mcp 2027 · Claude")
+                throw new Exception("Expected agent suffix in card title.");
+
+            identity = "ipt-mcp 2027 · " + AgentDisplayName.For("codex-mcp-client");
+            aggregator.RecordResult("Export STEP", "Done", true, null, true);
+            manager.Render();
+            Pump(50);
+            if (identityRun.Text != "ipt-mcp 2027 · Codex")
+                throw new Exception("Expected subsequent agent swap to update open card title.");
+        }
+        finally { manager.DismissAllImmediate(); }
+
+        // Hover PID fade in / fade out independently of showBranding, skipping stationary cursor.
+        var cursor = new Point(10, 10);
+        var hoverWin = new McpToastWindow(Snapshot(), null, null, null, null, null, () => cursor, () => true,
+            instanceIdentity: "ipt-mcp 2027 · Claude");
+        try
+        {
+            hoverWin.SetShowBranding(false);
+            hoverWin.CapturePointerBaseline();
+            hoverWin.Show();
+            var brush = Field<SolidColorBrush>(hoverWin, "_pidBrush");
+            Raise(hoverWin, Mouse.MouseEnterEvent);
+            Pump(200);
+            if (Math.Abs(brush.Opacity) > 0.001)
+                throw new Exception("FC-TST-02: stationary cursor must not reveal PID.");
+
+            cursor = new Point(25, 14);
+            Raise(hoverWin, Mouse.MouseMoveEvent);
+            Pump(750);
+            if (brush.Opacity < 0.99)
+                throw new Exception("FC-TST-02: deliberate hover must reveal PID even with branding off.");
+
+            cursor = new Point(200, 200);
+            Raise(hoverWin, Mouse.MouseLeaveEvent);
+            Pump(350);
+            if (brush.Opacity > 0.01)
+                throw new Exception("FC-TST-02: leaving the card must hide PID again.");
+
+            hoverWin.CloseImmediate();
+            if (brush.HasAnimatedProperties)
+                throw new Exception("FC-TST-02: closing card must release PID animation.");
+        }
+        finally { hoverWin.CloseImmediate(); }
+
+        Console.WriteLine("PASS: agent title updates dynamically and PID reveals only on deliberate hover independently of branding");
     }
 
     private static string[] VisibleEntries(ListBox list, ScrollViewer viewer) => Enumerable.Range(0, list.Items.Count)
