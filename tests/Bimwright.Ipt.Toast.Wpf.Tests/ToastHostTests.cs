@@ -194,6 +194,106 @@ public sealed class ToastHostTests
             finally { notifier.Dispose(); frame.Close(); }
         });
 
+    // FC-TST-04
+    [Fact]
+    public void Paused_notifier_silences_notifications_and_connection_closes_open_card_and_resumes_on_ribbon_resume()
+        => Sta.Run(() =>
+        {
+            var savedNow = ToastSnooze.Now;
+            var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ipt-host-pause-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            var configPath = System.IO.Path.Combine(dir, "iptmcp.config.json");
+            var frame = new Window { Title = "Inventor test frame", Left = 80, Top = 80, Width = 900, Height = 600 };
+            ToastNotifier? notifier = null;
+            try
+            {
+                ToastSnooze.Now = () => new DateTime(2026, 11, 21, 10, 0, 0, DateTimeKind.Local);
+                ToastConfigStore.SaveEnableToast(configPath, true);
+                frame.Show();
+                notifier = new ToastNotifier(true, "ipt-mcp 2027", () => { }, configPath: configPath);
+                notifier.UpdateSnapshot(Frame(frame));
+
+                Assert.True(notifier.Notify(new ToastEvent("extrude", true, new JObject { ["ok"] = true }, null, null, 10, false)));
+                Assert.True(Wait(() => ToastWindows().Count == 1));
+
+                Assert.True(notifier.PauseForToday());
+                Assert.True(notifier.IsPaused);
+                Assert.True(Wait(() => ToastWindows().Count == 0));
+
+                Assert.False(notifier.Notify(new ToastEvent("extrude", true, new JObject { ["ok"] = true }, null, null, 10, false)));
+                Assert.False(notifier.Notify(new ToastEvent("extrude", false, null, "API_ERROR", "Failed", 10, false)));
+                Assert.False(notifier.Notify(new ToastEvent("report_task_result", true,
+                    new JObject { ["task_id"] = "t1", ["outcome"] = "completed", ["summary"] = "Done" },
+                    null, null, 5, true)));
+                Assert.False(notifier.NotifyConnection("TCP:1234"));
+                notifier.UpdateSnapshot(Frame(frame));
+                Thread.Sleep(80);
+                Assert.Empty(ToastWindows());
+
+                Assert.True(notifier.ResumeFromPause());
+                Assert.False(notifier.IsPaused);
+                Assert.True(Wait(() => ToastWindows().Count == 1));
+                Assert.True(notifier.Notify(new ToastEvent("extrude", true, new JObject { ["ok"] = true }, null, null, 10, false)));
+            }
+            finally
+            {
+                notifier?.Dispose();
+                frame.Close();
+                ToastSnooze.Now = savedNow;
+                if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true);
+            }
+        });
+
+    // FC-TST-03
+    [Fact]
+    public void SetAgent_updates_open_and_future_card_titles_with_mapped_agent_name()
+        => Sta.Run(() =>
+        {
+            var frame = new Window { Title = "Inventor test frame", Left = 80, Top = 80, Width = 900, Height = 600 };
+            ToastNotifier? notifier = null;
+            try
+            {
+                frame.Show();
+                notifier = new ToastNotifier(true, "ipt-mcp 2027", () => { });
+                notifier.UpdateSnapshot(Frame(frame));
+                notifier.SetAgent("claude-code");
+
+                Assert.True(notifier.Notify(new ToastEvent("extrude", true, new JObject { ["ok"] = true }, null, null, 10, false)));
+                Assert.True(Wait(() => ReadCardIdentity(notifier) == "ipt-mcp 2027 · Claude"));
+
+                notifier.SetAgent("codex-mcp-client");
+                Assert.True(Wait(() => ReadCardIdentity(notifier) == "ipt-mcp 2027 · Codex"));
+
+                notifier.SetAgent(null);
+                Assert.True(Wait(() => ReadCardIdentity(notifier) == "ipt-mcp 2027"));
+            }
+            finally
+            {
+                notifier?.Dispose();
+                frame.Close();
+            }
+        });
+
+    private static string? ReadCardIdentity(ToastNotifier notifier)
+    {
+        var host = typeof(ToastNotifier)
+            .GetField("_host", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?.GetValue(notifier);
+        if (host == null) return null;
+        var dispatcher = Field<System.Windows.Threading.Dispatcher>(host, "_dispatcher");
+        return dispatcher.Invoke(() =>
+        {
+            var manager = typeof(ToastHost)
+                .GetField("_manager", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.GetValue(host);
+            var window = manager?.GetType()
+                .GetField("_window", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.GetValue(manager);
+            if (window == null) return null;
+            return Field<System.Windows.Documents.Run>(window, "_titleIdentityRun").Text;
+        });
+    }
+
     private static bool Wait(Func<bool> condition)
     {
         var clock = Stopwatch.StartNew();
@@ -215,7 +315,12 @@ public sealed class ToastHostTests
             GetWindowThreadProcessId(hwnd, out var ownerPid);
             if (ownerPid == pid && IsWindowVisible(hwnd)
                 && (GetWindowLongPtr(hwnd, -20).ToInt64() & NoActivate) != 0)
-                windows.Add(hwnd);
+            {
+                var cls = new System.Text.StringBuilder(256);
+                GetClassName(hwnd, cls, cls.Capacity);
+                if (cls.ToString().StartsWith("HwndWrapper[", StringComparison.Ordinal))
+                    windows.Add(hwnd);
+            }
             return true;
         }, IntPtr.Zero);
         return windows;
@@ -227,6 +332,7 @@ public sealed class ToastHostTests
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowProc callback, IntPtr param);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder lpClassName, int nMaxCount);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 }

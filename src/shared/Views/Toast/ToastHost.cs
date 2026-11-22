@@ -21,9 +21,12 @@ internal sealed class ToastHost
     private readonly Action _openHistory;
     private readonly Func<InventorUiSnapshot, bool> _usable;
     private readonly Func<bool>? _motion;
+    private readonly Func<bool>? _isPaused;
+    private readonly Func<bool, bool>? _setPaused;
     private McpToastManager? _manager;
     private DispatcherTimer? _track;
     private volatile bool _showBranding;
+    private volatile string? _agentName;
     private volatile ToastPositionOptions _position = new();
     private Action<ToastPositionOptions>? _positionChanged;
     private volatile InventorUiSnapshot _ui;
@@ -31,7 +34,8 @@ internal sealed class ToastHost
 
     public ToastHost(InventorUiSnapshot ui, ActivityAggregator activity, string identity,
         Action openHistory, bool showBranding = false, Func<InventorUiSnapshot, bool>? usable = null,
-        Func<bool>? motion = null)
+        Func<bool>? motion = null, string? agentName = null,
+        Func<bool>? isPaused = null, Func<bool, bool>? setPaused = null)
     {
         _ui = ui;
         _activity = activity;
@@ -40,6 +44,9 @@ internal sealed class ToastHost
         _showBranding = showBranding;
         _usable = usable ?? FrameUsable;
         _motion = motion;
+        _agentName = string.IsNullOrWhiteSpace(agentName) ? null : agentName;
+        _isPaused = isPaused;
+        _setPaused = setPaused;
         Dispatcher? dispatcher = null;
         // A timed-out startup may still finish later; do not dispose its signal on the caller thread.
         var ready = new System.Threading.Tasks.TaskCompletionSource<bool>();
@@ -53,10 +60,12 @@ internal sealed class ToastHost
                     isFrameUsable: () => _usable(_ui),
                     onClick: OnClick,
                     showBranding: () => _showBranding,
-                    instanceIdentity: () => _identity,
+                    instanceIdentity: IdentityTitle,
                     motionEnabled: _motion,
                     positionOptions: () => _position,
-                    positionChanged: value => { _position = value; _positionChanged?.Invoke(value); });
+                    positionChanged: value => { _position = value; _positionChanged?.Invoke(value); },
+                    isPaused: _isPaused,
+                    setPaused: _setPaused);
                 _track = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
                     { Interval = TimeSpan.FromMilliseconds(100) };
                 _track.Tick += (_, _) => Track();
@@ -78,6 +87,17 @@ internal sealed class ToastHost
     }
 
     public void SetSnapshot(InventorUiSnapshot ui) => _ui = ui;
+    public void SetAgentName(string? agent)
+    {
+        _agentName = string.IsNullOrWhiteSpace(agent) ? null : agent;
+        Post(() => _manager?.RefreshIdentity());
+    }
+    private string IdentityTitle()
+    {
+        var agent = _agentName;
+        if (agent == null) return _identity;
+        return (string.IsNullOrWhiteSpace(_identity) ? BrandAssets.ProductName : _identity) + " · " + agent;
+    }
     public void SetPosition(ToastPositionOptions options, Action<ToastPositionOptions>? changed = null)
     {
         _position = options;

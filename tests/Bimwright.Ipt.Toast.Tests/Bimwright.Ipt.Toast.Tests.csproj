@@ -21,6 +21,9 @@
     <Compile Include="../../src/shared/Views/Toast/ToastScrollBarStyles.cs" Link="ToastScrollBarStyles.cs" />
     <Compile Include="../../src/shared/Security/SecretMasker.cs" Link="SecretMasker.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.cs" Link="ActivityAggregator.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/AgentDisplayName.cs" Link="AgentDisplayName.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastConfig.cs" Link="ToastConfig.cs" />
+    <Compile Include="../../src/shared/Views/Toast/Model/ToastSnooze.cs" Link="ToastSnooze.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/ActivityAggregator.Ipt.cs" Link="ActivityAggregator.Ipt.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/McpToastViewModel.cs" Link="McpToastViewModel.cs" />
     <Compile Include="../../src/shared/Views/Toast/Model/ToastContent.cs" Link="ToastContent.cs" />

@@ -124,7 +124,7 @@ internal static class LiveTailVisualTests
             window.CapturePointerBaseline(); window.Show(); window.PlayEnterAnimation();
             var compactHeight = window.ActualHeight;
             var panel = Children<ToastActivityPanel>(window).Single();
-            var row = (Border)VisualTreeHelper.GetParent(panel);
+            var row = ParentBorder(panel);
             cursor = new Point(20, 10); Enter(window);
             WaitForFrame(() => row.Height > 0 && row.HasAnimatedProperties, "first row opening");
             var list = Children<ListBox>(window).Single(); var viewer = Children<ScrollViewer>(list).Single();
@@ -217,6 +217,13 @@ internal static class LiveTailVisualTests
         finally { timeout.Stop(); CompositionTarget.Rendering -= render; }
         if (!reached) throw new Exception("Did not observe " + phase + " within " + clock.ElapsedMilliseconds + " ms.");
     }
+    private static Border ParentBorder(DependencyObject element)
+    {
+        for (var p = VisualTreeHelper.GetParent(element); p != null; p = VisualTreeHelper.GetParent(p))
+            if (p is Border b) return b;
+        throw new Exception("Expected an enclosing Border above ToastActivityPanel.");
+    }
+
     private static void Pump(int milliseconds)
     {
         var frame = new DispatcherFrame(); var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(milliseconds) };

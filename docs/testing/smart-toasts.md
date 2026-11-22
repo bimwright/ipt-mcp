@@ -5,7 +5,7 @@ The card is the one rvt-mcp and dwg-mcp show (same window, counters, thumbnail a
 
 ## Behavior covered
 
-- One card. Tool results share it and roll **Success / Failed / Capture** counters. Capture counts a successful `capture_view` (including inline) and is not added again on top of Success. A failure sticks the accent red until the card closes. Read and write both use the blue accent. The card title is `ipt-mcp {year}`, the line under it names the latest tool.
+- One card. Tool results share it and roll **Success / Failed / Capture** counters. Capture counts a successful `capture_view` (including inline) and is not added again on top of Success. A failure sticks the accent red until the card closes. Read and write both use the blue accent. The card title is `ipt-mcp {year}` (or `ipt-mcp {year} · {Agent}` when an agent name is present; hovering fades in `PID {pid}`), the line under it names the latest tool.
 - The card idles for 20 seconds by default after the latest result. Status offers 10, 20, 30 or 60 seconds; Apply saves `toastIdleSeconds` and the next result or pointer leave uses the new duration. A failed save keeps the previous duration active, shows an error and allows retry. A real pointer move pauses the deadline; leaving rearms the full interval. A card shown under a stationary cursor is not a hover.
 - Clicking the card opens History and dismisses it. × only dismisses. A successful `capture_view` that saved a local image also shows it as a thumbnail, centred in one fixed frame whatever its shape; clicking the thumbnail opens the file. A path that is not a real local image never renders.
 - **Agent connected** and the toast on/off confirmation are status cards (6 seconds and 3 seconds). They do not change counters and do not cover an open activity card or task report.
@@ -21,7 +21,7 @@ The card is the one rvt-mcp and dwg-mcp show (same window, counters, thumbnail a
 
 Off by default. The ribbon choice persists as `showBranding` in `iptmcp.config.json` and is restored at the next start. `McpToastWindow` reveals `BrandAssets` on a real hover:
 
-- Both wordmark layers use 10 DIP SemiBold text. With branding off the wordmark row is omitted; with it on the row is reserved and stays blank until a real hover. The title (`ipt-mcp {year}`) is visible either way.
+- Both wordmark layers use 10 DIP SemiBold text. With branding off the wordmark row is omitted; with it on the row is reserved and stays blank until a real hover. The title (`ipt-mcp {year}`, plus agent when known and `PID {pid}` on hover) is visible either way.
 - No wipe when the card appears. A real hover starts one after 100 ms. The mask and glint sweep together for 500 ms, quadratic ease-out, from relative offset -0.75 to +0.75. Settled letters are alpha 0.8; the glint crests at 1.0. Leaving fades the wordmark over 200 ms.
 - Updates, reflow, and a further hover while the wordmark is already revealed do not replay the wipe.
 - With Windows' **Animate controls and elements** setting disabled, the wordmark settles directly at alpha 0.8 without a sweep, and the card opens and closes without a fade.
@@ -46,7 +46,8 @@ The harness is a Windows-only STA console app using the production card window a
 dependency; it needs the .NET 10 SDK and an interactive session, and briefly shows test cards. Exit code 0 requires all of:
 
 - One merged body for outcome and context, keeping errors and capture hints and dropping blank or duplicate context.
-- The five-row card: title names the gateway (`ipt-mcp`, or the instance identity such as `ipt-mcp 2027`), the line under it names the latest tool, Success · Failed · Capture counters are spread evenly with the first lined up with the tool line, the brand row is right-aligned, and the height never depends on the result text.
+- The five-row card: title names the gateway (`ipt-mcp`, or the instance identity such as `ipt-mcp 2027`, plus `· <Agent>` when known and `PID <pid>` on hover), the line under it names the latest tool,
+- Daily pause (`Pause for today` / `Resume` on expanded card and in `ToastPositionForm` **Status**, persisting `toastSnoozedDate` in `iptmcp.config.json`), ribbon resume behavior, and server `client_name` forwarding, Success · Failed · Capture counters are spread evenly with the first lined up with the tool line, the brand row is right-aligned, and the height never depends on the result text.
 - Odometer counters: only changed digits roll, a new value continues the roll, a number that gains a digit widens gradually, a burst settles on the last value without resizing the card, and unchanged counters do not animate.
 - Thumbnail: centred on both axes in one fixed frame, opens with the card growing around it, cross-fades to the next capture, fades out before the card closes, ends fully open after an interrupted close, and never animates when Windows animation effects are off. A path outside the local-image policy never renders.
 - The × background stays transparent on hover; the two wordmark layers crossfade only inside the moving hover band. Reduced-motion preferences are honoured and every animation clock is released on close.

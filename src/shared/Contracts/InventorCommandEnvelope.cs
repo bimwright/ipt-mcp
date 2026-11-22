@@ -17,6 +17,7 @@ public sealed class InventorCommandEnvelope
     [JsonProperty("tool", NullValueHandling = NullValueHandling.Ignore)] public ToolMetadata? Tool { get; set; }
     /// <summary>Present from gateways that confirm documents; an add-in refuses writes without it (PAIRING_REQUIRED).</summary>
     [JsonProperty("document_target", NullValueHandling = NullValueHandling.Ignore)] public DocumentTargetEnvelope? DocumentTarget { get; set; }
+    [JsonProperty("client_name", NullValueHandling = NullValueHandling.Ignore)] public string? ClientName { get; init; }
 
     /// <summary>One NDJSON request line → envelope, keeping string parameters exactly as sent (<see cref="WireJson"/>).</summary>
     public static InventorCommandEnvelope Parse(string line) => JsonConvert.DeserializeObject<InventorCommandEnvelope>(line, WireJson.Settings)!;

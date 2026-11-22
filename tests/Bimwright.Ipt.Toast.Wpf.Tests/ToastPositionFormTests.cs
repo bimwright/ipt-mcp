@@ -115,4 +115,97 @@ public sealed class ToastPositionFormTests
         Assert.True(thread.Join(10000));
         if (error != null) throw error;
     }
+
+    // FC-TST-04
+    [Fact]
+    public void Pause_checkbox_persists_live_syncs_and_shows_errors()
+        => Sta.Run(() =>
+        {
+            var savedNow = ToastSnooze.Now;
+            var dir = Path.Combine(Path.GetTempPath(), "ipt-form-pause-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "iptmcp.config.json");
+            try
+            {
+                ToastSnooze.Now = () => new DateTime(2026, 11, 21, 10, 0, 0, DateTimeKind.Local);
+                ToastConfigStore.SaveEnableToast(path, true);
+                var enabled = true;
+                using (var form = new ToastPositionForm(
+                    "Target: fixture",
+                    () => new ToastPositionOptions(),
+                    _ => true,
+                    readToastEnabled: () => enabled,
+                    readPaused: () => ToastSnooze.IsActive(path),
+                    setPaused: v => v ? ToastSnooze.PauseForToday(path) : ToastSnooze.Resume(path)))
+                {
+                    form.Show();
+                    var panel = (Forms.FlowLayoutPanel)form.Controls[0];
+                    var pause = (Forms.CheckBox)panel.Controls["PauseToastsForToday"]!;
+                    var snoozeError = (Forms.Label)panel.Controls["ToastSnoozeError"]!;
+
+                    Assert.True(pause.Enabled);
+                    Assert.False(pause.Checked);
+
+                    pause.Checked = true;
+                    Assert.True(ToastSnooze.IsActive(path));
+                    Assert.Equal("", snoozeError.Text);
+
+                    // Background resume updates open dialog checkbox via ToastSnooze.Changed -> BeginInvoke.
+                    var done = new ManualResetEventSlim();
+                    new Thread(() => { ToastSnooze.Resume(path); done.Set(); }).Start();
+                    done.Wait(2000);
+                    var deadline = DateTime.UtcNow.AddSeconds(2);
+                    while (pause.Checked && DateTime.UtcNow < deadline)
+                    {
+                        Forms.Application.DoEvents();
+                        Thread.Sleep(15);
+                    }
+                    Assert.False(pause.Checked);
+                    Assert.False(ToastSnooze.IsActive(path));
+
+                    pause.Checked = true;
+                    Assert.True(ToastSnooze.IsActive(path));
+                    pause.Checked = false;
+                    Assert.False(ToastSnooze.IsActive(path));
+                }
+
+                enabled = false;
+                using (var disabledForm = new ToastPositionForm(
+                    "Target: fixture",
+                    () => new ToastPositionOptions(),
+                    _ => true,
+                    readToastEnabled: () => enabled,
+                    readPaused: () => false,
+                    setPaused: _ => true))
+                {
+                    disabledForm.Show();
+                    var panel = (Forms.FlowLayoutPanel)disabledForm.Controls[0];
+                    var pause = (Forms.CheckBox)panel.Controls["PauseToastsForToday"]!;
+                    Assert.False(pause.Enabled);
+                }
+
+                enabled = true;
+                using (var errorForm = new ToastPositionForm(
+                    "Target: fixture",
+                    () => new ToastPositionOptions(),
+                    _ => true,
+                    readToastEnabled: () => enabled,
+                    readPaused: () => false,
+                    setPaused: _ => false))
+                {
+                    errorForm.Show();
+                    var panel = (Forms.FlowLayoutPanel)errorForm.Controls[0];
+                    var pause = (Forms.CheckBox)panel.Controls["PauseToastsForToday"]!;
+                    var snoozeError = (Forms.Label)panel.Controls["ToastSnoozeError"]!;
+                    pause.Checked = true;
+                    Assert.False(pause.Checked);
+                    Assert.NotEmpty(snoozeError.Text);
+                }
+            }
+            finally
+            {
+                ToastSnooze.Now = savedNow;
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            }
+        });
 }
