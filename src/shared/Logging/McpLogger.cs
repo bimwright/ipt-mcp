@@ -77,7 +77,8 @@ namespace Bimwright.Ipt.Shared.Logging
             if (File.Exists(versionFile) && new FileInfo(versionFile).Length <= 32)
                 int.TryParse(File.ReadAllText(versionFile).Trim(), out currentVersion);
             // Preserve the privacy migration: legacy logs may contain source bodies.
-            if (currentVersion < LogVersion)
+            // Keep-all skips the delete but still writes the version, so turning it off later deletes nothing.
+            if (currentVersion < LogVersion && !LogRetentionPolicy.KeepAll)
                 foreach (var file in BoundedLogFile.FilesForPath(path))
                 {
                     BoundedLogFile.RefuseLink(file);

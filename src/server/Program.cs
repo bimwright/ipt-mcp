@@ -28,6 +28,9 @@ else
 cfg.BindRuntimeLayout(layout);
 ServerLogger.Configure(cfg.EnableCallLog, cfg.LocalAppDataRoot == null ? null : layout.GatewayLogPath);
 ServerLogger.RunMaintenance();
+// stderr is the server's diagnostic channel; stdout carries the MCP stream.
+if (Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.KeepAll)
+    Console.Error.WriteLine("ipt-mcp: BIMWRIGHT_KEEP_ALL_LOGS is on; logs, journals and reports are never deleted automatically.");
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.ClearProviders();
@@ -191,6 +194,7 @@ internal static partial class Program
             "  --config <path>         Load a JSON config file (lowest precedence).",
             "  --local-app-data <path> Isolate descriptors, logs, modules and bake data for a probe.",
             "  -h, --help              Show this help and exit.",
+            "  BIMWRIGHT_KEEP_ALL_LOGS=1  Never delete logs, journals or reports automatically (env only).",
         });
         Console.WriteLine(usage);
     }

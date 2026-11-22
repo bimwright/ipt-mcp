@@ -26,5 +26,8 @@ internal static class TestJournalIsolation
         Environment.SetEnvironmentVariable(
             ServerLogger.LogPathEnvVar,
             Path.Combine(Path.GetTempPath(), "ipt-mcp-tests", "calls.jsonl"));
+
+        // Retention tests rely on pruning: pin BIMWRIGHT_KEEP_ALL_LOGS off; KeepAllLogsTests pin it on.
+        Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.ReadValue = () => null;
     }
 }

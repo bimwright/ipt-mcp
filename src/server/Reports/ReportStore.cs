@@ -69,7 +69,7 @@ internal sealed class ReportStore
             {
                 if (File.Exists(temp)) File.Delete(temp);
             }
-            if (!replaced) Prune();
+            if (!replaced && !Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.KeepAll) Prune();
             return (saved.Id, replaced, saved.Path);
         }
     }
