@@ -77,6 +77,8 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         // Command history (rvt-mcp parity): journal file + in-memory session log on a
         // dedicated UI thread. Everything is best-effort — history must never stop the MCP path.
         // Call journals are initialized lazily only for requests with record_calls=true.
+        if (LogRetentionPolicy.KeepAll)
+            System.Diagnostics.Trace.WriteLine("[ipt-mcp] BIMWRIGHT_KEEP_ALL_LOGS is on; logs, journals and reports are never deleted automatically.");
         try { McpLogger.RunMaintenance(); } catch { }
         try { SendCodeJournal.RunMaintenance(IptPrivacyConfig.Load()); } catch { }
         try

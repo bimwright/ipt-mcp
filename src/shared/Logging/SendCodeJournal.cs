@@ -191,7 +191,8 @@ namespace Bimwright.Ipt.Shared.Logging
                     var text = File.ReadAllText(disabledMarker);
                     if (DateTimeOffset.TryParse(text, out var disabledAt))
                     {
-                        if (now - disabledAt >= TimeSpan.FromDays(7))
+                        // Keep-all keeps the journal and the marker, so the disable time is not reset.
+                        if (now - disabledAt >= TimeSpan.FromDays(7) && !LogRetentionPolicy.KeepAll)
                         {
                             foreach (var f in files)
                             {

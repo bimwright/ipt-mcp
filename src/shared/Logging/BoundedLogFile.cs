@@ -124,6 +124,7 @@ namespace Bimwright.Ipt.Shared.Logging
 
         private static void Prune(string active, long budget, DateTime cutoff)
         {
+            if (LogRetentionPolicy.KeepAll) return; // keep every archive; no budget check, no throw
             var files = FilesForPath(active);
             long total = files.Sum(p => new FileInfo(p).Length);
             foreach (var file in files)

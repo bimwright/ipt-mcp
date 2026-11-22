@@ -65,7 +65,7 @@
     <Compile Include="..\..\src\shared\Handlers\Code\ScriptLoopGuard.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Handlers\Code\ScriptSignatureHints.cs" LinkBase="Shared\Handlers\Code" />
     <Compile Include="..\..\src\shared\Handlers\Code\SendCodeHelpers.cs" LinkBase="Shared\Handlers\Code" />
-    <Compile Include="..\..\src\shared\Logging\*.cs" Exclude="..\..\src\shared\Logging\BoundedLogFile.cs" LinkBase="Shared\Logging" />
+    <Compile Include="..\..\src\shared\Logging\*.cs" Exclude="..\..\src\shared\Logging\BoundedLogFile.cs;..\..\src\shared\Logging\LogRetentionPolicy.cs" LinkBase="Shared\Logging" />
     <Compile Include="..\..\src\shared\Update\UpdateCheck.cs" Link="Shared\Update\UpdateCheck.cs" />
     <!-- Host-free toast model: the card state machine, content builder, layout, config and status text.
          The WPF card itself is covered by tests/Bimwright.Ipt.Toast.Tests. -->
