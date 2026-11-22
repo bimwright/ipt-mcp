@@ -59,7 +59,10 @@ public sealed class TransportConcurrencyTests
         var first = Connect(server, out var firstOwner);
         try
         {
-            var longCall = Task.Run(() => Ask(first, "{\"auth_token\":\"token\",\"long\":1}"));
+            // A dedicated thread, like the add-in's client threads: on a busy CI runner other tests can
+            // hold every thread-pool thread, and a Task.Run start then misses the wait below.
+            var longCall = Task.Factory.StartNew(() => Ask(first, "{\"auth_token\":\"token\",\"long\":1}"),
+                CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             Assert.True(longEntered.Wait(2000));
 
             var second = Connect(server, out var secondOwner);   // was "connect timed out" for the pipe
