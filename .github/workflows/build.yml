@@ -7,7 +7,35 @@ on:
   pull_request:
     branches: [ main, master ]
 
+# A new push to a PR cancels its older run; master runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # A PR that changes only Markdown or docs/ skips the heavy jobs below; master pushes always run everything.
+  # Unit tests and the public-tree check still run, because some tests read the docs.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          if echo "$changed" | grep -qvE '(\.md$|^docs/)'; then code=true; else code=false; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code changed: $code"
+
   public-tree:
     runs-on: windows-latest
     steps:
@@ -48,6 +76,8 @@ jobs:
         run: dotnet test tests/Bimwright.Ipt.Toast.Wpf.Tests -c Release
 
   installer:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     name: installer-${{ matrix.shell }}
     runs-on: windows-latest
     strategy:
@@ -68,3 +98,16 @@ jobs:
         with:
           name: installer-${{ matrix.shell }}
           path: artifacts/installer-*.json
+
+  # The one required check for master: green when every job passed or was skipped for a docs-only PR.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, public-tree, build, installer]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when any job failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
+      - name: All jobs passed or were skipped
+        run: echo ok
