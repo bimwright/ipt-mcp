@@ -554,7 +554,7 @@ Allow list dưới đây được sinh từ 39 annotation read-only và có test
 ```
 <!-- END GENERATED READONLY -->
 
-### Cài đặt runtime (v0.2.1)
+### Cài đặt runtime (v2.5.1)
 
 | Cài đặt | Mặc định | CLI / JSON |
 |---|---|---|

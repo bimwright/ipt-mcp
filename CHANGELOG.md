@@ -4,7 +4,9 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.1] - Unreleased
+
+Version numbers now follow the shared release number of the four bimwright gateways (rvt-mcp, dwg-mcp, nwd-mcp, ipt-mcp). The jump from 0.2.1 to 2.5.1 does not mark breaking changes; the entries below list what changed since 0.2.1.
 
 ### Changed
 - **Toast agent title, hover PID, and daily pause (`BW-TOAST-002`)**: Gateway forwards `client_name` on every tool call and activity notification so cards show `ipt-mcp <year> · <Agent>`; host `PID <n>` fades in on deliberate hover; expanded cards and the **Status** dialog add **Pause for today** / **Resume** (`toastSnoozedDate` in `iptmcp.config.json`), and the ribbon **Toasts** toggle resumes while paused.
@@ -297,5 +299,6 @@ First public surface of `bimwright/ipt-mcp` — a local MCP gateway that lets Cl
   output and the FLAG comments in `scripts/package-bundle.ps1`).
 - Autodesk Inventor binaries / SDK / interop assemblies are **not** redistributed with this repo.
 
-[Unreleased]: https://github.com/bimwright/ipt-mcp/compare/v0.1.0...HEAD
+[2.5.1]: https://github.com/bimwright/ipt-mcp/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/bimwright/ipt-mcp/compare/v0.1.0...v0.2.1
 [0.1.0]: https://github.com/bimwright/ipt-mcp/releases/tag/v0.1.0

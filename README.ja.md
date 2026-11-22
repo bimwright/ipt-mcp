@@ -548,7 +548,7 @@ Inventor および Autodesk は Autodesk, Inc. の登録商標です。bimwright
 ```
 <!-- END GENERATED READONLY -->
 
-### 実行時の設定 (v0.2.1)
+### 実行時の設定 (v2.5.1)
 
 | 設定 | 既定値 | CLI / JSON |
 |---|---|---|

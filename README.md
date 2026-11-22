@@ -554,7 +554,7 @@ The allow list below is generated from the 39 read-only annotations and checked 
 ```
 <!-- END GENERATED READONLY -->
 
-### Runtime settings (v0.2.1)
+### Runtime settings (v2.5.1)
 
 | Setting | Default | CLI / JSON |
 |---|---|---|
