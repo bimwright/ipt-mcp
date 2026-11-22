@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace Bimwright.Ipt.Shared.Handlers.Export;
@@ -76,6 +77,47 @@ public static class CaptureImagePolicy
             catch (IOException) { /* name already reserved — try the next sequence */ }
         }
         return null;
+    }
+
+    public const int RetentionDays = 30;
+    public const long RetentionBytes = 200L * 1024 * 1024;
+
+    // The names DefaultCapturePath generates (the sequence can grow past three digits).
+    private static readonly System.Text.RegularExpressions.Regex Generated = new(@"^capture-\d{8}-\d{6}-\d{3,}\.png$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Bounds <c>&lt;root&gt;\captures</c> like rvt-mcp: generated captures older than <paramref name="days"/> go, then
+    /// the oldest until the rest fits <paramref name="budget"/>. Only files with a generated name directly in that
+    /// folder are touched, never <paramref name="keep"/> (the capture just written) or a file the caller named.
+    /// <c>BIMWRIGHT_KEEP_ALL_LOGS</c> keeps every capture. Never throws: a capture must not fail because an old one is locked.
+    /// </summary>
+    public static int PruneGenerated(string root, string? keep, DateTime utcNow, int days = RetentionDays, long budget = RetentionBytes)
+    {
+        var deleted = 0;
+        if (Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.KeepAll) return 0;
+        try
+        {
+            var directory = Path.Combine(root, "captures");
+            if (!Directory.Exists(directory)) return 0;
+            var files = new List<FileInfo>();
+            foreach (var file in new DirectoryInfo(directory).GetFiles("capture-*"))
+                if (Generated.IsMatch(file.Name) && (file.Attributes & FileAttributes.ReparsePoint) == 0) files.Add(file);
+            files.Sort((a, b) => a.LastWriteTimeUtc != b.LastWriteTimeUtc
+                ? a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc) : string.CompareOrdinal(a.Name, b.Name));
+            long total = 0;
+            foreach (var file in files) total += file.Length;
+            var cutoff = utcNow.AddDays(-days);
+            foreach (var file in files)
+            {
+                if (string.Equals(file.FullName, keep, StringComparison.OrdinalIgnoreCase)) continue;
+                if (file.LastWriteTimeUtc >= cutoff && total <= budget) break;
+                try { var length = file.Length; file.Delete(); total -= length; deleted++; }
+                catch { }
+            }
+        }
+        catch { }
+        return deleted;
     }
 
     /// <summary>True (reject) when an inline-mode base64 payload exceeds the inline budget.</summary>

@@ -351,7 +351,7 @@ Excel 写入在 `batch_execute` 之外运行，并拥有自己的 document 事�
 
 | Tool | 描述 |
 |---|---|
-| `inventor_capture_view` | 把 active view 捕获为 PNG 文件（写入 `<export-root>\captures\` 或 `output_path`）；`inline=true` 改为返回受限的 base64 PNG。可在同一调用中设置视图（设计视图、对象/occurrence 可见性、方向或相机、fit），并一次拍摄多个 `shots`。 |
+| `inventor_capture_view` | 把 active view 捕获为 PNG 文件（写入 `<export-root>\captures\` 或 `output_path`）；`inline=true` 改为返回受限的 base64 PNG。可在同一调用中设置视图（设计视图、对象/occurrence 可见性、方向或相机、fit），并一次拍摄多个 `shots`。自动命名的截图保留 30 天，超过 200 MB 时从最旧的开始删除；你命名的文件从不删除。 |
 | `inventor_set_view_state` | 激活或创建设计视图，切换对象可见性（工作特征、草图等），并按 selector 显示/隐藏 occurrence。 |
 | `inventor_export_step` | 把 active part/assembly 导出为 STEP（.stp/.step）。 |
 | `inventor_export_stl` | 把 active part/assembly 导出为 STL（.stl）。 |
@@ -558,7 +558,7 @@ Inventor 和 Autodesk 是 Autodesk, Inc. 的注册商标。bimwright 是一个�
 
 CLI 覆盖环境变量，环境变量覆盖 `--config` JSON。Server 的日志开关会传递到 plug-in；`BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_CALL_LOG=1` 可以否决它。History 重新运行不会持久化 call log。内存中的 History 与此独立。源代码缓存（`BIMWRIGHT_CACHE_SEND_CODE_BODIES=1`）和源代码 journal（`BIMWRIGHT_PERSIST_SEND_CODE_BODIES=1`，TTL 默认 4 小时）是分别的可选项；journal 还需要启用 call logging。启用的 call log 只保留源代码长度/hash，从不保留源代码本身。已保存的 code module 是用户明确要求的存储；类似凭据的源代码值会在编译/存储前被拒绝，代码不会被改写。
 
-`BIMWRIGHT_KEEP_ALL_LOGS=1`（也接受 `true`、`yes` 或 `on`；在用户环境变量中设置，让 server 和 Inventor 都能读到，然后重启两者）保留所有日志、journal 和报告。跳过 gateway call log、plug-in call log 和 send-code journal 的 30 天 / 100 MiB 清理；“保留最新 500 个报告”的上限不再删除任何文件；call log 版本迁移也不再删除旧日志（其中可能含有源代码）。文件仍会轮转为带时间戳的归档，因此不会覆盖任何内容。该开关只阻止删除：不会启用已关闭的记录，不改变记录内容，也不改变 send-code 源代码的 TTL。关闭源代码持久化后，它也会保留 send-code journal，而不是在 7 天后清除；这是对已持久化源代码时间限制的有意例外，因此只应在所有者希望保留全部记录的机器上使用。此时磁盘占用会无限增长。Spill 文件、截图、checkpoint、code module、ToolBaker 数据和 discovery 文件仍按原方式清理。默认关闭。
+`BIMWRIGHT_KEEP_ALL_LOGS=1`（也接受 `true`、`yes` 或 `on`；在用户环境变量中设置，让 server 和 Inventor 都能读到，然后重启两者）保留所有日志、journal 和报告。跳过 gateway call log、plug-in call log 和 send-code journal 的 30 天 / 100 MiB 清理；“保留最新 500 个报告”的上限不再删除任何文件；call log 版本迁移也不再删除旧日志（其中可能含有源代码）。`captures\` 中自动命名的截图同样保留。文件仍会轮转为带时间戳的归档，因此不会覆盖任何内容。该开关只阻止删除：不会启用已关闭的记录，不改变记录内容，也不改变 send-code 源代码的 TTL。关闭源代码持久化后，它也会保留 send-code journal，而不是在 7 天后清除；这是对已持久化源代码时间限制的有意例外，因此只应在所有者希望保留全部记录的机器上使用。此时磁盘占用会无限增长。Spill 文件、checkpoint、code module、ToolBaker 数据和 discovery 文件仍按原方式清理。默认关闭。
 
 `send_code` 提供 `app` 和可为 null 的 `doc`，接受带 `return` 的脚本主体及可选的 helper 声明，并导入 `System`、`System.Collections.Generic`、`System.Linq`、`Inventor`。对 active document 的写入共用一个撤销事务；出错时中止该事务，警告会被返回。新建/已关闭的 document、其他 document 和外部文件不在该回滚范围内。超大的脚本输出包含一个文件、预览、schema 和 `mutation_applied: null`；请读取该文件，不要重新运行脚本。Spill 文件位于 `%LOCALAPPDATA%\Bimwright\ipt-mcp\spill`，新文件永远不会因数量上限被清除。
 

@@ -4,7 +4,7 @@ namespace Bimwright.Ipt.Shared.Logging
 {
     /// <summary>
     /// BIMWRIGHT_KEEP_ALL_LOGS (family switch, same in rvt/dwg/nwd/ipt): when on, automatic deletion of
-    /// logs, call records, journals and reports is skipped. Rotation still renames to timestamped
+    /// logs, call records, journals, reports and generated captures is skipped. Rotation still renames to timestamped
     /// archives. It never enables a recorder or changes what is recorded. Read in the server and the add-in.
     /// </summary>
     public static class LogRetentionPolicy

@@ -136,6 +136,7 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
             {
                 return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to capture view to file: " + ex.Message);
             }
+            CaptureImagePolicy.PruneGenerated(root, capturePath, DateTime.UtcNow);
             return Ok(ctx, new JObject
             {
                 ["path"] = capturePath,
@@ -241,6 +242,7 @@ public sealed class CaptureViewHandler : HandlerBase, IInventorCommand
         {
             return Fail(ctx, InventorErrorCodes.API_ERROR, "failed to capture view to file: " + ex.Message);
         }
+        CaptureImagePolicy.PruneGenerated(CaptureImagePolicy.ResolveCaptureRoot(), path, DateTime.UtcNow);
         return Ok(ctx, new JObject
         {
             ["path"] = path,
