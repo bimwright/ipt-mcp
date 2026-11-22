@@ -131,6 +131,7 @@ internal static partial class DrawingOperations
             if (extentW / extentH < (double)width / height) extentW = extentH * width / height; else extentH = extentW * height / width;
             camera.SetExtents(extentW, extentH); camera.ApplyWithoutTransition(); camera.SaveAsBitmap(path, width, height);
             var bytes = new FileInfo(path).Length; if (bytes == 0) throw new IOException("Capture produced an empty PNG.");
+            CaptureImagePolicy.PruneGenerated(CaptureImagePolicy.ResolveCaptureRoot(), path, DateTime.UtcNow);
             result = new JObject { ["ok"] = true, ["path"] = path, ["width"] = width, ["height"] = height, ["bytes"] = bytes, ["region_mm"] = new JObject { ["min"] = min.DeepClone(), ["max"] = max.DeepClone() }, ["count"] = 1 };
             if (p.Value<bool?>("inline") == true) { var base64 = Convert.ToBase64String(File.ReadAllBytes(path)); if (CaptureImagePolicy.TryRejectInline(base64.Length, out var reason)) { result["inline_omitted"] = true; result["warning"] = reason; } else { result["mime_type"] = "image/png"; result["base64"] = base64; } }
         }

@@ -160,4 +160,66 @@ public class CaptureImagePolicyTests
         Assert.Contains("file mode", r);
         Assert.Contains("width/height", r);
     }
+
+    [Fact]
+    public void PruneGenerated_drops_old_then_oldest_generated_captures_and_nothing_else()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ipt-capture-prune-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "captures");
+        Directory.CreateDirectory(Path.Combine(folder, "sub"));
+        var now = new DateTime(2026, 11, 22, 0, 0, 0, DateTimeKind.Utc);
+        string Make(string name, int ageDays, int bytes)
+        {
+            var path = Path.Combine(folder, name);
+            File.WriteAllBytes(path, new byte[bytes]);
+            File.SetLastWriteTimeUtc(path, now.AddDays(-ageDays));
+            return path;
+        }
+        try
+        {
+            var expired = Make("capture-20261001-101010-001.png", 40, 10);
+            var oldest = Make("capture-20261101-101010-002.png", 20, 400);
+            var middle = Make("capture-20261110-101010-1003.png", 11, 400);
+            var newest = Make("capture-20261121-101010-004.png", 1, 400);
+            var named = Make("before-fix.png", 90, 400);
+            var lookalike = Make("capture-notes.png", 90, 400);
+            var otherType = Make("capture-20261001-101010-005.jpg", 90, 400);
+            var nested = Make(Path.Combine("sub", "capture-20261001-101010-006.png"), 90, 400);
+
+            // Budget 900: the expired file goes by age, then the oldest until the rest fits.
+            Assert.Equal(2, CaptureImagePolicy.PruneGenerated(root, newest, now, days: 30, budget: 900));
+            Assert.False(File.Exists(expired));
+            Assert.False(File.Exists(oldest));
+            foreach (var kept in new[] { middle, newest, named, lookalike, otherType, nested }) Assert.True(File.Exists(kept), kept);
+
+            // The capture just written survives even when it alone exceeds the budget.
+            Assert.Equal(1, CaptureImagePolicy.PruneGenerated(root, newest, now, days: 30, budget: 100));
+            Assert.True(File.Exists(newest));
+            Assert.False(File.Exists(middle));
+
+            Assert.Equal(0, CaptureImagePolicy.PruneGenerated(Path.Combine(root, "missing"), null, now));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void PruneGenerated_keeps_every_capture_when_keep_all_is_on()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ipt-capture-keepall-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "captures"));
+        var old = Path.Combine(root, "captures", "capture-20200101-101010-001.png");
+        File.WriteAllBytes(old, new byte[400]);
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-400));
+        try
+        {
+            Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.ReadValue = () => "1";
+            Assert.Equal(0, CaptureImagePolicy.PruneGenerated(root, null, DateTime.UtcNow, days: 30, budget: 1));
+            Assert.True(File.Exists(old));
+        }
+        finally
+        {
+            Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.ReadValue = () => null;
+            Directory.Delete(root, true);
+        }
+    }
 }
