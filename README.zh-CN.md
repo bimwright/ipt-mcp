@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## 工具面
 
-开发 checkout 默认暴露 **150 个工具**（`--toolsets all`）；`--disable-send-code` 后为 **144 个工具**，`--read-only` 下为 **39 个工具**。所有 MCP 名称以 `inventor_` 开头。Toolset 过滤器可以缩小这个范围。下文已发布的 v0.2.1 benchmark 记录保留其原来的 111 个工具范围。
+2.5.1 默认暴露 **150 个工具**（`--toolsets all`）；`--disable-send-code` 后为 **144 个工具**，`--read-only` 下为 **39 个工具**。所有 MCP 名称以 `inventor_` 开头。Toolset 过滤器可以缩小这个范围。下文已发布的 v0.2.1 benchmark 记录保留其原来的 111 个工具范围。
 
 默认启用包括 `code` 在内的全部 19 个 toolset。用 `--toolsets <csv>` 缩小范围。
 

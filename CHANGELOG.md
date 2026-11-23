@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.5.1] - Unreleased
+## [2.5.1] - 2026-11-23
 
 Version numbers now follow the shared release number of the four bimwright gateways (rvt-mcp, dwg-mcp, nwd-mcp, ipt-mcp). The jump from 0.2.1 to 2.5.1 does not mark breaking changes; the entries below list what changed since 0.2.1.
 
