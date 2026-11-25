@@ -10,22 +10,23 @@ public static class ServerInstructions
 {
     public const string Text =
         "ipt-mcp - MCP gateway for Autodesk Inventor 2022-2027. Tools are prefixed inventor_*. " +
-        "Use whenever the user works with Inventor, .ipt part files, .iam assembly files, or .idw/.dwg drawings: " +
+        "Use for Inventor .ipt parts, .iam assemblies and .idw/.dwg drawings: " +
         "part, sketch, extrude, assembly constraints, BOM, interference, parameter, iproperty, " +
         "iLogic, iPart, sheet metal, drawings and STEP/STL/DXF export. Lengths are in mm. " +
         "The gateway binds only when exactly one Inventor is live. On AMBIGUOUS_TARGET call " +
         "inventor_list_available_targets, ask the user which model, then inventor_switch_target(\"pid:<n>\"). " +
         "On TARGET_LOST confirm the model and switch explicitly. Then call inventor_health(check_updates=true) once " +
-        "and follow its description. Before the first write, confirm the active document with the user and call " +
+        "and follow it. Before the first write, confirm the active document with the user and call " +
         "inventor_switch_target(\"pid:<n>\", verify=true). Under --read-only (no switch_target) start with --target pid:<n>. " +
         "HOST_BUSY/TARGET_BUSY: not started; resend once Inventor is free. " +
-        "TIMEOUT: outcome unknown; inspect before retrying a write. HOST_CRASHED: Inventor died, unsaved edits are " +
+        "TIMEOUT: outcome unknown; inspect before retrying a write. HOST_CRASHED: unsaved edits are " +
         "lost; do not resend, tell the user. When the job is verified complete, failed or cancelled, call " +
-        "inventor_report_task_result once (not for chat-only answers; idle time is not completion). " +
+        "inventor_report_task_result once (not for chat-only answers). " +
         "Tool index: open/new/save/close documents, get_document_state, checkpoints; create_sketch, draw_*; " +
         "extrude, revolve, fillet, hole, build_solids; place_occurrence, add_constraint; " +
         "get/set_parameter, get/set_iproperty; export_*; ilogic_*, sheet_fabrication_*; " +
         "baked tools; send_code only when no typed tool fits. " +
+        "inventor_send_code is enabled by default; --disable-send-code or --read-only removes it. " +
         SafetyAndPermissions;
 
     /// <summary>FC-SRV-06 / R-C safety block; always the last part of <see cref="Text"/> (INSTR-SAFETY-BLOCK).</summary>
