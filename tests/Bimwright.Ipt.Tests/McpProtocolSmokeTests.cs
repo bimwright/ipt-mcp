@@ -13,7 +13,8 @@ public sealed class McpProtocolSmokeTests
             expressionArguments: new JObject { ["code"] = "return doc.ComponentDefinition.Occurrences[1].RangeBox;" });
         var tool = Assert.Single((JArray)responses[1]["result"]!["tools"]!, t => (string?)t["name"] == "inventor_send_code");
         Assert.Contains(SendCodeTaskGuide.Text, (string?)tool["description"]);
-        Assert.Contains(SendCodeTaskGuide.Text, (string?)responses[0]["result"]?["instructions"]);
+        // INSTR-NO-DUP-SENDCODE: the guide ships in the tool description only, not in the instructions.
+        Assert.DoesNotContain(SendCodeTaskGuide.Text.Trim(), (string?)responses[0]["result"]?["instructions"]);
         var body = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
         Assert.False(body.Value<bool>("ok"));
         Assert.Equal("NO_TARGET", (string?)body["error"]?["code"]);
@@ -175,9 +176,10 @@ public sealed class McpProtocolSmokeTests
         Assert.Contains("update_guidance.mode", (string?)health["description"]);
         Assert.Contains("unobserved_components", (string?)health["description"]);
         Assert.Contains("inventor_health(check_updates=true)", (string?)responses[0]["result"]?["instructions"]);
-        Assert.Contains("update.notification", (string?)responses[0]["result"]?["instructions"]);
-        Assert.Contains("bundle_update_proposal_allowed", (string?)responses[0]["result"]?["instructions"]);
-        Assert.Contains("protected_components", (string?)responses[0]["result"]?["instructions"]);
+        // INSTR-MOVE-TO-TOOL: update-check detail is in the inventor_health description (asserted above), not repeated here.
+        Assert.DoesNotContain("update.notification", (string?)responses[0]["result"]?["instructions"]);
+        Assert.DoesNotContain("bundle_update_proposal_allowed", (string?)responses[0]["result"]?["instructions"]);
+        Assert.DoesNotContain("protected_components", (string?)responses[0]["result"]?["instructions"]);
         var result = JObject.Parse((string)responses[2]["result"]!["content"]![0]!["text"]!);
         Assert.False(result.Value<bool>("ok"));
         Assert.False(result.Value<bool>("host_connected"));
@@ -192,6 +194,20 @@ public sealed class McpProtocolSmokeTests
         Assert.Equal(JTokenType.Null, result["update"]!["notification"]!.Type);
         Assert.Equal("check_only", (string?)result["update_guidance"]?["mode"]);
         Assert.DoesNotContain("install.ps1", result["update_guidance"]!["steps"]!.ToString());
+    }
+
+    // INSTR-MAX-2KB, INSTR-SAFETY-BLOCK (FC-SRV-06): the served instructions fit in 2,048 UTF-8 bytes and end with
+    // the safety block for every launch that registers a different surface.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Served_instructions_fit_in_2048_bytes_and_end_with_safety_block(bool readOnly)
+    {
+        var responses = await RunProtocolHandshake(readOnly: readOnly);
+        var instructions = (string?)responses[0]["result"]?["instructions"];
+        Assert.NotNull(instructions);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(instructions!) <= 2048);
+        Assert.EndsWith(ServerInstructions.SafetyAndPermissions, instructions);
     }
 
     [Fact]
