@@ -34,7 +34,7 @@ public sealed class DocumentTools
         => Call("open_document", new JObject { ["path"] = path, ["visible"] = visible, ["silent"] = silent }, ct);
 
     [McpServerTool(Name = "inventor_save_document", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false),
-     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Save a document: the active one, or document (full path or name of an open/loaded document), following the inventor_get_document_state policy, which this tool enforces. " +
+     Description("Can discard or overwrite persisted data; Inventor undo cannot restore discarded edits or overwritten files. Save a document: the active one, or document (full path or name of an open/loaded document). Call inventor_get_document_state first and follow its policy, which this tool enforces. " +
                  "Without path it saves in place (Inventor keeps OldVersions): refused for a never-saved document (DOCUMENT_NEVER_SAVED), a template (TEMPLATE_SAVE_AS_REQUIRED), a read-only file (FILE_READ_ONLY) or a file missing on disk; saved=false with reason no_changes when nothing changed; an older-format file needs allow_format_upgrade=true after the user approved. " +
                  "With path it saves as a new local file of the document's type (.ipt/.iam/.idw/.dwg/.ipn) in an existing folder; an existing file is never overwritten (SAVE_AS_TARGET_EXISTS). Use a path the user gave; never choose one yourself. Refusals carry data.reason and save nothing. " +
                  "Runs silently by default (silent=true auto-answers prompts such as 'save referenced documents?' with their defaults so the call cannot hang on a hidden dialog).")]

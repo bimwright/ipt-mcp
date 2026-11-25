@@ -24,7 +24,7 @@ public sealed class MetaTools
     public MetaTools(PluginClient client) => _client = client;
 
     [McpServerTool(Name = "inventor_list_available_targets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("List detected live Inventor add-in targets (year, pid, transport, active document); `selected` marks this gateway's target. Use 4-digit calendar years (2022..2027), never legacy version codes.")]
+     Description("List detected live Inventor add-in targets (year, pid, transport, active document); `selected` marks this gateway's target. Use 4-digit calendar years (2022..2027), never legacy version codes. The gateway binds automatically only when exactly one Inventor is live; with several, calls return AMBIGUOUS_TARGET with candidates: list them here, ask the user which model if unclear, then call inventor_switch_target with pid:<n> or id:<target_id> (--read-only keeps read tools, list/get target and baked-tool listing but drops inventor_switch_target: restart with --target pid:<n>).")]
     public string ListAvailableTargets() =>
         LoggedMeta("inventor_list_available_targets", null, () =>
         {
@@ -42,7 +42,7 @@ public sealed class MetaTools
         });
 
     [McpServerTool(Name = "inventor_get_current_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
-     Description("Report the Inventor target this gateway uses. Never selects one: with no selection yet it returns bound=false with the live candidates (the first host call binds only when exactly one is live). A selection that exited returns TARGET_LOST.")]
+     Description("Report the Inventor target this gateway uses. Never selects one: with no selection yet it returns bound=false with the live candidates (the first host call binds only when exactly one is live). A selection that exited returns TARGET_LOST: it is never replaced automatically, so confirm the model with the user and switch explicitly.")]
     public string GetCurrentTarget()
     {
         return LoggedMeta("inventor_get_current_target", null, () =>
@@ -78,9 +78,9 @@ public sealed class MetaTools
     [McpServerTool(Name = "inventor_switch_target", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false),
      Description("Select the Inventor session this gateway uses: pid:<n> or id:<target_id> (preferred), auto, or a 4-digit year (2022..2027); other text returns INVALID_TARGET_SELECTOR. A selector matching several sessions is refused. The selection is kept until switched again and is never replaced automatically. " +
                  "auto and a year never move an existing selection to another Inventor, and leaving a running session this gateway selected needs rebind=true (TARGET_REBIND_REQUIRED otherwise); check with the user first. A refused switch keeps the current selection. Not available under --read-only (use --target at startup). " +
-                 "verify=true also confirms the document that is active in that Inventor now: writes run only on a confirmed target and return TARGET_UNCONFIRMED until this is called once, and DOCUMENT_CHANGED (command not started) when another document became active. " +
+                 "verify=true also confirms the document that is active in that Inventor now: writes run only on a confirmed target and return TARGET_UNCONFIRMED until this is called once, and DOCUMENT_CHANGED or DOCUMENT_UNCONFIRMED (write not started) when another document is active: confirm the intended document again, or pass document=<path or name>. PAIRING_REQUIRED: update the server and add-in together; reads still work. " +
                  "Check with the user that the reported document is the one to change. Opening or creating a document with inventor_open_document/new_part/new_assembly/new_drawing/create_part moves the confirmation to it; a write with an explicit document parameter is not tied to the active document. " +
-                 "Selecting the same session again keeps its confirmed document. Does not change the Inventor document.")]
+                 "Selecting the same session again keeps its confirmed document. After HOST_CRASHED, tell the user and confirm before switching to another Inventor. Does not change the Inventor document.")]
     public Task<string> SwitchTarget(string target, bool verify = false,
         [Description("Leave a running Inventor this gateway selected and move to another (default false). Only after the user agreed.")] bool rebind = false,
         CancellationToken ct = default) =>
