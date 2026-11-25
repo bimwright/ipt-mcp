@@ -105,6 +105,16 @@ internal static partial class Program
             }
         }));
 
+    // TOOL-ALWAYSLOAD (BW-MCP-UPGRADE-001): startup and report tools preload even under Tool Search; never send_code.
+    internal const string AlwaysLoadMetadataKey = "anthropic/alwaysLoad";
+    internal static readonly string[] AlwaysLoadToolNames =
+    {
+        "inventor_health",
+        "inventor_list_available_targets",
+        "inventor_switch_target",
+        "inventor_report_task_result",
+    };
+
     internal static IMcpServerBuilder RegisterToolsets(IMcpServerBuilder mcp, IEnumerable<Type> toolTypes, bool readOnly = false,
         Newtonsoft.Json.Linq.JObject? gatewayIdentity = null)
     {
@@ -121,6 +131,11 @@ internal static partial class Program
                         [HealthRuntimeInfo.ClientRuntimeMetadataKey] = System.Text.Json.Nodes.JsonNode.Parse(
                             HealthRuntimeInfo.ClientRuntime(gatewayIdentity).ToString()),
                     };
+                if (AlwaysLoadToolNames.Contains(attribute.Name, StringComparer.Ordinal))
+                {
+                    tool.ProtocolTool.Meta ??= new System.Text.Json.Nodes.JsonObject();
+                    tool.ProtocolTool.Meta[AlwaysLoadMetadataKey] = true;
+                }
                 if (attribute.Name is "inventor_ilogic_run_rule" or "inventor_ilogic_run_external_rule")
                 {
                     var schema = Newtonsoft.Json.Linq.JObject.Parse(tool.ProtocolTool.InputSchema.GetRawText());

@@ -43,6 +43,8 @@ async def run_mode(server, flags, output, label, sweep=False):
                                                "clientInfo": {"name": "ipt-release-contract", "version": "1"}})
             assert "result" in init, init
             instructions = init['result']['instructions']
+            assert len(instructions.encode('utf-8')) <= 2048, f'instructions={len(instructions.encode("utf-8"))}B > 2048'
+            assert 'Safety & permissions:' in instructions
             assert 'inventor_send_code is enabled by default' in instructions
             assert '--disable-send-code' in instructions and '--read-only' in instructions
             assert 'PLUGIN_ENABLE_SEND_CODE' not in instructions, 'Obsolete add-in opt-in guidance'
@@ -61,12 +63,19 @@ async def run_mode(server, flags, output, label, sweep=False):
                 assert "error" in denied or denied.get("result", {}).get("isError") is True
             if "inventor_send_code" in by_name:
                 assert not by_name["inventor_send_code"].get("annotations"), by_name["inventor_send_code"]
+            always_load = {"inventor_health", "inventor_list_available_targets", "inventor_switch_target", "inventor_report_task_result"}
             for tool in tools:
-                assert tool.get("description"), tool["name"]
+                desc = tool.get("description")
+                assert desc, tool["name"]
+                assert len(desc) <= 4096 and len(desc.encode("utf-8")) <= 4096, f'{tool["name"]}: desc too long'
+                if tool["name"] in always_load:
+                    assert tool.get('_meta', {}).get('anthropic/alwaysLoad') is True, tool["name"]
+                else:
+                    assert tool.get('_meta', {}).get('anthropic/alwaysLoad') is not True, tool["name"]
                 if tool["name"] != "inventor_send_code":
                     assert set(tool.get("annotations", {})) >= {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}, tool["name"]
                     if tool['annotations']['destructiveHint']:
-                        assert re.search(r'undo|undone|rollback|roll(?:ed)? back', tool['description'], re.I), tool['name']
+                        assert re.search(r'undo|undone|rollback|roll(?:ed)? back', desc, re.I), tool['name']
                 else:
                     assert not tool.get('annotations'), 'send_code must have no permission annotations'
                     assert tool.get('_meta', {}).get('anthropic/requiresUserInteraction') is not True

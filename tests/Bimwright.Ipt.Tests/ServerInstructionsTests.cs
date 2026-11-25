@@ -9,21 +9,25 @@ namespace Bimwright.Ipt.Tests;
 
 public sealed class ServerInstructionsTests
 {
-    private static IEnumerable<(string Name, string Description)> AllTools() =>
+    internal static IEnumerable<(string Name, string Description, MethodInfo Method)> AllToolMethods() =>
         typeof(Program).Assembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
             .SelectMany(t => t.GetMethods())
-            .Select(m => (Tool: m.GetCustomAttribute<McpServerToolAttribute>(), Desc: m.GetCustomAttribute<DescriptionAttribute>()))
+            .Select(m => (Method: m, Tool: m.GetCustomAttribute<McpServerToolAttribute>(), Desc: m.GetCustomAttribute<DescriptionAttribute>()))
             .Where(x => x.Tool is not null)
-            .Select(x => (x.Tool!.Name!, x.Desc?.Description ?? ""));
+            .Select(x => (x.Tool!.Name!, x.Desc?.Description ?? "", x.Method));
+
+    private static IEnumerable<(string Name, string Description)> AllTools() =>
+        AllToolMethods().Select(t => (t.Name, t.Description));
 
     // INSTR-MAX-2KB: the text is one constant; no startup flag composes a different string
     // (McpProtocolSmokeTests checks the served text for the default and --read-only launches).
     [Fact]
     public void Instructions_fit_in_2048_utf8_bytes_INSTR_MAX_2KB()
     {
-        Assert.True(Encoding.UTF8.GetByteCount(ServerInstructions.Text) <= 2048,
-            "ServerInstructions.Text is " + Encoding.UTF8.GetByteCount(ServerInstructions.Text) + " UTF-8 bytes; the cap is 2048.");
+        var bytes = Encoding.UTF8.GetByteCount(ServerInstructions.Text);
+        Assert.True(bytes <= 2048,
+            "ServerInstructions.Text is " + bytes + " UTF-8 bytes; the cap is 2048.");
     }
 
     // INSTR-SAFETY-BLOCK, FC-SRV-06, BW-PERM-001 R-C: the safety block is present and is the last part of the text.
@@ -46,12 +50,20 @@ public sealed class ServerInstructionsTests
         var order = new[]
         {
             At("Autodesk Inventor 2022-2027"), At("iproperty"), At("export"),
-            At("exactly one Inventor is live"), At("inventor_health(check_updates=true)"), At("inventor_report_task_result"),
+            At("exactly one Inventor is live"), At("inventor_list_available_targets"), At("inventor_switch_target"),
+            At("inventor_health(check_updates=true)"), At("inventor_report_task_result"),
             At("Tool index:"), At("Safety & permissions:"),
         };
         Assert.Equal(order.OrderBy(i => i), order);
-        foreach (var rule in new[] { "AMBIGUOUS_TARGET", "TARGET_LOST", "verify=true", "Lengths are in mm", "--read-only" })
+        foreach (var rule in new[]
+                 {
+                     "AMBIGUOUS_TARGET", "TARGET_LOST", "verify=true", "Lengths are in mm",
+                     "HOST_BUSY", "TARGET_BUSY", "TIMEOUT", "HOST_CRASHED",
+                     // Release-contract invariants verified by tests/stdio/release-contract.py
+                     "inventor_send_code is enabled by default", "--disable-send-code", "--read-only",
+                 })
             Assert.Contains(rule, text);
+        Assert.DoesNotContain("PLUGIN_ENABLE_SEND_CODE", text);
     }
 
     // INSTR-NO-DUP-SENDCODE: the routing guide lives only in the inventor_send_code description.
@@ -73,18 +85,33 @@ public sealed class ServerInstructionsTests
             Assert.DoesNotContain(moved, ServerInstructions.Text);
             Assert.Contains(moved, tools["inventor_health"]);
         }
+        Assert.Contains("host_busy", tools["inventor_health"]);
         Assert.Contains("AMBIGUOUS_TARGET", tools["inventor_list_available_targets"]);
         Assert.Contains("TARGET_LOST", tools["inventor_get_current_target"]);
         Assert.Contains("DOCUMENT_UNCONFIRMED", tools["inventor_switch_target"]);
         Assert.Contains("PAIRING_REQUIRED", tools["inventor_switch_target"]);
+        Assert.Contains("HOST_CRASHED", tools["inventor_switch_target"]);
         Assert.Contains("inventor_get_document_state", tools["inventor_save_document"]);
+        Assert.Contains("Activity toasts", tools["inventor_report_task_result"]);
+        Assert.Contains("BIMWRIGHT_INVENTOR_PLUGIN_DISABLE_SEND_CODE=1", tools["inventor_send_code"]);
+        // SendCode-Context: accepted code shape and default namespaces remain in the tool description.
+        Assert.Contains("Pass a C# script body with statements and return", tools["inventor_send_code"]);
+        Assert.Contains("Imports: System, System.Collections.Generic, System.Linq, Inventor.", tools["inventor_send_code"]);
     }
 
     [Fact]
-    public void Every_full_tool_name_in_the_instructions_is_a_real_tool()
+    public void Every_full_tool_name_and_index_prefix_in_the_instructions_matches_real_tools()
     {
         var names = AllTools().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        foreach (Match m in Regex.Matches(ServerInstructions.Text, @"inventor_[a-z_]+[a-z]"))
+        foreach (Match m in Regex.Matches(ServerInstructions.Text, @"inventor_[a-z0-9_]+[a-z0-9]"))
             Assert.Contains(m.Value, names);
+        var indexStart = ServerInstructions.Text.IndexOf("Tool index:", StringComparison.Ordinal);
+        var indexEnd = ServerInstructions.Text.IndexOf("Safety & permissions:", StringComparison.Ordinal);
+        var index = ServerInstructions.Text[indexStart..indexEnd];
+        foreach (Match m in Regex.Matches(index, @"\b([a-z]+(?:_[a-z]+)*_)\*"))
+        {
+            var prefix = "inventor_" + m.Groups[1].Value;
+            Assert.Contains(names, n => n.StartsWith(prefix, StringComparison.Ordinal));
+        }
     }
 }

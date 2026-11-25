@@ -196,8 +196,9 @@ public sealed class McpProtocolSmokeTests
         Assert.DoesNotContain("install.ps1", result["update_guidance"]!["steps"]!.ToString());
     }
 
-    // INSTR-MAX-2KB, INSTR-SAFETY-BLOCK (FC-SRV-06): the served instructions fit in 2,048 UTF-8 bytes and end with
-    // the safety block for every launch that registers a different surface.
+    // INSTR-MAX-2KB, INSTR-SAFETY-BLOCK (FC-SRV-06), INSTR-MOVE-TO-TOOL, TOOL-ALWAYSLOAD:
+    // the served instructions fit in 2,048 UTF-8 bytes and end with the safety block, every wire tool description
+    // fits in 4,096 chars/UTF-8 bytes, and only the registered startup/report tools carry anthropic/alwaysLoad=true.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -208,6 +209,33 @@ public sealed class McpProtocolSmokeTests
         Assert.NotNull(instructions);
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(instructions!) <= 2048);
         Assert.EndsWith(ServerInstructions.SafetyAndPermissions, instructions);
+
+        var tools = (JArray)responses[1]["result"]!["tools"]!;
+        foreach (var tool in tools)
+        {
+            var desc = (string?)tool["description"] ?? "";
+            Assert.True(desc.Length <= 4096, $"{tool["name"]} description length {desc.Length} > 4096");
+            Assert.True(System.Text.Encoding.UTF8.GetByteCount(desc) <= 4096,
+                $"{tool["name"]} description UTF-8 bytes {System.Text.Encoding.UTF8.GetByteCount(desc)} > 4096");
+        }
+
+        // TOOL-ALWAYSLOAD (BW-MCP-UPGRADE-001): startup + report tools preload; never send_code.
+        var expectedAlwaysLoad = readOnly
+            ? new[] { "inventor_health", "inventor_list_available_targets", "inventor_report_task_result" }
+            : Program.AlwaysLoadToolNames;
+        var actualAlwaysLoad = tools
+            .Where(t => t["_meta"]?[Program.AlwaysLoadMetadataKey]?.Value<bool>() == true)
+            .Select(t => (string)t["name"]!)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(expectedAlwaysLoad.OrderBy(n => n, StringComparer.Ordinal).ToArray(), actualAlwaysLoad);
+        var health = Assert.Single(tools, t => (string?)t["name"] == "inventor_health");
+        Assert.NotNull(health["_meta"]?[HealthRuntimeInfo.ClientRuntimeMetadataKey]);
+        if (!readOnly)
+        {
+            var sendCode = Assert.Single(tools, t => (string?)t["name"] == "inventor_send_code");
+            Assert.Null(sendCode["_meta"]?[Program.AlwaysLoadMetadataKey]);
+        }
     }
 
     [Fact]
