@@ -43,7 +43,7 @@ public sealed class PluginClient
     internal async Task ReportServerActivityAsync(string name, object? arguments,
         ModelContextProtocol.Protocol.CallToolResult? result, string? error, long durationMs)
     {
-        var target = _binding.Peek(_registry.List());
+        var target = _binding.Peek(ListTargets());
         if (target == null) return;
         try
         {
@@ -90,25 +90,69 @@ public sealed class PluginClient
         ReportStore = new Reports.ReportStore(config.ReportDirectory ?? System.IO.Path.Combine(config.DataDirectory, "reports"));
         _binding = new TargetBinding(config.TargetId, processProbe);
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
-        _setupIdentity = SetupRuntimeIdentity.Capture(config.LocalAppDataRoot is { } root
-            ? Bimwright.Setup.RuntimeLayout.Resolve(root, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp")
-            : Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp"),
-            typeof(PluginClient).Assembly, "gateway");
+        var layout = config.LocalAppDataRoot is { } root
+            ? ServerLayout.ForRoot(root).Layout
+            : config.Layout.Layout;
+        // FC-TGT-07: inside a client AppContainer there is no verified layout; report it as unmanaged.
+        _setupIdentity = layout is not null
+            ? SetupRuntimeIdentity.Capture(layout, typeof(PluginClient).Assembly, "gateway")
+            : SetupRuntimeIdentity.Capture(ServerLayout.ProductId, false, null, null, typeof(PluginClient).Assembly, "gateway");
     }
 
     internal JObject GatewayIdentity => (JObject)_setupIdentity.DeepClone();
 
-    public IReadOnlyList<TargetDescriptor> ListTargets() => _registry.List();
+    /// <summary>Test seam: replaces <see cref="TargetRegistry.List"/> when set (e.g. to simulate AppContainer access denial).</summary>
+    internal Func<IReadOnlyList<TargetDescriptor>>? ListTargetsOverride { get; set; }
+
+    /// <summary>
+    /// Live targets. Inside a client AppContainer (FC-TGT-07), enumerating an unreadable host descriptor folder
+    /// (for example via <c>--local-app-data</c>) throws <see cref="UnauthorizedAccessException"/>; treat that as
+    /// zero targets so callers report <c>CLIENT_SANDBOXED</c>. Outside a sandbox, access denial still throws.
+    /// </summary>
+    public IReadOnlyList<TargetDescriptor> ListTargets()
+    {
+        try { return (ListTargetsOverride ?? _registry.List)(); }
+        catch (UnauthorizedAccessException) when (Sandbox().Detected) { return Array.Empty<TargetDescriptor>(); }
+    }
+
+    /// <summary>Test seam for the AppContainer token probe (FC-TGT-07); defaults to the cached process-token check.</summary>
+    internal Func<bool?> AppContainerProbe { get; set; } = ClientSandbox.ProcessTokenIsAppContainer;
+
+    /// <summary>Directory the descriptors are read from (reported as sandbox.data_dir).</summary>
+    internal string DescriptorDirectory => _config.DescriptorDirectory;
+
+    /// <summary>FC-TGT-07: whether this server runs inside the client's AppContainer sandbox.</summary>
+    internal ClientSandbox.Result Sandbox() => ClientSandbox.Classify(AppContainerProbe(),
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), _config.DescriptorDirectory);
+
+    /// <summary>The sandbox block for responses, or null when not sandboxed.</summary>
+    internal JObject? SandboxJson() => Sandbox() is { Detected: true } s ? ClientSandbox.ToJson(s, _config.DescriptorDirectory) : null;
+
+    /// <summary>
+    /// FC-TGT-07: when sandboxed and discovery finds no live target, NO_TARGET becomes CLIENT_SANDBOXED
+    /// (same envelope; nothing is sent). Every other case is unchanged.
+    /// </summary>
+    private T Targeted<T>(Func<IReadOnlyList<TargetDescriptor>, T> resolve)
+    {
+        var live = ListTargets();
+        try { return resolve(live); }
+        catch (InventorGatewayException ex) when (ex.Code == InventorErrorCodes.NO_TARGET && live.Count == 0 && SandboxJson() is { } sandbox)
+        {
+            var data = ex.ResponseData as JObject ?? new JObject();
+            data["sandbox"] = sandbox;
+            throw new InventorGatewayException(InventorErrorCodes.CLIENT_SANDBOXED, ClientSandbox.Message, data);
+        }
+    }
 
     /// <summary>The selected target, binding it on first use only when exactly one live target matches.
     /// Throws NO_TARGET, AMBIGUOUS_TARGET, TARGET_LOST or TARGET_UNAVAILABLE instead of falling back.</summary>
-    public TargetDescriptor ResolveTarget() => _binding.Resolve(_registry.List());
+    public TargetDescriptor ResolveTarget() => Targeted(_binding.Resolve);
 
     /// <summary>Selects one live target by pid:&lt;n&gt;, id:&lt;target_id&gt;, year, pid or pipe name; ambiguity is refused.</summary>
-    public TargetDescriptor SwitchTarget(string selector, bool rebind = false) => _binding.Switch(selector, _registry.List(), rebind);
+    public TargetDescriptor SwitchTarget(string selector, bool rebind = false) => Targeted(live => _binding.Switch(selector, live, rebind));
 
     /// <summary>The current selection without binding one (inventor_get_current_target, FC-TGT-05); null when none.</summary>
-    public TargetDescriptor? CurrentTarget() => _binding.Current(_registry.List());
+    public TargetDescriptor? CurrentTarget() => _binding.Current(ListTargets());
 
     internal string? SelectedTargetId => _binding.SelectedTargetId;
 

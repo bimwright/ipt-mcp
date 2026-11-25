@@ -13,6 +13,11 @@ namespace Bimwright.Ipt.Shared.Contracts;
 public static class SetupRuntimeIdentity
 {
     public static JObject Capture(RuntimeLayout layout, Assembly assembly, string component, int? hostYear = null)
+        => Capture(layout.ProductId, layout.Managed, layout.GenerationId, layout.DataSchema, assembly, component, hostYear);
+
+    /// <summary>Same identity without a RuntimeLayout (the gateway inside a client AppContainer, FC-TGT-07).</summary>
+    public static JObject Capture(string productId, bool managed, string? generationId, int? dataSchema,
+        Assembly assembly, string component, int? hostYear = null)
     {
         if (component != "gateway" && component != "plugin") throw new ArgumentException("Unknown setup component.", nameof(component));
         using var process = Process.GetCurrentProcess();
@@ -37,11 +42,11 @@ public static class SetupRuntimeIdentity
         return new JObject
         {
             ["schema_version"] = 2,
-            ["product_id"] = layout.ProductId,
+            ["product_id"] = productId,
             ["component"] = component,
-            ["managed"] = layout.Managed,
-            ["generation_id"] = layout.GenerationId,
-            ["data_schema"] = layout.DataSchema,
+            ["managed"] = managed,
+            ["generation_id"] = generationId,
+            ["data_schema"] = dataSchema,
             ["host_year"] = hostYear,
             ["process_id"] = process.Id,
             ["process_started_utc"] = process.StartTime.ToUniversalTime().ToString("o"),

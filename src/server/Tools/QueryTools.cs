@@ -45,6 +45,7 @@ public sealed class QueryTools
         var gateway = _client.GatewayIdentity;
         var plugin = connected ? data["setup_plugin"] as JObject : null;
         HealthRuntimeInfo.Enrich(data, gateway, connected);
+        if (_client.SandboxJson() is { } sandbox) data["sandbox"] = sandbox; // FC-TGT-07: only when detected
         data["update"] = check_updates
             ? await _updates.CheckAsync(gateway, plugin, ct)
             : ReleaseUpdateCheck.NotChecked(gateway, plugin);
@@ -200,7 +201,7 @@ public sealed class QueryTools
         }
         catch (InventorGatewayException ex)
         {
-            return ToolResponse.Error(ex.Code, ex.Message);
+            return ToolResponse.Error(ex);
         }
     }
 }

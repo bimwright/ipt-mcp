@@ -260,7 +260,10 @@ public sealed class ReleaseUpdateCheckTests
         if (failure == "network") handler.BeforeResponse = _ => throw new HttpRequestException("offline");
         if (failure == "timeout") handler.BeforeResponse = ct => Task.Delay(Timeout.Infinite, ct);
         if (failure == "metadata") handler.Body = "not json";
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(40) };
+        // Only the timeout case needs a short client timeout; the others fail immediately and a 40 ms
+        // limit made them race the timeout on slow CI runners (seen as "timeout" instead of "network_unavailable").
+        using var client = new HttpClient(handler)
+        { Timeout = failure == "timeout" ? TimeSpan.FromMilliseconds(40) : TimeSpan.FromSeconds(30) };
         var result = await Check(client);
         var notice = Assert.IsType<JObject>(result["notification"]);
         Assert.Equal("UPDATE_CHECK_UNAVAILABLE", notice.Value<string>("code"));

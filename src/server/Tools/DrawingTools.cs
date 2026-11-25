@@ -57,7 +57,7 @@ internal static class DrawingWire
             return ToolResponse.Serialize(data);
         }
         catch (ArgumentException ex) { return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
-        catch (InventorGatewayException ex) { return ToolResponse.Error(ex.Code, ex.Message); }
+        catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
     }
 }
 
