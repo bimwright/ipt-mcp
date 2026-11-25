@@ -7,6 +7,8 @@ namespace Bimwright.Ipt.Shared.Contracts;
 public static class InventorErrorCodes
 {
     public const string NO_TARGET = "NO_TARGET";
+    /// <summary>The MCP client runs this server in a Windows AppContainer and no target is visible; the command was not sent (FC-TGT-07).</summary>
+    public const string CLIENT_SANDBOXED = "CLIENT_SANDBOXED";
     public const string TARGET_UNAVAILABLE = "TARGET_UNAVAILABLE";
     /// <summary>The add-in endpoint exists but did not accept the connection in time; nothing was sent (family contract error table).</summary>
     public const string TARGET_BUSY = "TARGET_BUSY";

@@ -30,7 +30,7 @@ public sealed class CodeModuleStore
     public CodeModuleStore(string directory) => _dir = directory;
 
     public static string DefaultDirectory => Path.Combine(
-        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot, "modules");
+        ServerLayout.ForCurrentUser().DataRoot, "modules");
 
     public string Directory => _dir;
 

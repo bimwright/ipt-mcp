@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- When an MCP client runs ipt-mcp inside a Windows AppContainer sandbox (for example Codex Desktop), the gateway cannot see or reach Inventor and either exited before MCP initialize (the per-user layout check is denied access to the parent of the redirected `LocalAppData`) or reported a bare `NO_TARGET`. Only in that sandbox, an access-denied layout check now falls back to an unverified folder under the redirected `LocalAppData`, so the server starts; outside a sandbox the layout checks fail as before. The gateway detects the sandbox (an AppContainer process token, or `LocalAppData` under `Packages\<package>\AC`) and, when no target is visible, returns `CLIENT_SANDBOXED` instead of `NO_TARGET` (the command is not sent) with guidance for the user: the sandbox protects the computer, and a person can choose to let this one MCP server run outside it. `inventor_list_available_targets` and `inventor_get_current_target` show the same guidance and a `sandbox` block, and `inventor_health` includes `sandbox` whenever a sandbox is detected. Nothing changes outside a sandbox. Family contract FC-TGT-07; same issue as rvt-mcp [#71](https://github.com/bimwright/rvt-mcp/issues/71).
+
 ## [2.5.1] - 2026-11-23
 
 Version numbers now follow the shared release number of the four bimwright gateways (rvt-mcp, dwg-mcp, nwd-mcp, ipt-mcp). The jump from 0.2.1 to 2.5.1 does not mark breaking changes; the entries below list what changed since 0.2.1.

@@ -17,16 +17,16 @@ if (args.Any(a => a == "--help" || a == "-h"))
 
 // Hold the setup barrier before binding runtime paths or starting any data writer.
 var cfg = InventorMcpConfig.Load(args);
-Bimwright.Setup.RuntimeLayout layout;
+Bimwright.Setup.RuntimeLayout? layout;
 if (cfg.LocalAppDataRoot is { } isolatedRoot)
 {
     if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
     layout = Bimwright.Setup.RuntimeLayout.Start(isolatedRoot, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp");
 }
 else
-    layout = Bimwright.Setup.RuntimeLayout.StartForCurrentUser("ipt-mcp");
-cfg.BindRuntimeLayout(layout);
-ServerLogger.Configure(cfg.EnableCallLog, cfg.LocalAppDataRoot == null ? null : layout.GatewayLogPath);
+    layout = ServerLayout.StartForCurrentUser(); // null only inside a client AppContainer (FC-TGT-07): keep the fallback paths
+if (layout is not null) cfg.BindRuntimeLayout(layout);
+ServerLogger.Configure(cfg.EnableCallLog, cfg.LocalAppDataRoot == null ? null : layout!.GatewayLogPath);
 ServerLogger.RunMaintenance();
 // stderr is the server's diagnostic channel; stdout carries the MCP stream.
 if (Bimwright.Ipt.Shared.Logging.LogRetentionPolicy.KeepAll)

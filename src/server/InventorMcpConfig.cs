@@ -12,7 +12,7 @@ public sealed class InventorMcpConfig
     public bool EnableSendCode { get; set; } = true;
     public bool EnableCallLog { get; set; }
     public string? LocalAppDataRoot { get; set; }
-    public string DataDirectory { get; private set; } = Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot;
+    public string DataDirectory { get; private set; }
     /// <summary>Saved agent reports (FC-RPT-04); null means &lt;DataDirectory&gt;\reports. Tests set a temporary folder.</summary>
     internal string? ReportDirectory { get; set; }
     public bool EnableToolBaker { get; set; } = true;
@@ -27,22 +27,37 @@ public sealed class InventorMcpConfig
     public string? TargetId { get; set; }
     public List<string> Toolsets { get; set; } = new();
 
-    public string DescriptorDirectory { get; set; } = Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").RuntimeRoot;
-    public string BakeDirectory { get; set; } = Path.Combine(
-        Bimwright.Setup.RuntimeLayout.ForCurrentUser("ipt-mcp").DataRoot, "baked");
+    public string DescriptorDirectory { get; set; }
+    public string BakeDirectory { get; set; }
 
-    // Bind once the setup barrier is held, so an installer cutover between option
-    // parsing and startup cannot leave writers using a stale layout.
-    internal void BindRuntimeLayout(Bimwright.Setup.RuntimeLayout layout)
+    /// <summary>The per-user layout these paths came from; <see cref="ServerLayout.SandboxFallback"/> inside a client AppContainer (FC-TGT-07).</summary>
+    internal ServerLayout Layout { get; private set; }
+
+    public InventorMcpConfig() : this(ServerLayout.ForCurrentUser()) { }
+
+    internal InventorMcpConfig(ServerLayout layout)
     {
+        Layout = layout;
         DataDirectory = layout.DataRoot;
         DescriptorDirectory = layout.RuntimeRoot;
         BakeDirectory = Path.Combine(layout.DataRoot, "baked");
     }
 
-    public static InventorMcpConfig Load(string[] args)
+    // Bind once the setup barrier is held, so an installer cutover between option
+    // parsing and startup cannot leave writers using a stale layout.
+    internal void BindRuntimeLayout(Bimwright.Setup.RuntimeLayout layout)
     {
-        var config = new InventorMcpConfig();
+        Layout = ServerLayout.From(layout);
+        DataDirectory = layout.DataRoot;
+        DescriptorDirectory = layout.RuntimeRoot;
+        BakeDirectory = Path.Combine(layout.DataRoot, "baked");
+    }
+
+    public static InventorMcpConfig Load(string[] args) => Load(args, null);
+
+    internal static InventorMcpConfig Load(string[] args, ServerLayout? layout)
+    {
+        var config = layout is null ? new InventorMcpConfig() : new InventorMcpConfig(layout);
         ApplyJson(config, args);   // lowest precedence
         ApplyEnv(config);          // middle
         ApplyCli(config, args);    // highest

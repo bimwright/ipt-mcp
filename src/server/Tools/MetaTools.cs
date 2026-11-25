@@ -29,7 +29,16 @@ public sealed class MetaTools
         LoggedMeta("inventor_list_available_targets", null, () =>
         {
             var selected = _client.SelectedTargetId;
-            return ToolResponse.Serialize(_client.ListTargets().Select(t => PublicTarget(t, t.TargetId == selected)));
+            var targets = _client.ListTargets();
+            // FC-TGT-07: inside the client's AppContainer no target is visible; explain instead of an empty list.
+            if (targets.Count == 0 && _client.SandboxJson() is { } sandbox)
+                return ToolResponse.Serialize(new JObject
+                {
+                    ["targets"] = new JArray(),
+                    ["sandbox"] = sandbox,
+                    ["note"] = ClientSandbox.Message,
+                });
+            return ToolResponse.Serialize(targets.Select(t => PublicTarget(t, t.TargetId == selected)));
         });
 
     [McpServerTool(Name = "inventor_get_current_target", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false),
@@ -43,14 +52,18 @@ public sealed class MetaTools
                 if (_client.CurrentTarget() is not { } t)
                 {
                     var candidates = _client.ListTargets();
-                    return ToolResponse.Serialize(new JObject
+                    var sandbox = candidates.Count == 0 ? _client.SandboxJson() : null;
+                    var unbound = new JObject
                     {
                         ["bound"] = false,
                         ["candidates"] = JArray.FromObject(candidates.Select(c => PublicTarget(c, false))),
-                        ["next_step"] = candidates.Count == 0
+                        ["next_step"] = sandbox is not null ? ClientSandbox.Message
+                            : candidates.Count == 0
                             ? "No live Inventor target. Start Inventor with the bimwright add-in loaded."
                             : "Check with the user which Inventor to use, then inventor_switch_target(target=\"pid:<n>\", verify=true) before writes.",
-                    });
+                    };
+                    if (sandbox is not null) unbound["sandbox"] = sandbox; // FC-TGT-07
+                    return ToolResponse.Serialize(unbound);
                 }
                 var json = JObject.FromObject(PublicTarget(t, true));
                 json["bound"] = true;
