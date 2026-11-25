@@ -116,10 +116,65 @@ public sealed class ClientSandboxTests : IDisposable
         Assert.Equal(InventorErrorCodes.CLIENT_SANDBOXED, (string?)result["error"]?["code"]);
         Assert.Equal(ClientSandbox.Message, (string?)result["error"]?["message"]);
         Assert.Contains("The command was not sent.", (string?)result["error"]?["message"]);
+        AssertSandboxBlock(result["data"]?["sandbox"]);
 
         var mcp = AgentOutputGuard.Apply("inventor_list_open_documents",
             new CallToolResult { Content = new[] { new TextContentBlock { Text = text } } }, new InventorMcpConfig());
         Assert.True(mcp.IsError);
+    }
+
+    [Fact]
+    public async Task FC_TGT_07_all_tool_surfaces_preserve_sandbox_block_and_message()
+    {
+        var client = Client(true);
+        var responses = new[]
+        {
+            await new AssemblyQueryTools(client).ListConstraints(),
+            await new AssemblyTools(client).CreateDesignView("v1"),
+            await new AssemblyTools(client).PlaceOccurrence("part.ipt"),
+            await new DrawingQueryTools(client).GetDrawingInfo(),
+            await new ExportTools(client).ViewFit(),
+            await new PropertyTools(client).GetMassProperties(),
+            await new SheetFabricationQueryTools(client).SheetFabricationInfo(),
+            await new CodeTools(client, new CodeModuleStore(Path.Combine(_root, "modules")))
+                .SaveCodeModule("helper", "public static int One() => 1;"),
+        };
+
+        foreach (var text in responses)
+        {
+            var result = JObject.Parse(text);
+            Assert.False(result.Value<bool>("ok"));
+            Assert.Equal(InventorErrorCodes.CLIENT_SANDBOXED, (string?)result["error"]?["code"]);
+            Assert.Equal(ClientSandbox.Message, (string?)result["error"]?["message"]);
+            AssertSandboxBlock(result["data"]?["sandbox"]);
+        }
+    }
+
+    [Fact]
+    public async Task FC_TGT_07_discovery_unauthorized_access_reports_client_sandboxed_only_in_sandbox()
+    {
+        var sandboxed = Client(true);
+        sandboxed.ListTargetsOverride = () => throw new UnauthorizedAccessException("Access to descriptor folder is denied.");
+
+        var list = JObject.Parse(new MetaTools(sandboxed).ListAvailableTargets());
+        Assert.Empty((JArray)list["targets"]!);
+        AssertSandboxBlock(list["sandbox"]);
+
+        var current = JObject.Parse(new MetaTools(sandboxed).GetCurrentTarget());
+        Assert.False(current.Value<bool>("bound"));
+        AssertSandboxBlock(current["sandbox"]);
+
+        var doc = JObject.Parse(await new QueryTools(sandboxed).ListOpenDocuments());
+        Assert.Equal(InventorErrorCodes.CLIENT_SANDBOXED, (string?)doc["error"]?["code"]);
+        AssertSandboxBlock(doc["data"]?["sandbox"]);
+
+        var health = JObject.Parse(await new QueryTools(sandboxed).Health());
+        Assert.Equal(InventorErrorCodes.CLIENT_SANDBOXED, (string?)health["error"]?["code"]);
+        AssertSandboxBlock(health["sandbox"]);
+
+        var unsandboxed = Client(false);
+        unsandboxed.ListTargetsOverride = () => throw new UnauthorizedAccessException("Access denied.");
+        Assert.Throws<UnauthorizedAccessException>(() => unsandboxed.ListTargets());
     }
 
     [Fact]
@@ -248,7 +303,17 @@ public sealed class ClientSandboxTests : IDisposable
     public void FC_TGT_07_sandboxed_start_denial_returns_no_layout_and_a_working_layout_is_used_unchanged()
     {
         Assert.Null(ServerLayout.Start(Denied, () => true));
+        Assert.True(ServerLayout.ProcessSandboxed(AcLocal));
+        Assert.Null(ServerLayout.Start(Denied, () => ServerLayout.ProcessSandboxed(AcLocal)));
+        Assert.True(ServerLayout.Resolve(Denied, () => ServerLayout.ProcessSandboxed(AcLocal), AcLocal).SandboxFallback);
+        if (ClientSandbox.ProcessTokenIsAppContainer() != true)
+        {
+            Assert.False(ServerLayout.ProcessSandboxed(_root));
+            Assert.Throws<UnauthorizedAccessException>(() => ServerLayout.Start(Denied, () => ServerLayout.ProcessSandboxed(_root)));
+            Assert.Throws<UnauthorizedAccessException>(() => ServerLayout.Resolve(Denied, () => ServerLayout.ProcessSandboxed(_root), _root));
+        }
 
+        if (!OperatingSystem.IsWindows()) return;
         var real = Bimwright.Setup.RuntimeLayout.Resolve(_root,
             System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp");
         var resolved = ServerLayout.Resolve(() => real, () => true, AcLocal);

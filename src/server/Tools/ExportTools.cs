@@ -241,7 +241,7 @@ public sealed class ExportTools
         }
         catch (InventorGatewayException ex)
         {
-            return ToolResponse.Error(ex.Code, ex.Message);
+            return ToolResponse.Error(ex);
         }
     }
 }

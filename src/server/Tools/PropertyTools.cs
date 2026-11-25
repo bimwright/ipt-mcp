@@ -48,7 +48,7 @@ public sealed class PropertyTools
         }
         catch (InventorGatewayException ex)
         {
-            return ToolResponse.Error(ex.Code, ex.Message);
+            return ToolResponse.Error(ex);
         }
     }
 }

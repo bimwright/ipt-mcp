@@ -43,7 +43,7 @@ public sealed class PluginClient
     internal async Task ReportServerActivityAsync(string name, object? arguments,
         ModelContextProtocol.Protocol.CallToolResult? result, string? error, long durationMs)
     {
-        var target = _binding.Peek(_registry.List());
+        var target = _binding.Peek(ListTargets());
         if (target == null) return;
         try
         {
@@ -91,7 +91,7 @@ public sealed class PluginClient
         _binding = new TargetBinding(config.TargetId, processProbe);
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
         var layout = config.LocalAppDataRoot is { } root
-            ? Bimwright.Setup.RuntimeLayout.Resolve(root, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, "ipt-mcp")
+            ? ServerLayout.ForRoot(root).Layout
             : config.Layout.Layout;
         // FC-TGT-07: inside a client AppContainer there is no verified layout; report it as unmanaged.
         _setupIdentity = layout is not null
@@ -101,7 +101,19 @@ public sealed class PluginClient
 
     internal JObject GatewayIdentity => (JObject)_setupIdentity.DeepClone();
 
-    public IReadOnlyList<TargetDescriptor> ListTargets() => _registry.List();
+    /// <summary>Test seam: replaces <see cref="TargetRegistry.List"/> when set (e.g. to simulate AppContainer access denial).</summary>
+    internal Func<IReadOnlyList<TargetDescriptor>>? ListTargetsOverride { get; set; }
+
+    /// <summary>
+    /// Live targets. Inside a client AppContainer (FC-TGT-07), enumerating an unreadable host descriptor folder
+    /// (for example via <c>--local-app-data</c>) throws <see cref="UnauthorizedAccessException"/>; treat that as
+    /// zero targets so callers report <c>CLIENT_SANDBOXED</c>. Outside a sandbox, access denial still throws.
+    /// </summary>
+    public IReadOnlyList<TargetDescriptor> ListTargets()
+    {
+        try { return (ListTargetsOverride ?? _registry.List)(); }
+        catch (UnauthorizedAccessException) when (Sandbox().Detected) { return Array.Empty<TargetDescriptor>(); }
+    }
 
     /// <summary>Test seam for the AppContainer token probe (FC-TGT-07); defaults to the cached process-token check.</summary>
     internal Func<bool?> AppContainerProbe { get; set; } = ClientSandbox.ProcessTokenIsAppContainer;
@@ -122,7 +134,7 @@ public sealed class PluginClient
     /// </summary>
     private T Targeted<T>(Func<IReadOnlyList<TargetDescriptor>, T> resolve)
     {
-        var live = _registry.List();
+        var live = ListTargets();
         try { return resolve(live); }
         catch (InventorGatewayException ex) when (ex.Code == InventorErrorCodes.NO_TARGET && live.Count == 0 && SandboxJson() is { } sandbox)
         {
@@ -140,7 +152,7 @@ public sealed class PluginClient
     public TargetDescriptor SwitchTarget(string selector, bool rebind = false) => Targeted(live => _binding.Switch(selector, live, rebind));
 
     /// <summary>The current selection without binding one (inventor_get_current_target, FC-TGT-05); null when none.</summary>
-    public TargetDescriptor? CurrentTarget() => _binding.Current(_registry.List());
+    public TargetDescriptor? CurrentTarget() => _binding.Current(ListTargets());
 
     internal string? SelectedTargetId => _binding.SelectedTargetId;
 

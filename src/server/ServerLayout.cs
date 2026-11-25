@@ -33,12 +33,20 @@ internal sealed record ServerLayout(string DataRoot, string RuntimeRoot, string 
     private static string LocalAppData() => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     /// <summary>Whether this process runs in a client AppContainer (token or redirected LocalAppData).</summary>
-    internal static bool ProcessSandboxed() =>
-        ClientSandbox.Classify(ClientSandbox.ProcessTokenIsAppContainer(), LocalAppData()).Detected;
+    internal static bool ProcessSandboxed(string? extraRoot = null) =>
+        ClientSandbox.Classify(ClientSandbox.ProcessTokenIsAppContainer(), LocalAppData(), extraRoot).Detected;
 
     /// <summary>RuntimeLayout.ForCurrentUser, or the sandbox fallback when only the AppContainer denies it.</summary>
     internal static ServerLayout ForCurrentUser() =>
-        Resolve(() => RuntimeLayout.ForCurrentUser(ProductId), ProcessSandboxed, LocalAppData());
+        Resolve(() => RuntimeLayout.ForCurrentUser(ProductId), () => ProcessSandboxed(), LocalAppData());
+
+    /// <summary>RuntimeLayout.Resolve for an explicit --local-app-data root, or the sandbox fallback inside an AppContainer.</summary>
+    internal static ServerLayout ForRoot(string localAppDataRoot) =>
+        Resolve(() =>
+        {
+            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
+            return RuntimeLayout.Resolve(localAppDataRoot, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, ProductId);
+        }, () => ProcessSandboxed(localAppDataRoot), localAppDataRoot);
 
     internal static ServerLayout Resolve(Func<RuntimeLayout> resolve, Func<bool> sandboxed, string localAppData)
     {
@@ -51,7 +59,15 @@ internal sealed record ServerLayout(string DataRoot, string RuntimeRoot, string 
     /// denies it; the config then keeps its fallback paths.
     /// </summary>
     internal static RuntimeLayout? StartForCurrentUser() =>
-        Start(() => RuntimeLayout.StartForCurrentUser(ProductId), ProcessSandboxed);
+        Start(() => RuntimeLayout.StartForCurrentUser(ProductId), () => ProcessSandboxed());
+
+    /// <summary>Program startup for an explicit --local-app-data root, or null when only the AppContainer denies it.</summary>
+    internal static RuntimeLayout? StartForRoot(string localAppDataRoot) =>
+        Start(() =>
+        {
+            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Inventor requires Windows.");
+            return RuntimeLayout.Start(localAppDataRoot, System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, ProductId);
+        }, () => ProcessSandboxed(localAppDataRoot));
 
     internal static RuntimeLayout? Start(Func<RuntimeLayout> start, Func<bool> sandboxed)
     {

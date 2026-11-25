@@ -216,6 +216,7 @@ public sealed class CodeTools
         }
         catch (InventorGatewayException ex)
         {
+            if (ex.Code == InventorErrorCodes.CLIENT_SANDBOXED) return ToolResponse.Error(ex);
             return ToolResponse.Error(ex.Code, "module not saved — the add-in must dry-compile it first: " + ex.Message);
         }
 

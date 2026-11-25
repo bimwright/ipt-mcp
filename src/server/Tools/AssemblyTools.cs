@@ -80,7 +80,7 @@ public sealed class AssemblyTools
             return ToolResponse.Serialize(data);
         }
         catch (ArgumentException ex) { return ToolResponse.Error(InventorErrorCodes.INVALID_ARGUMENT, ex.Message); }
-        catch (InventorGatewayException ex) { return ToolResponse.Error(ex.Code, ex.Message); }
+        catch (InventorGatewayException ex) { return ToolResponse.Error(ex); }
     }
 
     [McpServerTool(Name = "inventor_place_occurrence", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false),
@@ -230,7 +230,7 @@ public sealed class AssemblyTools
         }
         catch (InventorGatewayException ex)
         {
-            return ToolResponse.Error(ex.Code, ex.Message);
+            return ToolResponse.Error(ex);
         }
     }
 }
