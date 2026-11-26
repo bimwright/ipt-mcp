@@ -50,7 +50,7 @@ public sealed class ServerInstructionsTests
         var order = new[]
         {
             At("Autodesk Inventor 2022-2027"), At("iproperty"), At("export"),
-            At("exactly one Inventor is live"), At("inventor_list_available_targets"), At("inventor_switch_target"),
+            At("Auto-bind requires a unique target"), At("inventor_list_available_targets"), At("inventor_switch_target"),
             At("inventor_health(check_updates=true)"), At("inventor_report_task_result"),
             At("Tool index:"), At("Safety & permissions:"),
         };
