@@ -142,29 +142,57 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
         catch { Deactivate(); throw; }
     }
 
+    private string? _updateDataRoot;
+    private CancellationToken _updateLifetime;
+    private int _updateNoticeShown;
+    private int _updateCheckInFlight;
+
     /// <summary>
-    /// rvt-mcp parity: at most one GitHub request a day (BIMWRIGHT_DISABLE_UPDATE_CHECK=1 turns it off); when a newer
-    /// stable release exists and was not skipped, one modeless card per Inventor session on the History UI thread,
-    /// after Inventor has had time to finish starting. Never touches the STA and never blocks the MCP path.
+    /// rvt-mcp parity: at most one GitHub request a day at startup (BIMWRIGHT_DISABLE_UPDATE_CHECK=1 turns it off),
+    /// plus a shorter 30-minute cooldown when the user opens History. Shows at most one modeless card per Inventor
+    /// session on the History UI thread. Never touches the STA and never blocks the MCP path.
     /// </summary>
     private void StartUpdateNotice(string dataRoot, CancellationToken lifetime)
     {
-        if (_historyHost is not { } host || Bimwright.Ipt.Shared.Update.UpdateChecker.IsDisabled(Environment.GetEnvironmentVariable)) return;
-        var statePath = Path.Combine(dataRoot, "update-check.json");
+        _updateDataRoot = dataRoot;
+        _updateLifetime = lifetime;
+        RunUpdateNoticeCheck(Bimwright.Ipt.Shared.Update.UpdateChecker.CheckInterval, TimeSpan.FromSeconds(20));
+    }
+
+    private void TriggerUpdateNoticeFromUi()
+    {
+        RunUpdateNoticeCheck(Bimwright.Ipt.Shared.Update.UpdateChecker.InteractiveCheckInterval, TimeSpan.Zero);
+    }
+
+    private void RunUpdateNoticeCheck(TimeSpan interval, TimeSpan delayBeforeShow)
+    {
+        if (_historyHost is not { } host || string.IsNullOrEmpty(_updateDataRoot)) return;
+        if (Bimwright.Ipt.Shared.Update.UpdateChecker.IsDisabled(Environment.GetEnvironmentVariable)) return;
+        if (Volatile.Read(ref _updateNoticeShown) != 0) return;
+        if (Interlocked.CompareExchange(ref _updateCheckInFlight, 1, 0) != 0) return;
+
+        var statePath = Path.Combine(_updateDataRoot!, "update-check.json");
         var current = Bimwright.Ipt.Shared.Update.UpdateChecker.VersionOf(GetType().Assembly);
+        var lifetime = _updateLifetime;
         Task.Run(async () =>
         {
             try
             {
-                var info = await Bimwright.Ipt.Shared.Update.UpdateChecker.CheckAsync(current, statePath).ConfigureAwait(false);
+                var info = await Bimwright.Ipt.Shared.Update.UpdateChecker.CheckAsync(current, statePath, checkInterval: interval).ConfigureAwait(false);
                 if (info == null || info.IsSkipped) return;
-                await Task.Delay(TimeSpan.FromSeconds(20), lifetime).ConfigureAwait(false);
+                if (delayBeforeShow > TimeSpan.Zero)
+                    await Task.Delay(delayBeforeShow, lifetime).ConfigureAwait(false);
+                if (Interlocked.Exchange(ref _updateNoticeShown, 1) != 0) return;
                 host.Post(() =>
                 {
                     try { new UpdateNoticeWindow(info, statePath).Show(); } catch { }
                 });
             }
             catch { }
+            finally
+            {
+                Volatile.Write(ref _updateCheckInFlight, 0);
+            }
         });
     }
 
@@ -567,6 +595,7 @@ public abstract class InventorAddInServerBase : InvApi.ApplicationAddInServer
     /// <summary>Ribbon or toast callback (any thread): show-or-focus on the history dispatcher; no COM access.</summary>
     private void ShowOrFocusHistoryWindow()
     {
+        TriggerUpdateNoticeFromUi();
         var host = _historyHost;
         var log = _sessionLog;
         var dispatcher = _dispatcher;

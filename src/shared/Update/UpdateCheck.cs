@@ -15,6 +15,7 @@ public sealed class UpdateCheckState
     [JsonProperty("lastCheckedUtc")] public DateTime? LastCheckedUtc { get; set; }
     [JsonProperty("latestTag")] public string? LatestTag { get; set; }
     [JsonProperty("latestUrl")] public string? LatestUrl { get; set; }
+    [JsonProperty("latestNotes")] public string? LatestNotes { get; set; }
     [JsonProperty("skippedVersion")] public string? SkippedVersion { get; set; }
 
     public static UpdateCheckState Load(string path)
@@ -49,6 +50,7 @@ public sealed class UpdateInfo
     public string CurrentVersion { get; set; } = "";
     public string LatestVersion { get; set; } = "";
     public string ReleaseUrl { get; set; } = "";
+    public string? ReleaseNotes { get; set; }
     public bool IsSkipped { get; set; }
 }
 
@@ -62,6 +64,7 @@ public static class UpdateChecker
     public const string ReleasesLatestUrl = "https://github.com/bimwright/ipt-mcp/releases/latest";
     public const string DisableEnvVar = "BIMWRIGHT_DISABLE_UPDATE_CHECK";
     public static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
+    public static readonly TimeSpan InteractiveCheckInterval = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
     public static bool IsDisabled(Func<string, string?> env)
@@ -101,8 +104,8 @@ public static class UpdateChecker
         catch { return "0.0.0"; }
     }
 
-    /// <summary>(tag, release page) of a published stable release; null otherwise.</summary>
-    public static Tuple<string, string>? ParseLatestRelease(string json)
+    /// <summary>(tag, release page, formattedNotes) of a published stable release; null otherwise.</summary>
+    public static Tuple<string, string, string?>? ParseLatestRelease(string json)
     {
         try
         {
@@ -113,9 +116,82 @@ public static class UpdateChecker
             var url = o.Value<string>("html_url");
             if (string.IsNullOrWhiteSpace(url) || !url!.StartsWith("https://github.com/bimwright/ipt-mcp/", StringComparison.Ordinal))
                 url = ReleasesLatestUrl;
-            return Tuple.Create(tag!, url!);
+            var notes = FormatReleaseNotes(o.Value<string>("body"));
+            return Tuple.Create(tag!, url!, notes);
         }
         catch { return null; }
+    }
+
+    public static string? FormatReleaseNotes(string? markdown, int maxChars = 1500)
+    {
+        if (string.IsNullOrWhiteSpace(markdown)) return null;
+        var lines = markdown!.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var sb = new StringBuilder();
+        var prevBlank = true;
+        foreach (var raw in lines)
+        {
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("### Distribution", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("### Validation", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("Source commit:", StringComparison.OrdinalIgnoreCase))
+                break;
+
+            if (trimmed.Length == 0)
+            {
+                if (!prevBlank && sb.Length > 0)
+                {
+                    sb.AppendLine();
+                    prevBlank = true;
+                }
+                continue;
+            }
+
+            var line = StripMarkdownInline(trimmed);
+            if (line.StartsWith("### ") || line.StartsWith("## ") || line.StartsWith("# "))
+                line = line.TrimStart('#', ' ');
+            else if (line.StartsWith("- ") || line.StartsWith("* "))
+                line = "• " + line.Substring(2).Trim();
+
+            if (sb.Length > 0 && sb.Length + line.Length + 2 > maxChars)
+            {
+                var remaining = maxChars - sb.Length - 1;
+                if (remaining > 20)
+                    sb.Append(line.Substring(0, remaining).TrimEnd()).Append('…');
+                else
+                    sb.Append('…');
+                break;
+            }
+
+            sb.AppendLine(line);
+            prevBlank = false;
+        }
+        var result = sb.ToString().Trim();
+        return result.Length == 0 ? null : result;
+    }
+
+    private static string StripMarkdownInline(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] == '[')
+            {
+                var closeBracket = text.IndexOf(']', i + 1);
+                if (closeBracket > i && closeBracket + 1 < text.Length && text[closeBracket + 1] == '(')
+                {
+                    var closeParen = text.IndexOf(')', closeBracket + 2);
+                    if (closeParen > closeBracket + 1)
+                    {
+                        sb.Append(text, i + 1, closeBracket - i - 1);
+                        i = closeParen + 1;
+                        continue;
+                    }
+                }
+            }
+            sb.Append(text[i++]);
+        }
+        return sb.ToString().Replace("**", string.Empty).Replace("`", string.Empty);
     }
 
     /// <summary>The notice from the saved state (no network); null when up to date, a dev or unknown build, or unknown.</summary>
@@ -129,20 +205,22 @@ public static class UpdateChecker
             CurrentVersion = "v" + current.ToString(3),
             LatestVersion = "v" + latest.ToString(3),
             ReleaseUrl = string.IsNullOrWhiteSpace(state!.LatestUrl) ? ReleasesLatestUrl : state.LatestUrl!,
+            ReleaseNotes = string.IsNullOrWhiteSpace(state.LatestNotes) ? null : state.LatestNotes,
             IsSkipped = Stable(state.SkippedVersion) is { } skipped && skipped == latest,
         };
     }
 
     /// <summary>Refreshes the saved state when it is due and returns the notice. Never throws.</summary>
     public static async Task<UpdateInfo?> CheckAsync(string currentVersion, string statePath,
-        Func<CancellationToken, Task<string?>>? fetch = null, DateTime? nowUtc = null)
+        Func<CancellationToken, Task<string?>>? fetch = null, DateTime? nowUtc = null, TimeSpan? checkInterval = null)
     {
         try
         {
             var now = nowUtc ?? DateTime.UtcNow;
+            var interval = checkInterval ?? CheckInterval;
             var state = UpdateCheckState.Load(statePath);
             var due = state.LastCheckedUtc == null
-                || now - state.LastCheckedUtc.Value >= CheckInterval
+                || now - state.LastCheckedUtc.Value >= interval
                 || state.LastCheckedUtc.Value > now.AddMinutes(5);   // clock moved backwards
             if (due)
             {
@@ -158,6 +236,7 @@ public static class UpdateChecker
                 {
                     state.LatestTag = parsed.Item1;
                     state.LatestUrl = parsed.Item2;
+                    state.LatestNotes = parsed.Item3;
                     state.Save(statePath);
                 }
             }

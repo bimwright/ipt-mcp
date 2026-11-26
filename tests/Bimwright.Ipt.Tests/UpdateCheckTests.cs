@@ -9,8 +9,9 @@ public sealed class UpdateCheckTests : IDisposable
     private string State => Path.Combine(_dir, "update-check.json");
     public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
 
-    private static string Release(string tag, bool prerelease = false, string url = "https://github.com/bimwright/ipt-mcp/releases/tag/") =>
-        $"{{\"tag_name\":\"{tag}\",\"prerelease\":{prerelease.ToString().ToLowerInvariant()},\"draft\":false,\"html_url\":\"{url}{tag}\"}}";
+    private static string Release(string tag, bool prerelease = false, string url = "https://github.com/bimwright/ipt-mcp/releases/tag/", string? body = null) =>
+        $"{{\"tag_name\":\"{tag}\",\"prerelease\":{prerelease.ToString().ToLowerInvariant()},\"draft\":false,\"html_url\":\"{url}{tag}\"" +
+        (body == null ? "" : $",\"body\":{Newtonsoft.Json.JsonConvert.SerializeObject(body)}") + "}";
 
     [Theory]
     [InlineData("0.2.1", "0.2.1")]
@@ -83,5 +84,43 @@ public sealed class UpdateCheckTests : IDisposable
         Assert.True(UpdateChecker.IsDisabled(n => n == UpdateChecker.DisableEnvVar ? "1" : null));
         Assert.True(UpdateChecker.IsDisabled(n => n == UpdateChecker.DisableEnvVar ? "TRUE" : null));
         Assert.False(UpdateChecker.IsDisabled(_ => null));
+    }
+
+    [Fact]
+    public async Task Release_notes_are_formatted_cached_and_trimmed_before_distribution()
+    {
+        var body = "Summary of **updates**.\n\n### Fixed\n- Fix [#16](https://github.com/bimwright/ipt-mcp/pull/16): `CLIENT_SANDBOXED`.\n\n### Distribution\nSetup ZIP details.\n\nSource commit: abc123.";
+        var now = new DateTime(2026, 11, 26, 8, 0, 0, DateTimeKind.Utc);
+        var info = await UpdateChecker.CheckAsync("2.5.1", State, _ => Task.FromResult<string?>(Release("v2.5.2", body: body)), now);
+
+        Assert.NotNull(info);
+        Assert.Contains("Summary of updates.", info!.ReleaseNotes);
+        Assert.Contains("• Fix #16: CLIENT_SANDBOXED.", info.ReleaseNotes);
+        Assert.DoesNotContain("Distribution", info.ReleaseNotes);
+        Assert.DoesNotContain("Source commit", info.ReleaseNotes);
+
+        var cached = UpdateChecker.FromState("2.5.1", UpdateCheckState.Load(State));
+        Assert.Equal(info.ReleaseNotes, cached!.ReleaseNotes);
+    }
+
+    [Fact]
+    public async Task Interactive_check_interval_refreshes_sooner_than_daily_interval()
+    {
+        var calls = 0;
+        var latest = "v2.5.1";
+        Task<string?> Fetch(CancellationToken _) { calls++; return Task.FromResult<string?>(Release(latest)); }
+        var now = new DateTime(2026, 11, 26, 8, 0, 0, DateTimeKind.Utc);
+
+        Assert.Null(await UpdateChecker.CheckAsync("2.5.1", State, Fetch, now));
+        Assert.Equal(1, calls);
+
+        latest = "v2.5.2";
+        Assert.Null(await UpdateChecker.CheckAsync("2.5.1", State, Fetch, now.AddMinutes(10), UpdateChecker.InteractiveCheckInterval));
+        Assert.Equal(1, calls);
+
+        var info = await UpdateChecker.CheckAsync("2.5.1", State, Fetch, now.AddMinutes(31), UpdateChecker.InteractiveCheckInterval);
+        Assert.Equal(2, calls);
+        Assert.NotNull(info);
+        Assert.Equal("v2.5.2", info!.LatestVersion);
     }
 }
