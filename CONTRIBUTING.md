@@ -77,7 +77,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the conceptual model. Quick reference
    `src/shared/Plugin/InventorCommandRegistry.<Domain>.cs` (`add(new YourHandler());`).
 3. Add an `[McpServerTool(Name = "inventor_<wire>")]` method on the owning toolset class under
    `src/server/Tools/`. The wire command sent to the add-in is the snake_case name minus the
-   `inventor_` prefix.
+   `inventor_` prefix. Keep `ServerInstructions` under 2,048 UTF-8 bytes, each tool description
+   under 4,096 characters/bytes, and each parameter description under 2,048 UTF-8 bytes.
 4. Cover non-trivial logic with an xUnit test, including the registration/read-only snapshot.
 5. Smoke test in at least one Inventor version before the PR (see
    [`docs/testing/manual-smoke.md`](docs/testing/manual-smoke.md)).

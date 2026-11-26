@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Bề mặt công cụ
 
-Bản 2.5.1 có **150 công cụ** theo mặc định (`--toolsets all`); `--disable-send-code` còn **144 công cụ**, và `--read-only` còn **39 công cụ**. Tên MCP đều bắt đầu bằng `inventor_`. Bộ lọc toolset thu hẹp bề mặt này. Các bản ghi benchmark v0.2.1 đã công bố bên dưới giữ nguyên phạm vi gốc 111 tool.
+Bản 2.5.2 có **150 công cụ** theo mặc định (`--toolsets all`); `--disable-send-code` còn **144 công cụ**, và `--read-only` còn **39 công cụ**. Tên MCP đều bắt đầu bằng `inventor_`. Bộ lọc toolset thu hẹp bề mặt này. Các bản ghi benchmark v0.2.1 đã công bố bên dưới giữ nguyên phạm vi gốc 111 tool.
 
 Mặc định bật cả 19 toolset, gồm `code`. Dùng `--toolsets <csv>` để thu hẹp.
 
@@ -554,7 +554,7 @@ Allow list dưới đây được sinh từ 39 annotation read-only và có test
 ```
 <!-- END GENERATED READONLY -->
 
-### Cài đặt runtime (v2.5.1)
+### Cài đặt runtime (v2.5.2)
 
 | Cài đặt | Mặc định | CLI / JSON |
 |---|---|---|

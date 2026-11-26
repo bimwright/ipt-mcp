@@ -70,8 +70,10 @@ async def run_mode(server, flags, output, label, sweep=False):
                 assert len(desc) <= 4096 and len(desc.encode("utf-8")) <= 4096, f'{tool["name"]}: desc too long'
                 if tool["name"] in always_load:
                     assert tool.get('_meta', {}).get('anthropic/alwaysLoad') is True, tool["name"]
+                    assert tool.get('_meta', {}).get('antigravity/alwaysLoad') is True, tool["name"]
                 else:
                     assert tool.get('_meta', {}).get('anthropic/alwaysLoad') is not True, tool["name"]
+                    assert tool.get('_meta', {}).get('antigravity/alwaysLoad') is not True, tool["name"]
                 if tool["name"] != "inventor_send_code":
                     assert set(tool.get("annotations", {})) >= {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}, tool["name"]
                     if tool['annotations']['destructiveHint']:

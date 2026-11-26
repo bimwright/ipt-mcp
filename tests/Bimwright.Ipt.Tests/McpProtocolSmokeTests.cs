@@ -200,15 +200,22 @@ public sealed class McpProtocolSmokeTests
     // the served instructions fit in 2,048 UTF-8 bytes and end with the safety block, every wire tool description
     // fits in 4,096 chars/UTF-8 bytes, and only the registered startup/report tools carry anthropic/alwaysLoad=true.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Served_instructions_fit_in_2048_bytes_and_end_with_safety_block(bool readOnly)
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(false, "meta")]
+    [InlineData(false, "query")]
+    public async Task Served_instructions_fit_the_budget_and_respect_tool_registration(bool readOnly, string? toolset)
     {
-        var responses = await RunProtocolHandshake(readOnly: readOnly);
+        var responses = await RunProtocolHandshake(readOnly: readOnly, toolset: toolset);
         var instructions = (string?)responses[0]["result"]?["instructions"];
         Assert.NotNull(instructions);
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(instructions!) <= 2048);
         Assert.EndsWith(ServerInstructions.SafetyAndPermissions, instructions);
+        Assert.Contains("Use only registered tools", instructions);
+        Assert.Contains("If switching is unavailable, restart with --target pid:<n>", instructions);
+        Assert.Contains("verify=true); include meta in writable mode", instructions);
+        Assert.Contains("if available, call inventor_health(check_updates=true)", instructions);
+        Assert.Contains("If available, call inventor_report_task_result", instructions);
 
         var tools = (JArray)responses[1]["result"]!["tools"]!;
         foreach (var tool in tools)
@@ -220,21 +227,34 @@ public sealed class McpProtocolSmokeTests
         }
 
         // TOOL-ALWAYSLOAD (BW-MCP-UPGRADE-001): startup + report tools preload; never send_code.
-        var expectedAlwaysLoad = readOnly
-            ? new[] { "inventor_health", "inventor_list_available_targets", "inventor_report_task_result" }
-            : Program.AlwaysLoadToolNames;
-        var actualAlwaysLoad = tools
-            .Where(t => t["_meta"]?[Program.AlwaysLoadMetadataKey]?.Value<bool>() == true)
-            .Select(t => (string)t["name"]!)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(expectedAlwaysLoad.OrderBy(n => n, StringComparer.Ordinal).ToArray(), actualAlwaysLoad);
-        var health = Assert.Single(tools, t => (string?)t["name"] == "inventor_health");
-        Assert.NotNull(health["_meta"]?[HealthRuntimeInfo.ClientRuntimeMetadataKey]);
-        if (!readOnly)
+        var expectedAlwaysLoad = (readOnly, toolset) switch
+        {
+            (_, "meta") => new[] { "inventor_list_available_targets", "inventor_switch_target" },
+            (_, "query") => new[] { "inventor_health", "inventor_report_task_result" },
+            (true, _) => new[] { "inventor_health", "inventor_list_available_targets", "inventor_report_task_result" },
+            _ => new[] { "inventor_health", "inventor_list_available_targets", "inventor_report_task_result", "inventor_switch_target" },
+        };
+        var alwaysLoadKeys = new[] { "anthropic/alwaysLoad", "antigravity/alwaysLoad" };
+        foreach (var alwaysLoadKey in alwaysLoadKeys)
+        {
+            var actualAlwaysLoad = tools
+                .Where(t => t["_meta"]?[alwaysLoadKey]?.Value<bool>() == true)
+                .Select(t => (string)t["name"]!)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(expectedAlwaysLoad, actualAlwaysLoad);
+        }
+
+        if (toolset != "meta")
+        {
+            var health = Assert.Single(tools, t => (string?)t["name"] == "inventor_health");
+            Assert.NotNull(health["_meta"]?[HealthRuntimeInfo.ClientRuntimeMetadataKey]);
+        }
+        if (!readOnly && toolset is null)
         {
             var sendCode = Assert.Single(tools, t => (string?)t["name"] == "inventor_send_code");
-            Assert.Null(sendCode["_meta"]?[Program.AlwaysLoadMetadataKey]);
+            foreach (var alwaysLoadKey in alwaysLoadKeys)
+                Assert.Null(sendCode["_meta"]?[alwaysLoadKey]);
         }
     }
 
@@ -261,7 +281,7 @@ public sealed class McpProtocolSmokeTests
 
     private static async Task<JObject[]> RunProtocolHandshake(bool checkILogicArguments = false,
         bool checkHealth = false, bool readOnly = false, bool explicitHealthArgument = false,
-        string? expressionTool = null, JObject? expressionArguments = null)
+        string? expressionTool = null, JObject? expressionArguments = null, string? toolset = null)
     {
         using var profile = new Profile();
         var serverAssembly = typeof(Program).Assembly.Location;
@@ -279,6 +299,11 @@ public sealed class McpProtocolSmokeTests
         startInfo.ArgumentList.Add("--local-app-data");
         startInfo.ArgumentList.Add(profile.Root);
         if (readOnly) startInfo.ArgumentList.Add("--read-only");
+        if (toolset is not null)
+        {
+            startInfo.ArgumentList.Add("--toolsets");
+            startInfo.ArgumentList.Add(toolset);
+        }
         if (checkILogicArguments || expressionTool is not null)
         {
             startInfo.ArgumentList.Add("--target");

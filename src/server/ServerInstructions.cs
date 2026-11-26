@@ -12,14 +12,14 @@ public static class ServerInstructions
         "ipt-mcp - Autodesk Inventor 2022-2027 MCP gateway (tools: inventor_*). " +
         "For .ipt parts, .iam assemblies, .idw/.dwg drawings: part, sketch, extrude, constraints, BOM, " +
         "interference, parameter, iproperty, mass, iLogic, iPart, sheet metal, STEP/STL/DXF export. Lengths are in mm. " +
-        "Binds only when exactly one Inventor is live. On AMBIGUOUS_TARGET call inventor_list_available_targets, " +
-        "ask user, then inventor_switch_target(\"pid:<n>\"). On TARGET_LOST confirm, switch explicitly. " +
-        "Then call inventor_health(check_updates=true) once and follow its guidance. " +
-        "Before first write, confirm active doc and call inventor_switch_target(\"pid:<n>\", verify=true). " +
-        "Under --read-only (no switch_target) use --target pid:<n>. " +
+        "Use only registered tools. Auto-bind requires a unique target. On AMBIGUOUS_TARGET: " +
+        "inventor_list_available_targets, ask user, then inventor_switch_target(\"pid:<n>\"). " +
+        "On TARGET_LOST confirm, switch explicitly. If switching is unavailable, restart with --target pid:<n>. " +
+        "Then, if available, call inventor_health(check_updates=true) once. " +
+        "Before first active-doc write, confirm via inventor_switch_target(\"pid:<n>\", verify=true); include meta in writable mode. " +
         "HOST_BUSY/TARGET_BUSY: not started; resend when free. TIMEOUT: unknown outcome; inspect before retrying writes. " +
         "HOST_CRASHED: unsaved edits lost; do not resend, tell user. " +
-        "When verified done, failed or cancelled, call inventor_report_task_result once (not chat-only). " +
+        "If available, call inventor_report_task_result once after verifying the outcome (not chat-only). " +
         "Tool index: open/new/save/close docs, get_document_state, checkpoints, undo; create_sketch, draw_*; " +
         "revolve, fillet, hole, create_work_*, build_solids; place_occurrence, add_constraint; " +
         "list_bodies/features, probe_brep, measure_min_distance, get_mass_properties; " +

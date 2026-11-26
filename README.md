@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## Tool Surface
 
-Version 2.5.1 exposes **150 tools** by default (`--toolsets all`); `--disable-send-code` exposes **144 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
+Version 2.5.2 exposes **150 tools** by default (`--toolsets all`); `--disable-send-code` exposes **144 tools**, and `--read-only` exposes **39 tools**. All MCP names start with `inventor_`. Toolset filters narrow this surface. Published v0.2.1 benchmark records below retain their original 111-tool scope.
 
 All 19 toolsets are enabled by default, including `code`. Use `--toolsets <csv>` to narrow the surface.
 
@@ -554,7 +554,7 @@ The allow list below is generated from the 39 read-only annotations and checked 
 ```
 <!-- END GENERATED READONLY -->
 
-### Runtime settings (v2.5.1)
+### Runtime settings (v2.5.2)
 
 | Setting | Default | CLI / JSON |
 |---|---|---|

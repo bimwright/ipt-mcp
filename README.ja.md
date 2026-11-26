@@ -130,7 +130,7 @@ dotnet build src/plugin-inv27 -c Debug   # real 2027 interop compile; needs the 
 
 ## ツール一覧
 
-2.5.1 はデフォルトで **150 ツール**（`--toolsets all`）を公開します。`--disable-send-code` では **144 ツール**、`--read-only` では **39 ツール**です。MCP 名はすべて `inventor_` で始まります。toolset フィルターでこの範囲を絞り込めます。以下の公開済み v0.2.1 ベンチマーク記録は、当時の 111 ツールの範囲のままです。
+2.5.2 はデフォルトで **150 ツール**（`--toolsets all`）を公開します。`--disable-send-code` では **144 ツール**、`--read-only` では **39 ツール**です。MCP 名はすべて `inventor_` で始まります。toolset フィルターでこの範囲を絞り込めます。以下の公開済み v0.2.1 ベンチマーク記録は、当時の 111 ツールの範囲のままです。
 
 `code` を含む全 19 toolset がデフォルトで有効です。`--toolsets <csv>` で絞り込めます。
 
@@ -548,7 +548,7 @@ Inventor および Autodesk は Autodesk, Inc. の登録商標です。bimwright
 ```
 <!-- END GENERATED READONLY -->
 
-### 実行時の設定 (v2.5.1)
+### 実行時の設定 (v2.5.2)
 
 | 設定 | 既定値 | CLI / JSON |
 |---|---|---|
