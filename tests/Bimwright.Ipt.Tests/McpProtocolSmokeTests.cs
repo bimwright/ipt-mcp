@@ -234,13 +234,16 @@ public sealed class McpProtocolSmokeTests
             (true, _) => new[] { "inventor_health", "inventor_list_available_targets", "inventor_report_task_result" },
             _ => new[] { "inventor_health", "inventor_list_available_targets", "inventor_report_task_result", "inventor_switch_target" },
         };
-        const string alwaysLoadKey = "anthropic/alwaysLoad";
-        var actualAlwaysLoad = tools
-            .Where(t => t["_meta"]?[alwaysLoadKey]?.Value<bool>() == true)
-            .Select(t => (string)t["name"]!)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(expectedAlwaysLoad, actualAlwaysLoad);
+        var alwaysLoadKeys = new[] { "anthropic/alwaysLoad", "antigravity/alwaysLoad" };
+        foreach (var alwaysLoadKey in alwaysLoadKeys)
+        {
+            var actualAlwaysLoad = tools
+                .Where(t => t["_meta"]?[alwaysLoadKey]?.Value<bool>() == true)
+                .Select(t => (string)t["name"]!)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(expectedAlwaysLoad, actualAlwaysLoad);
+        }
 
         if (toolset != "meta")
         {
@@ -250,7 +253,8 @@ public sealed class McpProtocolSmokeTests
         if (!readOnly && toolset is null)
         {
             var sendCode = Assert.Single(tools, t => (string?)t["name"] == "inventor_send_code");
-            Assert.Null(sendCode["_meta"]?[alwaysLoadKey]);
+            foreach (var alwaysLoadKey in alwaysLoadKeys)
+                Assert.Null(sendCode["_meta"]?[alwaysLoadKey]);
         }
     }
 

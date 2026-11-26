@@ -107,6 +107,7 @@ internal static partial class Program
 
     // TOOL-ALWAYSLOAD (BW-MCP-UPGRADE-001): startup and report tools preload even under Tool Search; never send_code.
     internal const string AlwaysLoadMetadataKey = "anthropic/alwaysLoad";
+    internal const string AntigravityAlwaysLoadMetadataKey = "antigravity/alwaysLoad";
     internal static readonly string[] AlwaysLoadToolNames =
     {
         "inventor_health",
@@ -135,6 +136,7 @@ internal static partial class Program
                 {
                     tool.ProtocolTool.Meta ??= new System.Text.Json.Nodes.JsonObject();
                     tool.ProtocolTool.Meta[AlwaysLoadMetadataKey] = true;
+                    tool.ProtocolTool.Meta[AntigravityAlwaysLoadMetadataKey] = true;
                 }
                 if (attribute.Name is "inventor_ilogic_run_rule" or "inventor_ilogic_run_external_rule")
                 {
